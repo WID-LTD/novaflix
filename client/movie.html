@@ -11,6 +11,10 @@
     <a href="index.html" class="back-link">&larr; Back to Search</a>
   </nav>
 
+  <div id="backdropWrap" class="backdrop-wrap">
+    <div class="backdrop-overlay"></div>
+  </div>
+
   <main class="container movie-page" id="moviePage">
     <div id="movieLoader" class="loader">Loading...</div>
 
@@ -40,6 +44,19 @@
               <select id="episodeSelect" class="selector"></select>
             </div>
           </div>
+          <div id="episodeList" class="episode-list" style="display:none">
+            <div class="episode-list-header">
+              <label class="select-all-label">
+                <input type="checkbox" id="selectAllEpisodes" />
+                <span>Select All</span>
+              </label>
+              <span id="downloadStatus" class="download-status"></span>
+              <button id="downloadSelectedBtn" class="btn btn-secondary btn-small">Download Selected (0)</button>
+            </div>
+            <div class="episode-checklist-wrap">
+              <ul id="episodeChecklist" class="episode-checklist"></ul>
+            </div>
+          </div>
           <div class="actions">
             <a id="watchBtn" class="btn btn-primary" href="">Watch Now</a>
             <a id="downloadBtn" class="btn btn-secondary" href="">Download</a>
@@ -47,14 +64,37 @@
         </div>
       </div>
 
-      <div id="trailerSection" class="trailer-section" style="display:none">
-        <h2>Trailer</h2>
-        <div class="trailer-wrap">
-          <iframe id="trailerIframe" src="" frameborder="0" allowfullscreen></iframe>
-        </div>
-      </div>
     </div>
   </main>
+
+  <div id="trailerSection" class="trailer-section" style="display:none">
+    <div class="trailer-inner">
+      <h2>Trailer</h2>
+      <div class="trailer-wrap">
+        <iframe id="trailerIframe" src="" frameborder="0" allowfullscreen></iframe>
+      </div>
+    </div>
+  </div>
+
+  <!-- Download Modal -->
+  <div id="downloadModal" class="modal-overlay" style="display:none">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Download</h3>
+        <button id="modalCloseBtn" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="modalFileTitle" class="modal-file-title"></p>
+        <div id="modalQualityList" class="modal-quality-list"></div>
+        <div id="modalBatchInfo" class="modal-batch-info" style="display:none"></div>
+      </div>
+      <div class="modal-footer">
+        <span id="modalTotalSize" class="modal-total-size"></span>
+        <button id="modalCancelBtn" class="btn btn-secondary btn-small">Cancel</button>
+        <button id="modalConfirmBtn" class="btn btn-primary btn-small" disabled>Download</button>
+      </div>
+    </div>
+  </div>
 
   <script src="js/movie.js"></script>
 </body>

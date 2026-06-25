@@ -13,11 +13,9 @@ const COMMON_HEADERS = {
 };
 
 async function trySourceApi(tmdbId) {
-  const params = { tmdb: tmdbId };
   for (const source of SOURCE_API_URLS) {
     try {
       const res = await axios.get(source.url(tmdbId), {
-        params,
         headers: { ...COMMON_HEADERS, Referer: source.referer },
         timeout: 10000,
       });
@@ -74,9 +72,16 @@ async function extractPlaylistJson(pageUrl) {
       const sources = plData?.playlist?.[0]?.sources || [];
       for (const source of sources) {
         if (source.file && source.type === 'hls') {
+          const tracks = plData?.playlist?.[0]?.tracks || [];
+          const subtitles = tracks
+            .filter((t) => t.kind === 'captions' || t.kind === 'subtitles')
+            .map((t) => ({
+              label: t.label || 'Unknown',
+              file: t.file,
+            }));
           return {
             streamUrl: source.file,
-            subtitles: [],
+            subtitles,
           };
         }
       }

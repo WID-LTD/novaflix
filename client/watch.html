@@ -7,28 +7,114 @@
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body class="watch-body">
-  <div class="player-container">
-    <div class="player-top">
-      <a id="backFromPlayer" class="back-link" href="">&larr; Back</a>
-      <span id="playerTitle" class="player-title"></span>
-    </div>
+  <div class="player-top">
+    <a id="backFromPlayer" class="back-link" href="">&larr; Back</a>
+    <span id="playerTitle" class="player-title"></span>
+  </div>
 
-    <div class="player-wrap" id="playerWrap">
-      <video id="video" class="video-element" controls playsinline></video>
-      <div id="bufferingOverlay" class="buffering-overlay" style="display:none">
-        <div class="spinner"></div>
-        <span>Buffering...</span>
+  <div class="watch-layout" id="watchLayout">
+    <div class="watch-main">
+      <div class="player-wrap" id="playerWrap">
+        <video id="video" class="video-element" playsinline crossorigin="anonymous"></video>
+        <div id="bufferingOverlay" class="buffering-overlay" style="display:none">
+          <div class="spinner"></div>
+          <span>Buffering...</span>
+        </div>
+
+        <div class="controls-overlay" id="controlsOverlay">
+          <div class="controls-seek-wrap">
+            <input type="range" id="seekBar" class="seek-bar" min="0" max="100" value="0" step="0.1" />
+            <div class="seek-buffer" id="seekBuffer"></div>
+          </div>
+
+          <div class="controls-row">
+            <div class="controls-left">
+              <button id="playBtn" class="ctrl-btn" title="Play / Pause">
+                <span id="playIcon">&#9654;</span>
+              </button>
+              <button id="rewindBtn" class="ctrl-btn" title="Rewind 10s">&#x21E4;</button>
+              <button id="forwardBtn" class="ctrl-btn" title="Forward 10s">&#x21E5;</button>
+              <button id="prevBtn" class="ctrl-btn ctrl-ep-btn" title="Previous" style="display:none">&#x23EE;</button>
+              <button id="nextBtn" class="ctrl-btn ctrl-ep-btn" title="Next" style="display:none">&#x23ED;</button>
+              <span id="timeDisplay" class="time-display">0:00 / 0:00</span>
+            </div>
+
+            <div class="controls-right">
+              <button id="speedBtn" class="ctrl-btn" title="Playback Speed">1x</button>
+              <div class="ctrl-group" id="ccGroup">
+                <button id="ccBtn" class="ctrl-btn" title="Subtitles / CC">CC</button>
+                <select id="subtitleSelect" class="ctrl-select">
+                  <option value="">Off</option>
+                </select>
+              </div>
+              <div class="ctrl-group" id="qualityGroup">
+                <button id="qualityBtn" class="ctrl-btn" title="Quality">HD</button>
+                <select id="qualitySelect" class="ctrl-select" disabled>
+                  <option value="auto">Auto</option>
+                </select>
+              </div>
+              <button id="pipBtn" class="ctrl-btn" title="Picture in Picture">PiP</button>
+              <div class="ctrl-group" id="volumeGroup">
+                <button id="muteBtn" class="ctrl-btn" title="Mute">&#x1F50A;</button>
+                <input type="range" id="volumeSlider" class="volume-slider" min="0" max="1" step="0.05" value="1" />
+              </div>
+              <button id="downloadFromPlayer" class="ctrl-btn" title="Download">&#x21E9;</button>
+              <button id="fullscreenBtn" class="ctrl-btn" title="Fullscreen">&#x26F6;</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="player-controls-bar">
-      <div class="quality-selector">
-        <label for="qualitySelect">Quality:</label>
-        <select id="qualitySelect" disabled>
-          <option value="auto">Auto</option>
-        </select>
+    <div class="watch-sidebar" id="watchSidebar">
+      <div class="sidebar-scroll">
+        <div class="sidebar-poster-wrap">
+          <img id="sidebarPoster" class="sidebar-poster" src="" alt="Poster" />
+        </div>
+        <h2 id="sidebarTitle" class="sidebar-title"></h2>
+        <div class="sidebar-meta">
+          <span id="sidebarYear"></span>
+          <span class="dot">&middot;</span>
+          <span id="sidebarRating"></span>
+        </div>
+        <div id="sidebarGenres" class="sidebar-genres"></div>
+        <p id="sidebarOverview" class="sidebar-overview"></p>
+        <div id="sidebarEpisodes" class="sidebar-episodes" style="display:none">
+          <div class="sidebar-ep-header">
+            <label class="select-all-label">
+              <input type="checkbox" id="selectAllEpisodes" />
+              <span>Select All</span>
+            </label>
+            <span id="downloadStatus" class="download-status"></span>
+            <button id="downloadSelectedBtn" class="btn btn-secondary btn-small">Download (0)</button>
+          </div>
+          <div class="sidebar-ep-list-wrap">
+            <ul id="episodeChecklist" class="episode-checklist"></ul>
+          </div>
+        </div>
       </div>
-      <a id="downloadFromPlayer" class="btn btn-small" href="">Download</a>
+    </div>
+  </div>
+
+  <select id="playerSeasonSelect" style="display:none"></select>
+  <select id="playerEpisodeSelect" style="display:none"></select>
+
+  <div id="downloadModal" class="modal-overlay" style="display:none">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Download</h3>
+        <button id="modalCloseBtn" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="modalFileTitle" class="modal-file-title"></p>
+        <div id="modalQualityList" class="modal-quality-list"></div>
+        <div id="modalBatchInfo" class="modal-batch-info" style="display:none"></div>
+      </div>
+      <div class="modal-footer">
+        <span id="modalTotalSize" class="modal-total-size"></span>
+        <button id="modalCancelBtn" class="btn btn-secondary btn-small">Cancel</button>
+        <button id="modalConfirmBtn" class="btn btn-primary btn-small" disabled>Download</button>
+      </div>
     </div>
   </div>
 
