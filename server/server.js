@@ -5,7 +5,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
-import { getStreamUrl } from './scraper.mjs';
+import { getStreamUrl, closeBrowser } from './scraper.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,22 +27,25 @@ const tmdb = axios.create({
 });
 
 app.get('/api/search', async (req, res) => {
-  const { query } = req.query;
+  const { query, type } = req.query;
   if (!query) return res.status(400).json({ error: 'Query param is required' });
 
+  const mediaType = type === 'tv' ? 'tv' : 'movie';
+
   try {
-    const { data } = await tmdb.get('/search/movie', {
+    const { data } = await tmdb.get(`/search/${mediaType}`, {
       params: { query, language: 'en-US', page: 1 },
     });
 
     const results = data.results.map((m) => ({
       id: m.id,
-      title: m.title,
-      year: m.release_date ? m.release_date.split('-')[0] : 'N/A',
+      title: m.title || m.name,
+      year: (m.release_date || m.first_air_date || '').split('-')[0] || 'N/A',
       poster: m.poster_path
         ? `https://image.tmdb.org/t/p/w500${m.poster_path}`
         : null,
       overview: m.overview,
+      type: mediaType,
     }));
 
     res.json({ success: true, data: results });
@@ -53,43 +56,79 @@ app.get('/api/search', async (req, res) => {
 });
 
 app.get('/api/details', async (req, res) => {
-  const { id } = req.query;
+  const { id, type } = req.query;
   if (!id) return res.status(400).json({ error: 'TMDB ID is required' });
+
+  const mediaType = type === 'tv' ? 'tv' : 'movie';
 
   try {
     const [detailRes, videosRes] = await Promise.all([
-      tmdb.get(`/movie/${id}`, { params: { language: 'en-US' } }),
-      tmdb.get(`/movie/${id}/videos`, { params: { language: 'en-US' } }),
+      tmdb.get(`/${mediaType}/${id}`, { params: { language: 'en-US' } }),
+      tmdb.get(`/${mediaType}/${id}/videos`, { params: { language: 'en-US' } }),
     ]);
 
-    const movie = detailRes.data;
+    const media = detailRes.data;
     const trailer = videosRes.data.results.find(
       (v) => v.type === 'Trailer' && v.site === 'YouTube'
     );
 
+    const base = {
+      id: media.id,
+      title: media.title || media.name,
+      year: (media.release_date || media.first_air_date || '').split('-')[0] || 'N/A',
+      releaseDate: media.release_date || media.first_air_date || null,
+      poster: media.poster_path
+        ? `https://image.tmdb.org/t/p/w500${media.poster_path}`
+        : null,
+      backdrop: media.backdrop_path
+        ? `https://image.tmdb.org/t/p/w1280${media.backdrop_path}`
+        : null,
+      overview: media.overview,
+      rating: media.vote_average,
+      genres: media.genres.map((g) => g.name),
+      trailerKey: trailer ? trailer.key : null,
+      type: mediaType,
+    };
+
+    if (mediaType === 'tv') {
+      base.seasons = (media.seasons || [])
+        .filter((s) => s.season_number > 0)
+        .map((s) => ({
+          season: s.season_number,
+          episodes: s.episode_count,
+          name: s.name,
+        }));
+      base.runtime = media.episode_run_time?.[0] || null;
+      base.totalSeasons = media.number_of_seasons;
+    } else {
+      base.runtime = media.runtime;
+    }
+
+    res.json({ success: true, data: base });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: 'Failed to fetch details' });
+  }
+});
+
+app.get('/api/tv-season', async (req, res) => {
+  const { id, season } = req.query;
+  if (!id || !season) return res.status(400).json({ error: 'ID and season required' });
+
+  try {
+    const { data } = await tmdb.get(`/tv/${id}/season/${season}`, {
+      params: { language: 'en-US' },
+    });
     res.json({
       success: true,
-      data: {
-        id: movie.id,
-        title: movie.title,
-        year: movie.release_date ? movie.release_date.split('-')[0] : 'N/A',
-        releaseDate: movie.release_date || null,
-        poster: movie.poster_path
-          ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
-          : null,
-        backdrop: movie.backdrop_path
-          ? `https://image.tmdb.org/t/p/w1280${movie.backdrop_path}`
-          : null,
-        overview: movie.overview,
-        rating: movie.vote_average,
-        genres: movie.genres.map((g) => g.name),
-        runtime: movie.runtime,
-        trailerKey: trailer ? trailer.key : null,
-      },
+      episodes: (data.episodes || []).map((e) => ({
+        episode: e.episode_number,
+        name: e.name,
+      })),
     });
   } catch (err) {
     console.error(err.message);
-    res.status(500).json({ error: 'Failed to fetch movie details' });
+    res.status(500).json({ error: 'Failed to fetch season data' });
   }
 });
 
@@ -231,6 +270,17 @@ app.get('/api/proxy/*', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`NovaFlix engine alive on http://localhost:${PORT}`);
+});
+
+process.on('SIGINT', async () => {
+  console.log('Shutting down...');
+  await closeBrowser();
+  server.close(() => process.exit(0));
+});
+
+process.on('SIGTERM', async () => {
+  await closeBrowser();
+  server.close(() => process.exit(0));
 });

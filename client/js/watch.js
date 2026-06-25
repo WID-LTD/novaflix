@@ -2,14 +2,16 @@ const params = new URLSearchParams(location.search);
 const id = params.get('id');
 const type = params.get('type') || 'movie';
 const title = params.get('title') || 'Now Playing';
+const season = params.get('season') || '';
+const episode = params.get('episode') || '';
 
 if (!id) {
   document.body.innerHTML = '<div class="empty-state">No media ID</div>';
 } else {
-  initPlayer(id, type, title);
+  initPlayer(id, type, title, season, episode);
 }
 
-async function initPlayer(mediaId, mediaType, mediaTitle) {
+async function initPlayer(mediaId, mediaType, mediaTitle, mediaSeason, mediaEpisode) {
   const video = document.getElementById('video');
   const bufferingOverlay = document.getElementById('bufferingOverlay');
   const qualitySelect = document.getElementById('qualitySelect');
@@ -17,11 +19,16 @@ async function initPlayer(mediaId, mediaType, mediaTitle) {
   const titleEl = document.getElementById('playerTitle');
   const backLink = document.getElementById('backFromPlayer');
 
-  titleEl.textContent = mediaTitle;
-  backLink.href = `movie.html?id=${mediaId}`;
+  const displayTitle = mediaSeason ? `${mediaTitle} S${mediaSeason}E${mediaEpisode}` : mediaTitle;
+  titleEl.textContent = displayTitle;
+  backLink.href = `movie.html?id=${mediaId}&type=${mediaType}`;
 
   try {
-    const res = await fetch(`/api/source?id=${mediaId}&type=${mediaType}`);
+    let sourceUrl = `/api/source?id=${mediaId}&type=${mediaType}`;
+    if (mediaType === 'tv' && mediaSeason && mediaEpisode) {
+      sourceUrl += `&season=${mediaSeason}&episode=${mediaEpisode}`;
+    }
+    const res = await fetch(sourceUrl);
     const json = await res.json();
 
     if (!json.success || !json.streamUrl) {
@@ -44,7 +51,8 @@ async function initPlayer(mediaId, mediaType, mediaTitle) {
 
     const streamUrl = json.streamUrl;
 
-    downloadBtn.href = `/api/download?url=${encodeURIComponent(streamUrl)}&title=${encodeURIComponent(mediaTitle)}`;
+    const dlTitle = mediaSeason ? `${mediaTitle} S${mediaSeason}E${mediaEpisode}` : mediaTitle;
+    downloadBtn.href = `/api/download?url=${encodeURIComponent(streamUrl)}&title=${encodeURIComponent(dlTitle)}`;
 
     if (streamUrl.includes('.m3u8') && Hls.isSupported()) {
       const hls = new Hls({
