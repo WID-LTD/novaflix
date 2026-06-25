@@ -25,7 +25,20 @@ async function initPlayer(mediaId, mediaType, mediaTitle) {
     const json = await res.json();
 
     if (!json.success || !json.streamUrl) {
-      showError('No stream source available');
+      if (json.releaseDate) {
+        const release = new Date(json.releaseDate);
+        const now = new Date();
+        const daysSince = (now - release) / (1000 * 60 * 60 * 24);
+        if (release > now) {
+          showError(`Expected to release on ${release.toLocaleDateString('en-US', { dateStyle: 'long' })}`);
+        } else if (daysSince <= 14) {
+          showError('Recently released — streaming sources may still be uploading. Check back soon.');
+        } else {
+          showError('No streaming source available for this title');
+        }
+      } else {
+        showError(json.error || 'No stream source available');
+      }
       return;
     }
 

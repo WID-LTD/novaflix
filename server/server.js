@@ -73,6 +73,7 @@ app.get('/api/details', async (req, res) => {
         id: movie.id,
         title: movie.title,
         year: movie.release_date ? movie.release_date.split('-')[0] : 'N/A',
+        releaseDate: movie.release_date || null,
         poster: movie.poster_path
           ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
           : null,
@@ -112,8 +113,15 @@ app.get('/api/source', async (req, res) => {
       subtitles: result.subtitles || [],
     });
   } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: 'Failed to extract stream source' });
+    console.error(`[api/source] id=${id} type=${type || 'movie'} season=${season || '-'} episode=${episode || '-'}: ${err.message}`);
+    let releaseDate = null;
+    try {
+      const tmdbRes = await tmdb.get(`/${type === 'tv' ? 'tv' : 'movie'}/${id}`, {
+        params: { language: 'en-US' },
+      });
+      releaseDate = tmdbRes.data.release_date || tmdbRes.data.first_air_date || null;
+    } catch {}
+    res.json({ success: false, error: err.message, releaseDate });
   }
 });
 

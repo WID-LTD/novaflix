@@ -35,11 +35,17 @@ export async function getStreamUrl(tmdbId, type = 'movie', season = null, episod
             file: s.file,
           })),
         };
+      } else {
+        console.error(`[${source.referer}] returned status=${data.status_code}, no stream_urls for tmdb=${tmdbId}`);
       }
-    } catch {}
+    } catch (err) {
+      console.error(`[${source.referer}] failed for tmdb=${tmdbId}: ${err.message}`);
+    }
   }
 
-  throw new Error('No stream source available for this title');
+  const msg = `No stream source available for tmdb=${tmdbId}, type=${type}${season ? ` s${season}e${episode}` : ''}`;
+  console.error(msg);
+  throw new Error(msg);
 }
 
 export async function closeBrowser() {}
