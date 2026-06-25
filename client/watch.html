@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>NovaFlix - Player</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="watch-body">
+  <div class="player-container">
+    <div class="player-top">
+      <a id="backFromPlayer" class="back-link" href="">&larr; Back</a>
+      <span id="playerTitle" class="player-title"></span>
+    </div>
+
+    <div class="player-wrap" id="playerWrap">
+      <video id="video" class="video-element" controls playsinline></video>
+      <div id="bufferingOverlay" class="buffering-overlay" style="display:none">
+        <div class="spinner"></div>
+        <span>Buffering...</span>
+      </div>
+    </div>
+
+    <div class="player-controls-bar">
+      <div class="quality-selector">
+        <label for="qualitySelect">Quality:</label>
+        <select id="qualitySelect" disabled>
+          <option value="auto">Auto</option>
+        </select>
+      </div>
+      <a id="downloadFromPlayer" class="btn btn-small" href="">Download</a>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script src="js/watch.js"></script>
+</body>
+</html>

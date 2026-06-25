@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NovaFlix - Movie</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <nav class="top-bar">
+    <a href="index.html" class="back-link">&larr; Back to Search</a>
+  </nav>
+
+  <main class="container movie-page" id="moviePage">
+    <div id="movieLoader" class="loader">Loading...</div>
+
+    <div id="movieContent" style="display:none">
+      <div class="movie-header">
+        <div class="movie-poster">
+          <img id="posterImg" src="" alt="Poster" />
+        </div>
+        <div class="movie-info">
+          <h1 id="movieTitle"></h1>
+          <div class="meta">
+            <span id="movieYear"></span>
+            <span class="dot">&middot;</span>
+            <span id="movieRuntime"></span>
+            <span class="dot">&middot;</span>
+            <span id="movieRating"></span>
+          </div>
+          <div id="movieGenres" class="genres"></div>
+          <p id="movieOverview" class="overview"></p>
+          <div class="actions">
+            <a id="watchBtn" class="btn btn-primary" href="">Watch Now</a>
+            <a id="downloadBtn" class="btn btn-secondary" href="">Download</a>
+          </div>
+        </div>
+      </div>
+
+      <div id="trailerSection" class="trailer-section" style="display:none">
+        <h2>Trailer</h2>
+        <div class="trailer-wrap">
+          <iframe id="trailerIframe" src="" frameborder="0" allowfullscreen></iframe>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/movie.js"></script>
+</body>
+</html>

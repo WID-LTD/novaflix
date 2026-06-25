@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NovaFlix - Stream & Download</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-content">
+      <h1>NovaFlix</h1>
+      <p class="tagline">Stream & Download movies on demand</p>
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="Search for a movie..." autofocus />
+        <button id="searchBtn">Search</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="results" class="grid"></div>
+    <div id="emptyState" class="empty-state">
+      <p>Enter a movie title above to start browsing</p>
+    </div>
+  </main>
+
+  <script src="js/search.js"></script>
+</body>
+</html>
