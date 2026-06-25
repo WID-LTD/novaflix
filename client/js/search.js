@@ -21,7 +21,12 @@ async function searchMedia(query) {
     const res = await fetch(`/api/search?query=${encodeURIComponent(query)}&type=${currentType}`);
     const json = await res.json();
 
-    if (!json.success || json.data.length === 0) {
+    if (!json.success) {
+      resultsEl.innerHTML = `<div class="empty-state">${json.error || 'Search failed'}</div>`;
+      return;
+    }
+
+    if (json.data.length === 0) {
       resultsEl.innerHTML = `<div class="empty-state">No ${currentType === 'tv' ? 'shows' : 'movies'} found</div>`;
       return;
     }

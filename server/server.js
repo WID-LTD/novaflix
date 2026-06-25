@@ -11,12 +11,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3030;
 const TMDB_ACCESS_TOKEN = process.env.TMDB_ACCESS_TOKEN;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '..', 'client')));
 
 const tmdb = axios.create({
   baseURL: 'https://api.themoviedb.org/3',
@@ -51,7 +50,7 @@ app.get('/api/search', async (req, res) => {
     res.json({ success: true, data: results });
   } catch (err) {
     console.error(err.message);
-    res.status(500).json({ error: 'Failed to resolve metadata from TMDB' });
+    res.json({ success: false, error: 'Failed to resolve metadata from TMDB' });
   }
 });
 
@@ -107,7 +106,7 @@ app.get('/api/details', async (req, res) => {
     res.json({ success: true, data: base });
   } catch (err) {
     console.error(err.message);
-    res.status(500).json({ error: 'Failed to fetch details' });
+    res.json({ success: false, error: 'Failed to fetch details' });
   }
 });
 
@@ -128,7 +127,7 @@ app.get('/api/tv-season', async (req, res) => {
     });
   } catch (err) {
     console.error(err.message);
-    res.status(500).json({ error: 'Failed to fetch season data' });
+    res.json({ success: false, error: 'Failed to fetch season data' });
   }
 });
 
