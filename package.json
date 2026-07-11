@@ -1,0 +1,17 @@
+{
+  "name": "novaflix",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n api,web -c red,blue \"npm run dev -w server\" \"npm run dev -w client\"",
+    "dev:api": "npm run dev -w server",
+    "dev:web": "npm run dev -w client",
+    "build": "npm run build -w client"
+  },
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  }
+}

@@ -1,0 +1,1 @@
+import{j as e,g as n}from"./index-DAjtVsoH.js";const c=({rating:s,className:t=""})=>{const a=s>=7?"text-success":s>=5?"text-warning":"text-red-400";return e.jsxs("div",{className:`inline-flex items-center gap-1 ${a} ${t}`,children:[e.jsx(n,{className:"w-4 h-4 fill-current"}),e.jsx("span",{className:"font-semibold text-sm",children:s.toFixed(1)})]})};export{c as R};

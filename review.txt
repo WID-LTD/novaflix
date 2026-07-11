@@ -1,0 +1,835 @@
+Use the following prompt with OpenCode. It is written as a product design and implementation specification so the AI understands the scope, UX goals, and architecture instead of simply changing colors.
+
+---
+
+# OpenCode Prompt — Redesign NovaFlix into a Premium Streaming Platform
+
+## Project Overview
+
+You are an expert Senior Product Designer, UI/UX Designer, and React Frontend Engineer.
+
+Redesign the entire UI/UX of the existing NovaFlix application without breaking its existing functionality or API integrations.
+
+This is **not a refactor of functionality**. It is a complete redesign of the user experience, visual identity, information architecture, component system, and interaction design while preserving the current business logic.
+
+The final product should feel like a premium streaming platform comparable to Netflix, Apple TV, Disney+, HBO Max, and Prime Video, while maintaining its own unique identity.
+
+---
+
+# Primary Goal
+
+Transform NovaFlix into a world-class cinematic streaming experience that emphasizes:
+
+* Beautiful UI
+* Exceptional UX
+* Fast navigation
+* Modern interactions
+* Accessibility
+* Responsive layouts
+* Smooth animations
+* Premium visual hierarchy
+
+Every screen should feel polished enough to be used in production.
+
+---
+
+# Design Philosophy
+
+Follow these principles:
+
+* Content First
+* Minimal but Premium
+* Cinematic Experience
+* Large Visuals
+* Smooth Motion
+* Clean Typography
+* Spacious Layout
+* Consistent Design System
+* High Accessibility
+* Responsive by Default
+
+Avoid clutter.
+
+Avoid excessive gradients.
+
+Avoid outdated card layouts.
+
+Avoid inconsistent spacing.
+
+---
+
+# Brand Style
+
+Theme:
+
+Premium Dark Mode
+
+Primary Background
+
+```
+#090909
+```
+
+Secondary Background
+
+```
+#111111
+```
+
+Cards
+
+```
+#181818
+```
+
+Primary Accent
+
+```
+#E50914
+```
+
+Secondary Accent
+
+```
+#FF4D4F
+```
+
+Success
+
+```
+#00C853
+```
+
+Information
+
+```
+#00B8FF
+```
+
+Warning
+
+```
+#FFC107
+```
+
+Primary Text
+
+White
+
+Secondary Text
+
+Gray 400
+
+Muted Text
+
+Gray 500
+
+---
+
+# Typography
+
+Use
+
+Inter
+
+or
+
+Poppins
+
+Hierarchy
+
+Hero Title
+
+64px
+
+Section Title
+
+36px
+
+Movie Title
+
+24px
+
+Body
+
+16px
+
+Caption
+
+14px
+
+Buttons
+
+16px SemiBold
+
+---
+
+# Layout
+
+Desktop
+
+* Left Navigation
+* Main Content
+* Optional Right Sidebar
+
+Tablet
+
+Responsive Grid
+
+Mobile
+
+Bottom Navigation
+
+Everything should scale smoothly.
+
+---
+
+# Navigation
+
+Desktop Sidebar
+
+* Home
+* Movies
+* TV Shows
+* Trending
+* Top Rated
+* Discover
+* Watchlist
+* Continue Watching
+* Downloads
+* History
+* Settings
+* Profile
+
+Mobile Navigation
+
+* Home
+* Search
+* Discover
+* Library
+* Profile
+
+---
+
+# Home Page
+
+Redesign the homepage completely.
+
+Sections should include:
+
+Large Hero Banner
+
+Continue Watching
+
+Trending
+
+Popular Movies
+
+Popular TV Shows
+
+Upcoming
+
+Top Rated
+
+New Releases
+
+Genres
+
+Recommended
+
+Latest Added
+
+Because You Watched
+
+Editor's Picks
+
+Award Winning
+
+Hidden Gems
+
+Each section should use horizontal scrolling cards.
+
+Hero banner should include
+
+Movie Backdrop
+
+Movie Title
+
+Overview
+
+IMDb Rating
+
+Genres
+
+Runtime
+
+Buttons
+
+Watch Now
+
+Watch Trailer
+
+Add to Watchlist
+
+Share
+
+---
+
+# Movie Cards
+
+Design premium cards.
+
+Each card should include
+
+Poster
+
+Rating Badge
+
+Title
+
+Year
+
+Genre
+
+Hover Animation
+
+Quick Actions
+
+Watch
+
+Favorite
+
+Bookmark
+
+More Info
+
+Desktop Hover
+
+Scale
+
+Shadow
+
+Glow
+
+Preview Overlay
+
+Mobile
+
+Touch friendly
+
+---
+
+# Movie Details Page
+
+Redesign completely.
+
+Large backdrop
+
+Floating poster
+
+Movie metadata
+
+Genres
+
+Cast
+
+Crew
+
+Ratings
+
+Runtime
+
+Languages
+
+Production
+
+Buttons
+
+Play
+
+Trailer
+
+Watchlist
+
+Share
+
+Tabs
+
+Overview
+
+Cast
+
+Reviews
+
+Trailers
+
+Similar Movies
+
+Recommendations
+
+Gallery
+
+---
+
+# Video Player
+
+Modern streaming experience
+
+Support
+
+Subtitle
+
+Playback Speed
+
+Quality Selector
+
+Audio Tracks
+
+Fullscreen
+
+Picture-in-Picture
+
+Next Episode
+
+Episode List
+
+Auto Play
+
+Skip Intro
+
+Skip Credits
+
+Continue Watching Progress
+
+---
+
+# Search Experience
+
+Modern search page
+
+Large search field
+
+Instant suggestions
+
+Trending searches
+
+Popular actors
+
+Movies
+
+TV Shows
+
+Collections
+
+Filter system
+
+Genre
+
+Year
+
+Rating
+
+Language
+
+Runtime
+
+Sort
+
+Empty states
+
+Loading states
+
+---
+
+# Discover
+
+Advanced filtering
+
+Genre
+
+Language
+
+Country
+
+Rating
+
+Streaming Service
+
+Release Date
+
+Popularity
+
+Sort
+
+Grid/List Toggle
+
+---
+
+# TV Shows
+
+Season Selector
+
+Episode Cards
+
+Episode Runtime
+
+Watch Progress
+
+Continue Episode
+
+Cast
+
+Reviews
+
+Recommendations
+
+---
+
+# User Profile
+
+Modern dashboard
+
+Avatar
+
+Statistics
+
+Watch History
+
+Continue Watching
+
+Watchlist
+
+Downloads
+
+Favorite Genres
+
+Achievements
+
+Account Settings
+
+---
+
+# Authentication
+
+Premium authentication screens
+
+Sign In
+
+Sign Up
+
+Forgot Password
+
+Social Login
+
+Google
+
+GitHub
+
+Animated illustrations
+
+Minimal forms
+
+Beautiful validation
+
+---
+
+# Watchlist
+
+Grid Layout
+
+Sorting
+
+Search
+
+Collections
+
+Recently Added
+
+---
+
+# Downloads
+
+Downloaded Movies
+
+Offline Indicator
+
+Download Progress
+
+Storage Usage
+
+Delete Downloads
+
+---
+
+# Notifications
+
+Recommendations
+
+Watchlist Updates
+
+New Releases
+
+Continue Watching
+
+System Notifications
+
+---
+
+# Settings
+
+Theme
+
+Language
+
+Accessibility
+
+Subtitle Preferences
+
+Playback Preferences
+
+Notification Settings
+
+Privacy
+
+Security
+
+Account
+
+---
+
+# Loading Experience
+
+Replace all loading spinners with
+
+Skeleton Hero
+
+Skeleton Cards
+
+Skeleton Posters
+
+Skeleton Text
+
+Shimmer Effects
+
+---
+
+# Empty States
+
+Create beautiful empty states for
+
+Watchlist
+
+Downloads
+
+Search
+
+History
+
+Favorites
+
+Notifications
+
+---
+
+# Error Pages
+
+404
+
+Network Error
+
+Offline
+
+Something Went Wrong
+
+Permission Denied
+
+Each should include illustrations and recovery actions.
+
+---
+
+# Animations
+
+Use Framer Motion throughout.
+
+Implement
+
+Fade
+
+Slide
+
+Scale
+
+Shared Layout Animations
+
+Hero Transition
+
+Card Hover
+
+Modal Animation
+
+Drawer Animation
+
+Page Transition
+
+Image Fade
+
+Smooth Scroll
+
+Micro-interactions
+
+Do not overuse animations.
+
+---
+
+# Design System
+
+Create reusable components.
+
+Buttons
+
+Inputs
+
+Cards
+
+Movie Card
+
+TV Card
+
+Hero
+
+Modal
+
+Drawer
+
+Navigation
+
+Sidebar
+
+Bottom Navigation
+
+Badges
+
+Tags
+
+Progress Bars
+
+Rating Component
+
+Avatar
+
+Dropdown
+
+Tabs
+
+Accordions
+
+Dialogs
+
+Skeletons
+
+Pagination
+
+Toast
+
+Tooltips
+
+Context Menu
+
+---
+
+# Accessibility
+
+Follow WCAG AA.
+
+Keyboard Navigation
+
+ARIA Labels
+
+Screen Reader Support
+
+Focus States
+
+Color Contrast
+
+Reduced Motion Support
+
+Touch Targets
+
+---
+
+# Performance
+
+Optimize images
+
+Lazy loading
+
+Route splitting
+
+Virtualized lists
+
+Memoized components
+
+Responsive images
+
+Avoid unnecessary re-renders
+
+---
+
+# Responsiveness
+
+Support
+
+Mobile
+
+Tablet
+
+Laptop
+
+Desktop
+
+Ultra-wide monitors
+
+TV screens
+
+---
+
+# Technology Stack
+
+Keep the existing React architecture.
+
+Use
+
+* React
+* TypeScript
+* Tailwind CSS
+* Framer Motion
+* React Router
+* TanStack Query
+* Zustand (if already used)
+* Lucide React icons
+* React Hook Form
+* Shadcn/UI (or custom components)
+* TMDB API (existing integration)
+
+Do **not** rewrite the application's business logic unless required by the redesign.
+
+---
+
+# Constraints
+
+* Preserve all existing functionality and API integrations.
+* Improve only the UI, UX, layout, interactions, responsiveness, and component architecture.
+* Build a scalable design system with reusable components.
+* Ensure every page is production-ready.
+* Maintain clean, modular, and maintainable code.
+* Follow best practices for React, accessibility, and performance.
+
+## Expected Deliverables
+
+1. A complete redesign of every user-facing screen.
+2. A reusable component library and design system.
+3. Responsive layouts for mobile, tablet, desktop, and TV.
+4. Smooth animations and polished micro-interactions.
+5. Improved navigation and information architecture.
+6. Consistent spacing, typography, colors, and visual hierarchy across the entire application.
+7. A premium streaming experience that rivals leading entertainment platforms while retaining NovaFlix's existing functionality.

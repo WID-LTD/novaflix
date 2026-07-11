@@ -1,0 +1,23 @@
+api.ts:9 
+ GET http://localhost:3000/api/search?query=marvel&type=movie net::ERR_ABORTED 500 (Internal Server Error)
+
+api.ts:9 
+ GET http://localhost:3000/api/search?query=game+of+thrones&type=tv net::ERR_ABORTED 500 (Internal Server Error)
+api.ts:9 
+ GET http://localhost:3000/api/search?query=2024&type=movie net::ERR_ABORTED 500 (Internal Server Error)
+api.ts:9 
+ GET http://localhost:3000/api/search?query=inception&type=movie net::ERR_ABORTED 500 (Internal Server Error)
+api.ts:9 
+ GET http://localhost:3000/api/search?query=breaking+bad&type=tv net::ERR_ABORTED 500 (Internal Server Error)
+api.ts:9 
+ GET http://localhost:3000/api/search?query=marvel&type=movie net::ERR_ABORTED 500 (Internal Server Error)
+api.ts:9 
+ GET http://localhost:3000/api/search?query=game+of+thrones&type=tv net::ERR_ABORTED 500 (Internal Server Error)
+api.ts:9 
+ GET http://localhost:3000/api/search?query=2024&type=movie net::ERR_ABORTED 500 (Internal Server Error)
+api.ts:9 
+ GET http://localhost:3000/api/search?query=inception&type=movie net::ERR_ABORTED 500 (Internal Server Error)
+api.ts:9 
+ GET http://localhost:3000/api/search?query=breaking+bad&type=tv net::ERR_ABORTED 500 (Internal Server Error)
+﻿
+
