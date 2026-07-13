@@ -21,6 +21,7 @@ export default function Sidebar() {
     { to: '/discover?sort=trending', icon: TrendingUp, label: 'Trending', auth: false },
     { to: '/discover?sort=top_rated', icon: Star, label: 'Top Rated', auth: false },
     { to: '/discover', icon: Compass, label: 'Discover', auth: false },
+    { to: '/creators', icon: Users, label: 'Creators', auth: false },
     { to: '/watchlist', icon: Bookmark, label: 'Watchlist', auth: true },
     { to: '/profile', icon: User, label: 'Profile', auth: true },
     { to: '/settings', icon: Settings, label: 'Settings', auth: false },

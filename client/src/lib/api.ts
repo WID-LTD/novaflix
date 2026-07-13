@@ -45,3 +45,7 @@ export function getManifestInfo(url: string, id?: string, type?: string, season?
   if (episode) params.episode = episode
   return fetchJson(`${BASE}/manifest-info`, params)
 }
+
+export function getPublicCreators(): Promise<any> {
+  return fetchJson(`${BASE}/creator/public`)
+}

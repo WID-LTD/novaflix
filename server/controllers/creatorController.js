@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid'
+import pool from '../config/database.js'
 import { addUpload, getUploadsByUserId, getTipsForCreator, getCommentsForCreator, getTotalLikesForCreator, getCreatorDashboardStats } from '../db.js'
 
 export async function addUploadHandler(req, res) {
@@ -102,6 +103,25 @@ export async function getCreatorComments(req, res) {
   try {
     const comments = await getCommentsForCreator(req.userId)
     res.json({ success: true, comments })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+export async function getPublicCreators(req, res) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT u.id, u.name, u.avatar, u.bio,
+              cp.known_for_department,
+              (SELECT COUNT(*) FROM uploads WHERE user_id = u.id) as film_count,
+              (SELECT COALESCE(SUM(views), 0) FROM uploads WHERE user_id = u.id) as total_views,
+              (SELECT COUNT(*) FROM likes WHERE creator_id = u.id) as total_likes
+       FROM users u
+       JOIN creator_profiles cp ON cp.user_id = u.id
+       WHERE u.role = 'creator'
+       ORDER BY total_likes DESC`
+    )
+    res.json({ success: true, creators: rows })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

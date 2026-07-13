@@ -25,6 +25,7 @@ const Store = lazy(() => import('./pages/Store'))
 const Learn = lazy(() => import('./pages/Learn'))
 const WatchParty = lazy(() => import('./pages/WatchParty'))
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
+const Creators = lazy(() => import('./pages/Creators'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 
 function PageLoading() {
@@ -46,11 +47,13 @@ export default function App() {
   return (
     <Suspense fallback={<PageLoading />}>
       <Routes>
-        <Route path="/" element={<Landing />} />
+        <Route path="/landing" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/creator/login" element={<CreatorLogin />} />
         <Route element={<Layout />}>
+          <Route path="/" element={<Home />} />
           <Route path="/home" element={<Home />} />
+          <Route path="/creators" element={<Creators />} />
           <Route path="/search" element={<Search />} />
           <Route path="/movie/:id" element={<MovieDetail />} />
           <Route path="/tv/:id" element={<MovieDetail />} />

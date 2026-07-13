@@ -1,1 +1,0 @@
-import{j as s,n as c}from"./index-BgpT5KyP.js";const r=({rating:e,className:t=""})=>{const a=e>=7?"text-accent":e>=5?"text-accent-secondary":"text-red-400";return s.jsxs("div",{className:`inline-flex items-center gap-1 ${a} ${t}`,children:[s.jsx(c,{className:"w-4 h-4 fill-current"}),s.jsx("span",{className:"font-semibold text-sm",children:e.toFixed(1)})]})};export{r as R};

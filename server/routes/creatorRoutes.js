@@ -4,6 +4,7 @@ import * as creatorController from '../controllers/creatorController.js'
 
 const router = Router()
 
+router.get('/public', creatorController.getPublicCreators)
 router.post('/upload', authMiddleware, creatorController.addUploadHandler)
 router.get('/uploads', authMiddleware, creatorController.getUploads)
 router.get('/stats', authMiddleware, creatorController.getStats)

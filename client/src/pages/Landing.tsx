@@ -7,7 +7,7 @@ const features = [
   { icon: '🎬', title: 'Unlimited Streaming', desc: 'Watch thousands of movies and TV shows on any device, anytime.' },
   { icon: '✨', title: 'Personalized Picks', desc: 'Smart recommendations tailored to your taste and watch history.' },
   { icon: '👥', title: 'Watch Parties', desc: 'Watch together in real-time with friends — built-in chat and sync.' },
-  { icon: '🎥', title: 'Creator Hub', desc: 'Upload your films, earn revenue, and build your audience.' },
+  { icon: '🎥', title: 'Creator Hub', desc: 'Upload your films, earn revenue, and build your audience.', link: '/creators' },
   { icon: '📥', title: 'Smart Downloads', desc: 'Download to watch offline. Choose quality or let our algorithm decide.' },
   { icon: '🌍', title: 'Global Library', desc: 'Curated films from around the world, from indie gems to blockbusters.' },
 ]
@@ -75,13 +75,16 @@ export default function Landing() {
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-4">Everything you need</h2>
           <p className="text-gray-400 text-center mb-16 max-w-xl mx-auto">Built for viewers, creators, and everyone in between.</p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((f, i) => (
-              <div key={i} className="bg-surface-secondary border border-white/5 rounded-2xl p-6 hover:border-accent/30 transition-all group">
-                <span className="text-3xl mb-4 block">{f.icon}</span>
-                <h3 className="text-lg font-semibold mb-2">{f.title}</h3>
-                <p className="text-gray-400 text-sm">{f.desc}</p>
-              </div>
-            ))}
+            {features.map((f, i) => {
+              const Wrapper = f.link ? Link : 'div'
+              return (
+                <Wrapper key={i} to={f.link || ''} className={`bg-surface-secondary border border-white/5 rounded-2xl p-6 hover:border-accent/30 transition-all group ${f.link ? 'cursor-pointer' : ''}`}>
+                  <span className="text-3xl mb-4 block">{f.icon}</span>
+                  <h3 className="text-lg font-semibold mb-2">{f.title}</h3>
+                  <p className="text-gray-400 text-sm">{f.desc}</p>
+                </Wrapper>
+              )
+            })}
           </div>
         </div>
       </section>
@@ -157,6 +160,7 @@ export default function Landing() {
           <p className="text-gray-500 text-xs">&copy; 2026 NovaFlix. All rights reserved.</p>
           <div className="flex gap-6 text-xs text-gray-500">
             <Link to="/login" className="hover:text-white transition-colors">Sign In</Link>
+            <Link to="/creators" className="hover:text-white transition-colors">Creators</Link>
             <Link to="/creator/login" className="hover:text-white transition-colors">Creator Login</Link>
           </div>
         </div>
