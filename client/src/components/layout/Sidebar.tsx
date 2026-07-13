@@ -4,33 +4,43 @@ import {
   Home, Clapperboard, Tv, TrendingUp, Star, Compass,
   Bookmark, User, Settings, ChevronLeft, Film,
   Crown, BarChart3, Upload, ShoppingBag, BookOpen, Users,
+  Shield, LogIn,
 } from 'lucide-react'
 import { useStore } from '../../store/useStore'
-
-const navItems = [
-  { to: '/', icon: Home, label: 'Home' },
-  { to: '/search?type=movie', icon: Clapperboard, label: 'Movies' },
-  { to: '/tv-shows', icon: Tv, label: 'TV Shows' },
-  { to: '/discover?sort=trending', icon: TrendingUp, label: 'Trending' },
-  { to: '/discover?sort=top_rated', icon: Star, label: 'Top Rated' },
-  { to: '/discover', icon: Compass, label: 'Discover' },
-  { to: '/watchlist', icon: Bookmark, label: 'Watchlist' },
-  { to: '/profile', icon: User, label: 'Profile' },
-  { to: '/settings', icon: Settings, label: 'Settings' },
-]
-
-const businessItems = [
-  { to: '/pricing', icon: Crown, label: 'Plans', color: 'text-premium' },
-  { to: '/creator', icon: BarChart3, label: 'Creator Hub', color: 'text-creator' },
-  { to: '/upload', icon: Upload, label: 'Upload Film', color: 'text-creator' },
-  { to: '/store', icon: ShoppingBag, label: 'Merch Store', color: 'text-premium' },
-  { to: '/learn', icon: BookOpen, label: 'E-Learning', color: 'text-creator' },
-  { to: '/watch-party', icon: Users, label: 'Watch Party', color: 'text-info' },
-]
+import { useAuth } from '../../lib/AuthContext'
 
 export default function Sidebar() {
   const collapsed = useStore((s) => s.sidebarCollapsed)
   const toggle = useStore((s) => s.toggleSidebar)
+  const { user, isCreator, isAdmin } = useAuth()
+
+  const navItems = [
+    { to: '/home', icon: Home, label: 'Home', auth: false },
+    { to: '/search?type=movie', icon: Clapperboard, label: 'Movies', auth: false },
+    { to: '/tv-shows', icon: Tv, label: 'TV Shows', auth: false },
+    { to: '/discover?sort=trending', icon: TrendingUp, label: 'Trending', auth: false },
+    { to: '/discover?sort=top_rated', icon: Star, label: 'Top Rated', auth: false },
+    { to: '/discover', icon: Compass, label: 'Discover', auth: false },
+    { to: '/watchlist', icon: Bookmark, label: 'Watchlist', auth: true },
+    { to: '/profile', icon: User, label: 'Profile', auth: true },
+    { to: '/settings', icon: Settings, label: 'Settings', auth: false },
+  ]
+
+  const businessItems = [
+    { to: '/pricing', icon: Crown, label: 'Plans', color: 'text-accent', auth: false },
+    { to: '/creator', icon: BarChart3, label: 'Creator Hub', color: 'text-accent', auth: true, creatorOnly: true },
+    { to: '/upload', icon: Upload, label: 'Upload Film', color: 'text-accent', auth: true, creatorOnly: true },
+    { to: '/store', icon: ShoppingBag, label: 'Merch Store', color: 'text-accent', auth: false },
+    { to: '/learn', icon: BookOpen, label: 'E-Learning', color: 'text-accent', auth: false },
+    { to: '/watch-party', icon: Users, label: 'Watch Party', color: 'text-accent', auth: true },
+  ]
+
+  const visibleNav = navItems.filter(i => !i.auth || user)
+  const visibleBusiness = businessItems.filter(i => {
+    if (i.auth && !user) return false
+    if (i.creatorOnly && !isCreator) return false
+    return true
+  })
 
   return (
     <motion.nav
@@ -52,7 +62,7 @@ export default function Sidebar() {
       </div>
 
       <div className="flex-1 flex flex-col gap-1 px-2 overflow-y-auto">
-        {navItems.map((item) => (
+        {visibleNav.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -71,13 +81,23 @@ export default function Sidebar() {
           </NavLink>
         ))}
 
+        {!user && (
+          <NavLink
+            to="/login"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+          >
+            <LogIn className="w-5 h-5 shrink-0" />
+            {!collapsed && <span className="text-sm font-medium whitespace-nowrap">Sign In</span>}
+          </NavLink>
+        )}
+
         {!collapsed && (
           <div className="my-3 px-3">
             <div className="h-px bg-white/10" />
           </div>
         )}
 
-        {businessItems.map((item) => (
+        {visibleBusiness.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -95,6 +115,20 @@ export default function Sidebar() {
             )}
           </NavLink>
         ))}
+
+        {isAdmin && (
+          <NavLink
+            to="/admin"
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors duration-200 ${
+                isActive ? 'text-green-400 bg-white/5' : 'text-gray-400 hover:text-white hover:bg-white/5'
+              }`
+            }
+          >
+            <Shield className="w-5 h-5 shrink-0 text-green-400" />
+            {!collapsed && <span className="text-sm font-medium whitespace-nowrap">Admin Panel</span>}
+          </NavLink>
+        )}
       </div>
 
       <div className="px-2 mt-auto">

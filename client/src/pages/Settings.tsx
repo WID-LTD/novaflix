@@ -151,7 +151,7 @@ export default function Settings() {
           ))}
         </div>
 
-        <div className="mt-8 bg-gradient-to-r from-premium/10 to-premium/5 border border-premium/20 rounded-2xl p-6">
+        <div className="mt-8 bg-gradient-to-r from-accent/10 to-accent-secondary/5 border border-premium/20 rounded-2xl p-6">
           <div className="flex items-center gap-4">
             <PremiumBadge size="lg" />
             <div className="flex-1">

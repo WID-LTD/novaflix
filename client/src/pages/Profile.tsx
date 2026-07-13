@@ -34,9 +34,9 @@ export default function Profile() {
     <div className="min-h-screen px-4 md:px-8 pt-6 md:pt-10 pb-20">
       <div className="max-w-4xl mx-auto">
         {!isPremium && (
-          <div className="bg-gradient-to-r from-premium/10 to-premium/5 border border-premium/20 rounded-2xl p-6 mb-8">
+          <div className="bg-gradient-to-r from-accent/10 to-accent-secondary/5 border border-premium/20 rounded-2xl p-6 mb-8">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-full bg-gradient-to-br from-premium to-premium-light flex items-center justify-center">
+              <div className="w-14 h-14 rounded-full bg-gradient-to-br from-accent to-accent-secondary-light flex items-center justify-center">
                 <Crown className="w-7 h-7 text-black" />
               </div>
               <div className="flex-1">
@@ -79,17 +79,17 @@ export default function Profile() {
             <p className="text-xs text-gray-400 mt-1">Total Saved</p>
           </div>
           <div className="bg-surface-card border border-white/10 rounded-2xl p-5">
-            <Film className="w-6 h-6 text-info mb-3" />
+            <Film className="w-6 h-6 text-accent mb-3" />
             <p className="text-2xl font-bold">{movieCount}</p>
             <p className="text-xs text-gray-400 mt-1">Movies</p>
           </div>
           <div className="bg-surface-card border border-white/10 rounded-2xl p-5">
-            <Tv className="w-6 h-6 text-success mb-3" />
+            <Tv className="w-6 h-6 text-accent mb-3" />
             <p className="text-2xl font-bold">{tvCount}</p>
             <p className="text-xs text-gray-400 mt-1">TV Shows</p>
           </div>
           <div className="bg-surface-card border border-white/10 rounded-2xl p-5">
-            <Clock className="w-6 h-6 text-warning mb-3" />
+            <Clock className="w-6 h-6 text-accent-secondary mb-3" />
             <p className="text-2xl font-bold">{totalMinutes}</p>
             <p className="text-xs text-gray-400 mt-1">Minutes Watched</p>
           </div>
@@ -146,7 +146,7 @@ export default function Profile() {
 
         <div className="mb-10">
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Award className="w-5 h-5 text-premium" /> Achievements
+            <Award className="w-5 h-5 text-accent" /> Achievements
           </h2>
           <div className="grid grid-cols-4 gap-3">
             {badges.map((b) => {
@@ -179,14 +179,14 @@ export default function Profile() {
             </Link>
             <Link to="/creator" className="w-full flex items-center justify-between px-4 py-3 rounded-xl hover:bg-white/5 transition-colors">
               <div className="flex items-center gap-3">
-                <BarChart3 className="w-5 h-5 text-creator" />
+                <BarChart3 className="w-5 h-5 text-accent" />
                 <span className="text-sm">Creator Dashboard</span>
               </div>
               <span className="text-gray-500 text-sm">→</span>
             </Link>
             <Link to="/pricing" className="w-full flex items-center justify-between px-4 py-3 rounded-xl hover:bg-white/5 transition-colors">
               <div className="flex items-center gap-3">
-                <Crown className="w-5 h-5 text-premium" />
+                <Crown className="w-5 h-5 text-accent" />
                 <span className="text-sm">Premium Plans</span>
               </div>
               <span className="text-gray-500 text-sm">→</span>

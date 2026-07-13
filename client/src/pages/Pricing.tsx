@@ -92,11 +92,11 @@ export default function Pricing() {
     <div className="min-h-screen px-4 md:px-8 pt-6 md:pt-10 pb-20">
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-12">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-premium/10 mb-4">
-            <Crown className="w-8 h-8 text-premium" />
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-accent/10 mb-4">
+            <Crown className="w-8 h-8 text-accent" />
           </div>
           <h1 className="text-3xl md:text-section font-bold mb-3">
-            Choose Your <span className="text-premium">Plan</span>
+            Choose Your <span className="text-accent">Plan</span>
           </h1>
           <p className="text-gray-400 max-w-xl mx-auto">
             {user ? `You're on the ${isPremium ? 'Premium' : 'Free'} plan` : 'Start free and upgrade when you\'re ready. No hidden fees, cancel anytime.'}
@@ -135,7 +135,7 @@ export default function Pricing() {
                 {plan.features.map((f) => (
                   <li key={f.label} className="flex items-center gap-3 text-sm">
                     {f.included ? (
-                      <Check className="w-4 h-4 text-success shrink-0" />
+                      <Check className="w-4 h-4 text-accent shrink-0" />
                     ) : (
                       <X className="w-4 h-4 text-gray-600 shrink-0" />
                     )}
@@ -161,7 +161,7 @@ export default function Pricing() {
 
         <div className="mt-12 bg-surface-card border border-white/10 rounded-2xl p-6 md:p-8">
           <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-premium" /> Compare Features
+            <Sparkles className="w-5 h-5 text-accent" /> Compare Features
           </h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -169,7 +169,7 @@ export default function Pricing() {
                 <tr className="border-b border-white/10">
                   <th className="text-left py-3 pr-4 text-gray-400 font-medium">Feature</th>
                   <th className="text-center py-3 px-4 text-gray-400 font-medium">Free</th>
-                  <th className="text-center py-3 px-4 text-premium font-semibold">Premium</th>
+                  <th className="text-center py-3 px-4 text-accent font-semibold">Premium</th>
                   <th className="text-center py-3 pl-4 text-gray-400 font-medium">Duo</th>
                 </tr>
               </thead>
@@ -186,7 +186,7 @@ export default function Pricing() {
                   <tr key={row[0]} className="border-b border-white/5">
                     <td className="py-3 pr-4 text-gray-300">{row[0]}</td>
                     <td className="text-center py-3 px-4 text-gray-500">{row[1]}</td>
-                    <td className="text-center py-3 px-4 text-premium font-medium">{row[2]}</td>
+                    <td className="text-center py-3 px-4 text-accent font-medium">{row[2]}</td>
                     <td className="text-center py-3 pl-4 text-gray-300">{row[3]}</td>
                   </tr>
                 ))}

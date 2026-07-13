@@ -27,7 +27,7 @@ const CreatorCard: FC<CreatorCardProps> = ({
       className={`bg-surface-card border border-white/10 rounded-2xl p-5 ${className}`}
     >
       <div className="flex items-center gap-4">
-        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-creator to-creator-light flex items-center justify-center text-white text-xl font-bold shrink-0">
+        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-accent to-accent-secondary-light flex items-center justify-center text-white text-xl font-bold shrink-0">
           {avatar ? (
             <img src={avatar} alt={name} className="w-full h-full rounded-full object-cover" />
           ) : (

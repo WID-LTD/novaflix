@@ -12,18 +12,8 @@ export default {
         accent: {
           DEFAULT: '#E50914',
           secondary: '#FF4D4F',
+          light: '#FF8A8A',
         },
-        premium: {
-          DEFAULT: '#F5A623',
-          light: '#FFD700',
-        },
-        creator: {
-          DEFAULT: '#8B5CF6',
-          light: '#A78BFA',
-        },
-        success: '#00C853',
-        info: '#00B8FF',
-        warning: '#FFC107',
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],

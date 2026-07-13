@@ -22,7 +22,7 @@ const iconSizes: Record<string, string> = {
 const PremiumBadge: FC<PremiumBadgeProps> = ({ size = 'sm', label = 'Premium', className = '' }) => {
   return (
     <span
-      className={`inline-flex items-center font-semibold rounded-full bg-gradient-to-r from-premium to-premium-light text-black ${sizeStyles[size]} ${className}`}
+      className={`inline-flex items-center font-semibold rounded-full bg-gradient-to-r from-accent to-accent-secondary-light text-black ${sizeStyles[size]} ${className}`}
     >
       <Crown className={`${iconSizes[size]} fill-current`} />
       {label}

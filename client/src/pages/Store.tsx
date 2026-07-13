@@ -28,7 +28,7 @@ export default function Store() {
     <div className="min-h-screen px-4 md:px-8 pt-6 md:pt-10 pb-20">
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center gap-3 mb-2">
-          <ShoppingBag className="w-8 h-8 text-premium" />
+          <ShoppingBag className="w-8 h-8 text-accent" />
           <h1 className="text-3xl md:text-section font-bold">Merch Store</h1>
         </div>
         <p className="text-gray-400 text-sm mb-8">Wear your love for cinema</p>
@@ -40,7 +40,7 @@ export default function Store() {
               onClick={() => setActiveCategory(cat)}
               className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
                 activeCategory === cat
-                  ? 'bg-premium text-black'
+                  ? 'bg-accent text-black'
                   : 'bg-white/5 border border-white/10 text-gray-400 hover:text-white'
               }`}
             >
@@ -59,7 +59,7 @@ export default function Store() {
               className="group bg-surface-card border border-white/10 rounded-2xl overflow-hidden hover:border-premium/30 transition-colors"
             >
               <div className="aspect-square bg-gradient-to-br from-surface-secondary to-surface-card flex items-center justify-center">
-                <Shirt className="w-16 h-16 text-gray-600 group-hover:text-premium/50 transition-colors" />
+                <Shirt className="w-16 h-16 text-gray-600 group-hover:text-accent/50 transition-colors" />
               </div>
               <div className="p-4">
                 <div className="flex items-start justify-between gap-2">
@@ -72,8 +72,8 @@ export default function Store() {
                 </div>
                 <p className="text-xs text-gray-500 mt-1">{product.category}</p>
                 <div className="flex items-center justify-between mt-3">
-                  <span className="text-lg font-bold text-premium">${product.price}</span>
-                  <button className="p-2 rounded-lg bg-premium/10 text-premium hover:bg-premium/20 transition-colors">
+                  <span className="text-lg font-bold text-accent">${product.price}</span>
+                  <button className="p-2 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors">
                     <Heart className="w-4 h-4" />
                   </button>
                 </div>

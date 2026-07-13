@@ -2,8 +2,11 @@ import { lazy, Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import Layout from './components/layout/Layout'
 import AuthGuard from './components/layout/AuthGuard'
+import AdminGuard from './components/layout/AdminGuard'
+import CreatorGuard from './components/layout/CreatorGuard'
 import Skeleton from './components/ui/Skeleton'
 
+const Landing = lazy(() => import('./pages/Landing'))
 const Home = lazy(() => import('./pages/Home'))
 const Search = lazy(() => import('./pages/Search'))
 const MovieDetail = lazy(() => import('./pages/MovieDetail'))
@@ -14,12 +17,14 @@ const Watchlist = lazy(() => import('./pages/Watchlist'))
 const Profile = lazy(() => import('./pages/Profile'))
 const Settings = lazy(() => import('./pages/Settings'))
 const Login = lazy(() => import('./pages/Login'))
+const CreatorLogin = lazy(() => import('./pages/CreatorLogin'))
 const Pricing = lazy(() => import('./pages/Pricing'))
 const CreatorDashboard = lazy(() => import('./pages/CreatorDashboard'))
 const Upload = lazy(() => import('./pages/Upload'))
 const Store = lazy(() => import('./pages/Store'))
 const Learn = lazy(() => import('./pages/Learn'))
 const WatchParty = lazy(() => import('./pages/WatchParty'))
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 
 function PageLoading() {
@@ -41,25 +46,28 @@ export default function App() {
   return (
     <Suspense fallback={<PageLoading />}>
       <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/creator/login" element={<CreatorLogin />} />
         <Route element={<Layout />}>
-          <Route path="/" element={<Home />} />
+          <Route path="/home" element={<Home />} />
           <Route path="/search" element={<Search />} />
           <Route path="/movie/:id" element={<MovieDetail />} />
           <Route path="/tv/:id" element={<MovieDetail />} />
-          <Route path="/watch" element={<Watch />} />
+          <Route path="/watch" element={<AuthGuard><Watch /></AuthGuard>} />
           <Route path="/tv-shows" element={<TVShows />} />
           <Route path="/discover" element={<Discover />} />
-          <Route path="/watchlist" element={<Watchlist />} />
+          <Route path="/watchlist" element={<AuthGuard><Watchlist /></AuthGuard>} />
           <Route path="/profile" element={<AuthGuard><Profile /></AuthGuard>} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/pricing" element={<Pricing />} />
-          <Route path="/creator" element={<AuthGuard><CreatorDashboard /></AuthGuard>} />
+          <Route path="/creator" element={<CreatorGuard><CreatorDashboard /></CreatorGuard>} />
           <Route path="/upload" element={<AuthGuard><Upload /></AuthGuard>} />
           <Route path="/store" element={<Store />} />
           <Route path="/learn" element={<Learn />} />
           <Route path="/watch-party" element={<AuthGuard><WatchParty /></AuthGuard>} />
+          <Route path="/admin" element={<AdminGuard><AdminDashboard /></AdminGuard>} />
         </Route>
-        <Route path="/login" element={<Login />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>

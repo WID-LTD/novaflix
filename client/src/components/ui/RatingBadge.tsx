@@ -8,7 +8,7 @@ interface RatingBadgeProps {
 
 const RatingBadge: FC<RatingBadgeProps> = ({ rating, className = '' }) => {
   const color =
-    rating >= 7 ? 'text-success' : rating >= 5 ? 'text-warning' : 'text-red-400'
+    rating >= 7 ? 'text-accent' : rating >= 5 ? 'text-accent-secondary' : 'text-red-400'
 
   return (
     <div className={`inline-flex items-center gap-1 ${color} ${className}`}>

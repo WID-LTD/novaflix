@@ -59,8 +59,8 @@ export default function Upload() {
           animate={{ scale: 1, opacity: 1 }}
           className="text-center"
         >
-          <div className="w-20 h-20 rounded-full bg-success/20 flex items-center justify-center mx-auto mb-6">
-            <CheckCircle className="w-10 h-10 text-success" />
+          <div className="w-20 h-20 rounded-full bg-accent/20 flex items-center justify-center mx-auto mb-6">
+            <CheckCircle className="w-10 h-10 text-accent" />
           </div>
           <h1 className="text-3xl font-bold text-white mb-3">Uploaded Successfully!</h1>
           <p className="text-gray-400 mb-2">Your film is being processed.</p>
@@ -75,7 +75,7 @@ export default function Upload() {
     <div className="min-h-screen px-4 md:px-8 pt-6 md:pt-10 pb-20">
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center gap-3 mb-8">
-          <UploadIcon className="w-8 h-8 text-creator" />
+          <UploadIcon className="w-8 h-8 text-accent" />
           <div>
             <h1 className="text-2xl md:text-3xl font-bold">Upload Your Film</h1>
             <p className="text-sm text-gray-400 mt-1">Share your story with the world</p>
@@ -89,15 +89,15 @@ export default function Upload() {
             onDrop={handleDrop}
             className={`border-2 border-dashed rounded-2xl p-10 text-center transition-all duration-200 ${
               dragOver
-                ? 'border-creator bg-creator/5'
+                ? 'border-creator bg-accent/5'
                 : videoFile
-                  ? 'border-success bg-success/5'
+                  ? 'border-success bg-accent/5'
                   : 'border-white/20 hover:border-white/40'
             }`}
           >
             {videoFile ? (
               <div>
-                <Film className="w-12 h-12 text-success mx-auto mb-3" />
+                <Film className="w-12 h-12 text-accent mx-auto mb-3" />
                 <p className="text-sm font-medium text-white">{videoFile.name}</p>
                 <p className="text-xs text-gray-500 mt-1">
                   {(videoFile.size / 1024 / 1024).toFixed(1)} MB

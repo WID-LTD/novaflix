@@ -126,7 +126,7 @@ export default function WatchParty() {
             <div>
               <h1 className="text-2xl font-bold text-white">Watch Party</h1>
               <p className="text-sm text-gray-400 mt-1">
-                Room: <span className="text-creator font-mono font-bold">{roomCode}</span>
+                Room: <span className="text-accent font-mono font-bold">{roomCode}</span>
                 <span className="ml-3 text-gray-600">({users.length} connected)</span>
               </p>
             </div>
@@ -144,7 +144,7 @@ export default function WatchParty() {
                   onClick={() => setSelectedMovie(movie.id)}
                   className={`p-4 rounded-xl border text-left transition-all ${
                     selectedMovie === movie.id
-                      ? 'border-creator bg-creator/10'
+                      ? 'border-creator bg-accent/10'
                       : 'border-white/10 bg-white/5 hover:border-white/30'
                   }`}
                 >
@@ -160,7 +160,7 @@ export default function WatchParty() {
 
           <div className="bg-surface-card border border-white/10 rounded-2xl p-6">
             <div className="flex items-center gap-2 mb-4">
-              <MessageCircle className="w-5 h-5 text-creator" />
+              <MessageCircle className="w-5 h-5 text-accent" />
               <h2 className="text-lg font-semibold text-white">Party Chat</h2>
               <span className="text-xs text-gray-500 ml-auto">{messages.length} messages</span>
             </div>
@@ -172,7 +172,7 @@ export default function WatchParty() {
               ) : (
                 messages.map((msg, i) => (
                   <div key={i} className="flex items-start gap-2">
-                    <span className="text-xs font-medium text-creator shrink-0 mt-0.5">{msg.name}:</span>
+                    <span className="text-xs font-medium text-accent shrink-0 mt-0.5">{msg.name}:</span>
                     <span className="text-sm text-gray-300">{msg.message}</span>
                   </div>
                 ))
@@ -210,11 +210,11 @@ export default function WatchParty() {
     <div className="min-h-screen px-4 md:px-8 pt-6 md:pt-10 pb-20 flex items-center justify-center">
       <div className="max-w-lg w-full">
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-creator/10 mb-4">
-            <Users className="w-8 h-8 text-creator" />
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-accent/10 mb-4">
+            <Users className="w-8 h-8 text-accent" />
           </div>
           <h1 className="text-3xl md:text-4xl font-bold text-white mb-3">
-            Watch <span className="text-creator">Together</span>
+            Watch <span className="text-accent">Together</span>
           </h1>
           <p className="text-gray-400">Sync playback and chat with friends in real-time</p>
         </div>
@@ -248,9 +248,9 @@ export default function WatchParty() {
         </div>
 
         <div className="grid grid-cols-3 gap-3 text-center text-xs text-gray-500">
-          <div><Play className="w-5 h-5 mx-auto mb-1 text-premium" /><p>Sync Playback</p></div>
-          <div><MessageCircle className="w-5 h-5 mx-auto mb-1 text-info" /><p>Live Chat</p></div>
-          <div><Share2 className="w-5 h-5 mx-auto mb-1 text-success" /><p>Invite Friends</p></div>
+          <div><Play className="w-5 h-5 mx-auto mb-1 text-accent" /><p>Sync Playback</p></div>
+          <div><MessageCircle className="w-5 h-5 mx-auto mb-1 text-accent" /><p>Live Chat</p></div>
+          <div><Share2 className="w-5 h-5 mx-auto mb-1 text-accent" /><p>Invite Friends</p></div>
         </div>
       </div>
     </div>

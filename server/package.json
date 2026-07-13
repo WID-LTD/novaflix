@@ -6,7 +6,8 @@
   "main": "server.js",
   "scripts": {
     "dev": "node server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "seed": "node scripts/seedArtists.js"
   },
   "dependencies": {
     "axios": "^1.6.0",
@@ -16,6 +17,7 @@
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.3",
     "lowdb": "^5.1.0",
+    "paystack-api": "^2.0.6",
     "stripe": "^22.3.1",
     "uuid": "^14.0.1",
     "ws": "^8.21.0"

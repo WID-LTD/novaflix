@@ -20,8 +20,8 @@ const LockedOverlay: FC<LockedOverlayProps> = ({
     <div
       className={`absolute inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-20 ${className}`}
     >
-      <div className="w-12 h-12 rounded-full bg-premium/20 border border-premium/30 flex items-center justify-center">
-        <Lock className="w-6 h-6 text-premium" />
+      <div className="w-12 h-12 rounded-full bg-accent/20 border border-premium/30 flex items-center justify-center">
+        <Lock className="w-6 h-6 text-accent" />
       </div>
       <p className="text-white font-semibold text-lg">{feature}</p>
       <p className="text-gray-400 text-sm">{description}</p>

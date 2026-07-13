@@ -39,9 +39,9 @@ export function useToast() {
 }
 
 const iconMap: Record<ToastType, FC<{ className?: string }>> = {
-  success: (props) => <CheckCircle className="text-success" {...props} />,
+  success: (props) => <CheckCircle className="text-accent" {...props} />,
   error: (props) => <XCircle className="text-accent" {...props} />,
-  info: (props) => <Info className="text-info" {...props} />,
+  info: (props) => <Info className="text-accent" {...props} />,
 }
 
 const bgMap: Record<ToastType, string> = {

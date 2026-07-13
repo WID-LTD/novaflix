@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
@@ -6,20 +6,24 @@ import {
 } from 'lucide-react'
 import { getDetails } from '../lib/api'
 import { useStore } from '../store/useStore'
+import { useAuth } from '../lib/AuthContext'
 import Button from '../components/ui/Button'
 import Badge from '../components/ui/Badge'
 import RatingBadge from '../components/ui/RatingBadge'
 import Skeleton from '../components/ui/Skeleton'
 import SeasonEpisodeSelector from '../components/features/SeasonEpisodeSelector'
 import TipButton from '../components/ui/TipButton'
+import LikeButton from '../components/features/LikeButton'
+import CommentSection from '../components/features/CommentSection'
 import CreatorCard from '../components/ui/CreatorCard'
 import type { MediaDetails } from '../types'
 
 export default function MovieDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParamsImpl()
+  const [searchParams] = useSearchParams()
   const type = (searchParams.get('type') || 'movie') as 'movie' | 'tv'
+  const { user } = useAuth()
   const addToWatchlist = useStore((s) => s.addToWatchlist)
   const watchlist = useStore((s) => s.watchlist)
 
@@ -34,10 +38,30 @@ export default function MovieDetail() {
   const inWatchlist = details ? watchlist.some((w) => w.id === details.id) : false
 
   const handleWatch = (season?: number, episode?: number) => {
+    if (!user) {
+      navigate(`/login?redirect=/movie/${id}?type=${type}`)
+      return
+    }
     let url = `/watch?id=${id}&type=${type}`
     if (season) url += `&season=${season}`
     if (episode) url += `&episode=${episode}`
     navigate(url)
+  }
+
+  const handleAddToWatchlist = () => {
+    if (!user) {
+      navigate(`/login?redirect=/movie/${id}?type=${type}`)
+      return
+    }
+    if (!inWatchlist) {
+      addToWatchlist({
+        id: details!.id,
+        title: details!.title,
+        poster: details!.poster,
+        type: details!.type,
+        year: details!.year,
+      })
+    }
   }
 
   if (isLoading) {
@@ -184,20 +208,15 @@ export default function MovieDetail() {
                     <Play className="w-5 h-5" /> Trailer
                   </Button>
                 )}
+                <LikeButton
+                  contentId={details.id}
+                  contentType={details.type}
+                  className="px-4 py-2 border border-white/10 rounded-xl hover:border-accent/50"
+                />
                 <Button
                   variant="outline"
                   size="lg"
-                  onClick={() => {
-                    if (!inWatchlist) {
-                      addToWatchlist({
-                        id: details.id,
-                        title: details.title,
-                        poster: details.poster,
-                        type: details.type,
-                        year: details.year,
-                      })
-                    }
-                  }}
+                  onClick={handleAddToWatchlist}
                 >
                   <Star className="w-5 h-5" />
                   {inWatchlist ? 'In Watchlist' : 'Add to Watchlist'}
@@ -218,7 +237,7 @@ export default function MovieDetail() {
 
               <div className="mb-8">
                 <h3 className="text-base font-semibold text-white mb-3 flex items-center gap-2">
-                  <ShoppingBag className="w-4 h-4 text-premium" /> Official Merch
+                  <ShoppingBag className="w-4 h-4 text-accent" /> Official Merch
                 </h3>
                 <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-2">
                   {['Classic Tee', 'Poster', 'Cap', 'Mug'].map((item) => (
@@ -230,10 +249,17 @@ export default function MovieDetail() {
                         <ShoppingBag className="w-6 h-6 text-gray-600" />
                       </div>
                       <p className="text-xs font-medium text-white truncate">{item}</p>
-                      <p className="text-xs text-premium font-semibold mt-1">$19.99</p>
+                      <p className="text-xs text-accent font-semibold mt-1">$19.99</p>
                     </div>
                   ))}
                 </div>
+              </div>
+
+              <div className="mb-8">
+                <CommentSection
+                  contentId={details.id}
+                  contentType={details.type}
+                />
               </div>
 
               {details.type === 'tv' && details.seasons && details.seasons.length > 0 && (
@@ -254,7 +280,4 @@ export default function MovieDetail() {
   )
 }
 
-function useSearchParamsImpl() {
-  const params = new URLSearchParams(window.location.search)
-  return [params]
-}
+

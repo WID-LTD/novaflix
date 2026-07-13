@@ -1,16 +1,17 @@
-import { useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Film, Mail, Lock, Github, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
+import { getDetails, searchMedia } from '../lib/api'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 
 export default function Login() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const redirect = searchParams.get('redirect') || '/'
-  const { login, register } = useAuth()
+  const redirect = searchParams.get('redirect') || '/home'
+  const { login, register, verifyEmail, resendVerification } = useAuth()
   const [isSignUp, setIsSignUp] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState('')
@@ -18,6 +19,21 @@ export default function Login() {
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [needsVerify, setNeedsVerify] = useState(false)
+  const [code, setCode] = useState('')
+  const [verifying, setVerifying] = useState(false)
+  const [backdrop, setBackdrop] = useState('')
+
+  useEffect(() => {
+    searchMedia('marvel', 'movie').then(async (res) => {
+      if (!res.success || !res.data.length) return
+      const pick = res.data[Math.floor(Math.random() * Math.min(res.data.length, 10))]
+      const detail = await getDetails(String(pick.id), 'movie')
+      if (detail.success && detail.data.backdrop) {
+        setBackdrop(detail.data.backdrop)
+      }
+    })
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -30,42 +46,143 @@ export default function Login() {
 
     setLoading(false)
 
-    if (result.success) {
+    if (result.success && !result.userId) {
       navigate(redirect)
+    } else if (result.needsVerification || (result.success && result.userId)) {
+      setNeedsVerify(true)
     } else {
       setError(result.error || 'Something went wrong')
     }
   }
 
+  const handleVerify = async () => {
+    setError('')
+    setVerifying(true)
+    const result = await verifyEmail(code)
+    setVerifying(false)
+    if (result.success) {
+      navigate(redirect)
+    } else {
+      setError(result.error || 'Invalid code')
+    }
+  }
+
+  const handleResend = async () => {
+    setError('')
+    const result = await resendVerification()
+    if (result.success) {
+      setError('')
+    } else {
+      setError(result.error || 'Failed to resend')
+    }
+  }
+
+  const bgStyle = backdrop
+    ? { backgroundImage: `url(${backdrop})` }
+    : {}
+
+  if (needsVerify) {
+    return (
+      <div className="relative min-h-screen flex items-center justify-center overflow-hidden">
+        <div className="absolute inset-0 bg-cover bg-center scale-110" style={bgStyle} />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/70 to-black" />
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative w-full max-w-md px-4"
+        >
+          <div className="backdrop-blur-xl bg-black/40 border border-white/10 rounded-3xl p-8 ring-1 ring-accent/20">
+            <div className="text-center mb-6">
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-accent/10 mb-3">
+                <Film className="w-7 h-7 text-accent" />
+              </div>
+              <h1 className="text-xl font-bold">Verify your email</h1>
+              <p className="text-gray-400 mt-1 text-sm">6-digit code sent to {email}</p>
+            </div>
+            {error && (
+              <div className="bg-accent/10 border border-accent/20 text-accent text-sm rounded-xl px-4 py-3 mb-4">{error}</div>
+            )}
+            <div className="space-y-4">
+              <Input type="text" placeholder="Enter 6-digit code" value={code} onChange={e => setCode(e.target.value)} maxLength={6} className="text-center text-2xl tracking-widest" />
+              <Button className="w-full" size="lg" loading={verifying} onClick={handleVerify} disabled={code.length !== 6}>
+                Verify Email
+              </Button>
+              <button onClick={handleResend} className="w-full text-sm text-gray-400 hover:text-accent transition-colors">Resend code</button>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-surface px-4">
+    <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-surface">
+      <div
+        className="absolute inset-0 bg-cover bg-center scale-110 transition-opacity duration-1000"
+        style={{
+          ...bgStyle,
+          opacity: backdrop ? 0.4 : 0,
+        }}
+      />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/60 to-black" />
+      <div className="absolute inset-0 bg-gradient-to-t from-surface/50 via-transparent to-transparent" />
+
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md"
+        transition={{ duration: 0.6 }}
+        className="relative w-full max-w-md px-4"
       >
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-accent/10 mb-4">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.2 }}
+          className="text-center mb-8"
+        >
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-accent/10 mb-4 ring-1 ring-accent/20">
             <Film className="w-8 h-8 text-accent" />
           </div>
-          <h1 className="text-3xl font-bold">
+          <motion.h1
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="text-3xl font-bold"
+          >
             Nova<span className="text-accent">Flix</span>
-          </h1>
-          <p className="text-gray-400 mt-2">
+          </motion.h1>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.4 }}
+            className="text-gray-400 mt-2"
+          >
             {isSignUp ? 'Create your account' : 'Welcome back'}
-          </p>
-        </div>
+          </motion.p>
+        </motion.div>
 
-        <div className="bg-surface-card border border-white/10 rounded-2xl p-8">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="backdrop-blur-xl bg-black/40 border border-white/10 rounded-3xl p-8 ring-1 ring-accent/20 shadow-2xl shadow-accent/5"
+        >
           {error && (
-            <div className="bg-accent/10 border border-accent/20 text-accent text-sm rounded-xl px-4 py-3 mb-4">
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className="bg-accent/10 border border-accent/20 text-accent text-sm rounded-xl px-4 py-3 mb-4"
+            >
               {error}
-            </div>
+            </motion.div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {isSignUp && (
-              <div>
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+              >
                 <label className="text-sm text-gray-400 mb-1.5 block">Name</label>
                 <Input
                   type="text"
@@ -73,7 +190,7 @@ export default function Login() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
-              </div>
+              </motion.div>
             )}
 
             <div>
@@ -111,9 +228,15 @@ export default function Login() {
               </div>
             </div>
 
-            <Button type="submit" className="w-full" size="lg" loading={loading}>
-              {isSignUp ? 'Create Account' : 'Sign In'}
-            </Button>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+            >
+              <Button type="submit" className="w-full" size="lg" loading={loading}>
+                {isSignUp ? 'Create Account' : 'Sign In'}
+              </Button>
+            </motion.div>
           </form>
 
           <div className="relative my-6">
@@ -121,12 +244,17 @@ export default function Login() {
               <div className="w-full border-t border-white/10" />
             </div>
             <div className="relative flex justify-center text-xs">
-              <span className="bg-surface-card px-2 text-gray-500">or continue with</span>
+              <span className="bg-black/40 px-2 text-gray-500">or continue with</span>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            <button className="flex items-center justify-center gap-2 px-4 py-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.6 }}
+            className="grid grid-cols-2 gap-3 mb-6"
+          >
+            <button type="button" className="flex items-center justify-center gap-2 px-4 py-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 hover:border-accent/30 transition-all">
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
                 <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -135,22 +263,34 @@ export default function Login() {
               </svg>
               <span className="text-sm">Google</span>
             </button>
-            <button className="flex items-center justify-center gap-2 px-4 py-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors">
+            <button type="button" className="flex items-center justify-center gap-2 px-4 py-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 hover:border-accent/30 transition-all">
               <Github className="w-5 h-5" />
               <span className="text-sm">GitHub</span>
             </button>
-          </div>
+          </motion.div>
 
-          <p className="text-center text-sm text-gray-500">
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.7 }}
+            className="text-center text-sm text-gray-500"
+          >
             {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
             <button
+              type="button"
               onClick={() => setIsSignUp(!isSignUp)}
-              className="text-accent hover:text-red-400 transition-colors font-medium"
+              className="text-accent hover:text-accent-light transition-colors font-medium"
             >
               {isSignUp ? 'Sign In' : 'Sign Up'}
             </button>
-          </p>
-        </div>
+          </motion.p>
+
+          <div className="mt-4 text-center">
+            <Link to="/creator/login" className="text-sm text-gray-500 hover:text-accent transition-colors">
+              Creator login →
+            </Link>
+          </div>
+        </motion.div>
 
         <p className="text-center text-xs text-gray-600 mt-6">
           By continuing, you agree to our Terms of Service and Privacy Policy

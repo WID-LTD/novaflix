@@ -71,9 +71,9 @@ export default function TipButton({ recipientName = 'this creator', onTip, class
                       <button
                         key={p.amount}
                         onClick={() => handleTip(p.amount)}
-                        className="flex-1 flex flex-col items-center gap-1 px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl hover:border-premium/50 hover:bg-premium/10 transition-colors"
+                        className="flex-1 flex flex-col items-center gap-1 px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl hover:border-premium/50 hover:bg-accent/10 transition-colors"
                       >
-                        <Icon className="w-5 h-5 text-premium" />
+                        <Icon className="w-5 h-5 text-accent" />
                         <span className="text-xs font-semibold text-white">${p.amount}</span>
                         <span className="text-[10px] text-gray-500">{p.label}</span>
                       </button>
@@ -92,7 +92,7 @@ export default function TipButton({ recipientName = 'this creator', onTip, class
                   <button
                     onClick={handleCustom}
                     disabled={!customAmount || parseFloat(customAmount) <= 0}
-                    className="px-4 py-2 bg-premium text-black font-semibold text-sm rounded-xl disabled:opacity-50 hover:bg-premium-light transition-colors"
+                    className="px-4 py-2 bg-accent text-black font-semibold text-sm rounded-xl disabled:opacity-50 hover:bg-accent-light transition-colors"
                   >
                     Send
                   </button>

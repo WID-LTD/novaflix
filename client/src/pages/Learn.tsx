@@ -73,7 +73,7 @@ export default function Learn() {
     <div className="min-h-screen px-4 md:px-8 pt-6 md:pt-10 pb-20">
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center gap-3 mb-2">
-          <BookOpen className="w-8 h-8 text-creator" />
+          <BookOpen className="w-8 h-8 text-accent" />
           <h1 className="text-3xl md:text-section font-bold">E-Learning</h1>
         </div>
         <p className="text-gray-400 text-sm mb-8">
@@ -89,22 +89,22 @@ export default function Learn() {
               transition={{ delay: i * 0.05 }}
               className="group bg-surface-card border border-white/10 rounded-2xl overflow-hidden hover:border-creator/30 transition-colors"
             >
-              <div className="aspect-video bg-gradient-to-br from-creator/20 to-surface-secondary flex items-center justify-center relative">
-                <Film className="w-12 h-12 text-gray-600 group-hover:text-creator/50 transition-colors" />
+              <div className="aspect-video bg-gradient-to-br from-accent/20 to-surface-secondary flex items-center justify-center relative">
+                <Film className="w-12 h-12 text-gray-600 group-hover:text-accent/50 transition-colors" />
                 {course.premium && (
                   <div className="absolute top-3 right-3">
                     <PremiumBadge size="sm" />
                   </div>
                 )}
                 <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
-                  <div className="w-14 h-14 rounded-full bg-creator flex items-center justify-center">
+                  <div className="w-14 h-14 rounded-full bg-accent flex items-center justify-center">
                     <Play className="w-6 h-6 fill-white text-white ml-0.5" />
                   </div>
                 </div>
               </div>
               <div className="p-5">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[10px] font-medium text-creator bg-creator/10 px-2 py-0.5 rounded-full">
+                  <span className="text-[10px] font-medium text-accent bg-accent/10 px-2 py-0.5 rounded-full">
                     {course.category}
                   </span>
                 </div>
@@ -127,7 +127,7 @@ export default function Learn() {
 
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1">
-                    <Star className="w-4 h-4 fill-premium text-premium" />
+                    <Star className="w-4 h-4 fill-premium text-accent" />
                     <span className="text-sm font-semibold text-white">{course.rating}</span>
                   </div>
                   <Button variant={course.premium ? 'primary' : 'secondary'} size="sm">
