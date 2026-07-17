@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { searchMedia, getDetails } from '../lib/api'
+import { getTrendingFeed, getNowPlaying, getDetails } from '../lib/api'
 import { useStore } from '../store/useStore'
 import HeroBanner from '../components/features/HeroBanner'
 import ContentRow from '../components/features/ContentRow'
@@ -14,50 +14,45 @@ function shuffleArray<T>(arr: T[]): T[] {
   return shuffled
 }
 
-async function fetchSection(keyword: string, type: 'movie' | 'tv'): Promise<MediaItem[]> {
-  const res = await searchMedia(keyword, type)
-  return res.success ? res.data.slice(0, 20) : []
-}
+const HERO_COUNT = 6
 
 export default function Home() {
-  const [heroItem, setHeroItem] = useState<MediaDetails | null>(null)
+  const [heroItems, setHeroItems] = useState<MediaDetails[]>([])
   const continueWatching = useStore((s) => s.continueWatching)
   const watchlist = useStore((s) => s.watchlist)
-  const [trending, setTrending] = useState<MediaItem[]>([])
-  const [popularMovies, setPopularMovies] = useState<MediaItem[]>([])
-  const [popularTV, setPopularTV] = useState<MediaItem[]>([])
-  const [upcoming, setUpcoming] = useState<MediaItem[]>([])
-  const [topRated, setTopRated] = useState<MediaItem[]>([])
+  const [trendingMovies, setTrendingMovies] = useState<MediaItem[]>([])
+  const [trendingTV, setTrendingTV] = useState<MediaItem[]>([])
+  const [nowPlaying, setNowPlaying] = useState<MediaItem[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const [movieResults, tvResults, movieUpcoming, topRatedM, topRatedT] = await Promise.all([
-        fetchSection('marvel', 'movie'),
-        fetchSection('game of thrones', 'tv'),
-        fetchSection('2024', 'movie'),
-        fetchSection('inception', 'movie'),
-        fetchSection('breaking bad', 'tv'),
+      const [trendingRes, nowPlayingRes] = await Promise.all([
+        getTrendingFeed(),
+        getNowPlaying(),
       ])
 
-      const allTrending = shuffleArray([
-        ...movieResults.slice(0, 10),
-        ...tvResults.slice(0, 10),
-      ])
+      const movies = trendingRes.success ? trendingRes.data.movies.slice(0, 20) : []
+      const tv = trendingRes.success ? trendingRes.data.tv.slice(0, 20) : []
+      const np = nowPlayingRes.success ? nowPlayingRes.data.slice(0, 20) : []
 
-      setTrending(allTrending)
-      setPopularMovies(movieResults)
-      setPopularTV(tvResults)
-      setUpcoming(movieUpcoming)
-      setTopRated([...topRatedM, ...topRatedT])
+      setTrendingMovies(movies)
+      setTrendingTV(tv)
+      setNowPlaying(np)
 
-      if (allTrending.length > 0) {
-        const first = allTrending[0]
-        const detailRes = await getDetails(String(first.id), first.type)
-        if (detailRes.success) {
-          setHeroItem(detailRes.data)
-        }
+      const heroCandidates = shuffleArray([...np.slice(0, 8), ...movies.slice(0, 8)]).slice(0, HERO_COUNT)
+
+      if (heroCandidates.length > 0) {
+        const detailResults = await Promise.all(
+          heroCandidates.map((item) => getDetails(String(item.id), item.type))
+        )
+        setHeroItems(
+          detailResults
+            .filter((r) => r.success && r.data)
+            .map((r) => r.data)
+            .slice(0, HERO_COUNT)
+        )
       }
 
       setLoading(false)
@@ -69,22 +64,17 @@ export default function Home() {
     id: cw.id,
     title: cw.title,
     poster: cw.poster,
+    backdrop: null,
     type: cw.type,
     year: '',
     overview: '',
   }))
 
-  const trendingItems: MediaItem[] = trending.slice(0, 20)
-  const movieItems: MediaItem[] = popularMovies.slice(0, 20)
-  const tvItems: MediaItem[] = popularTV.slice(0, 20)
-  const upcomingItems: MediaItem[] = upcoming.slice(0, 20)
-  const topRatedItems: MediaItem[] = topRated.slice(0, 20)
-
   return (
     <div className="min-h-screen">
-      <HeroBanner item={heroItem} loading={loading} />
+      <HeroBanner items={heroItems} loading={loading} />
 
-      <div className="relative z-10 -mt-32 md:-mt-48">
+      <main className="relative z-20 -mt-20 space-y-16 pb-nav">
         {continueWatchingItems.length > 0 && (
           <ContentRow
             title="Continue Watching"
@@ -93,10 +83,10 @@ export default function Home() {
           />
         )}
 
-        {trendingItems.length > 0 && (
+        {trendingMovies.length > 0 && (
           <ContentRow
             title="Trending Now"
-            items={trendingItems}
+            items={trendingMovies.slice(0, 20)}
             link="/discover?sort=trending"
           />
         )}
@@ -104,43 +94,35 @@ export default function Home() {
         {watchlist.length > 0 && (
           <ContentRow
             title="Because You Watched"
-            items={shuffleArray([...movieItems, ...tvItems]).slice(0, 10)}
+            items={shuffleArray([...trendingMovies, ...trendingTV]).slice(0, 10)}
             link="/discover"
           />
         )}
 
-        {movieItems.length > 0 && (
+        {nowPlaying.length > 0 && (
           <ContentRow
-            title="Popular Movies"
-            items={movieItems}
+            title="Now Playing"
+            items={nowPlaying}
             link="/search?type=movie"
           />
         )}
 
-        {tvItems.length > 0 && (
+        {trendingTV.length > 0 && (
           <ContentRow
             title="Popular TV Shows"
-            items={tvItems}
+            items={trendingTV}
             link="/tv-shows"
           />
         )}
 
-        {upcomingItems.length > 0 && (
+        {trendingMovies.length > 0 && (
           <ContentRow
-            title="Trending in Your Area"
-            items={upcomingItems}
-            link="/discover"
-          />
-        )}
-
-        {topRatedItems.length > 0 && (
-          <ContentRow
-            title="Top Rated"
-            items={topRatedItems}
+            title="Top Rated Movies"
+            items={shuffleArray(trendingMovies).slice(0, 20)}
             link="/discover?sort=top_rated"
           />
         )}
-      </div>
+      </main>
     </div>
   )
 }

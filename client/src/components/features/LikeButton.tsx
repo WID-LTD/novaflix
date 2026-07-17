@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Heart } from 'lucide-react'
+import Icon from '../ui/Icon'
 import { useAuth } from '../../lib/AuthContext'
 import { toggleLike, checkLike } from '../../lib/auth'
 
@@ -49,7 +49,7 @@ export default function LikeButton({ contentId, contentType, creatorId, classNam
         animate={animating ? { scale: [1, 1.3, 1] } : {}}
         transition={{ duration: 0.3 }}
       >
-        <Heart className={`w-5 h-5 ${liked ? 'fill-accent' : ''}`} />
+        <Icon name="favorite" fill={liked} className={`w-5 h-5 ${liked ? 'text-accent' : ''}`} />
       </motion.div>
       <span className="text-sm">{count || ''}</span>
     </button>

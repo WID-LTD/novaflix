@@ -1,6 +1,14 @@
 import axios from 'axios'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
 import { spawn } from 'child_process'
 import { getStreamUrl } from '../scraper.mjs'
+import { getActiveSessionCount } from '../db.js'
+import { PLAN_FEATURES } from './planUtils.js'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const DOWNLOADS_DIR = path.join(__dirname, '..', 'download')
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 
@@ -37,6 +45,18 @@ async function parseMasterManifest(masterUrl) {
   }
 
   variants.sort((a, b) => (parseInt(a.resolution?.split('x')[1]) || 0) - (parseInt(b.resolution?.split('x')[1]) || 0))
+
+  // Apply plan resolution cap
+  if (plan && PLAN_MAX_RES[plan] !== undefined) {
+    const maxRes = PLAN_MAX_RES[plan]
+    const filtered = variants.filter((v) => {
+      const height = parseInt(v.resolution?.split('x')[1]) || 0
+      return height <= maxRes
+    })
+    if (filtered.length > 0) variants = filtered
+    else if (variants.length > 0) variants = [variants[0]]
+  }
+
   return variants
 }
 
@@ -52,6 +72,17 @@ function formatSize(bytes) {
 export async function source(req, res) {
   const { id, type, season, episode } = req.query
   if (!id) return res.status(400).json({ error: 'TMDB ID is required' })
+
+  // Concurrent screen enforcement
+  const plan = req.user?.plan || 'free'
+  const maxScreens = PLAN_FEATURES[plan]?.concurrentScreens || 1
+  const activeSessions = await getActiveSessionCount(req.userId)
+  if (activeSessions >= maxScreens) {
+    return res.status(429).json({
+      success: false,
+      error: `Your ${plan} plan allows ${maxScreens} concurrent screen${maxScreens > 1 ? 's' : ''}. You've reached this limit.`,
+    })
+  }
 
   try {
     const result = await getStreamUrl(id, type || 'movie', season || null, episode || null)
@@ -75,8 +106,10 @@ export async function source(req, res) {
   }
 }
 
+const PLAN_MAX_RES = { free: 480, student: 720, basic: 720, standard: 1080, premium: 2160 }
+
 export async function manifestInfo(req, res) {
-  const { url, id, type, season, episode } = req.query
+  const { url, id, type, season, episode, plan } = req.query
   if (!url) return res.status(400).json({ error: 'URL is required' })
 
   try {
@@ -129,10 +162,16 @@ export async function manifestInfo(req, res) {
   }
 }
 
+const DOWNLOAD_PLANS = { student: true, basic: true, standard: true, premium: true }
+
 export async function download(req, res) {
   const ffmpegPath = req.app.locals.ffmpegPath
-  const { url, title, variant, compress } = req.query
+  const { url, title, variant, compress, save } = req.query
   if (!url) return res.status(400).json({ error: 'URL is required' })
+
+  if (!DOWNLOAD_PLANS[req.user?.plan]) {
+    return res.status(403).json({ error: 'Downloads require a paid plan (Student or higher)' })
+  }
 
   const safeTitle = title
     ? title.replace(/[^a-z0-9]/gi, '_').toLowerCase()
@@ -170,66 +209,141 @@ export async function download(req, res) {
       return res.status(400).json({ error: 'Stream not accessible' })
     }
 
-    res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}.mp4"`)
-    res.setHeader('Content-Type', 'video/mp4')
-    res.setHeader('Access-Control-Allow-Origin', '*')
-    res.setHeader('Transfer-Encoding', 'chunked')
+    const outputFilename = `${safeTitle}.mp4`
 
-    const ffArgs = [
-      '-headers', dlHeaders,
-      '-allowed_extensions', 'ALL',
-      '-i', cdnUrl,
-      '-f', 'mp4',
-      '-movflags', 'frag_keyframe+empty_moov',
-      '-loglevel', 'error',
-      '-y',
-      'pipe:1',
-    ]
-
-    if (compress === 'true') {
-      ffArgs.splice(ffArgs.length - 4, 0,
-        '-c:v', 'libx264',
-        '-crf', '23',
-        '-preset', 'fast',
-        '-c:a', 'aac',
-        '-b:a', '128k',
-      )
-    } else {
-      ffArgs.splice(ffArgs.length - 4, 0,
-        '-c', 'copy',
-        '-bsf:a', 'aac_adtstoasc',
-      )
-    }
-
-    const ffmpeg = spawn(ffmpegPath, ffArgs, { stdio: ['pipe', 'pipe', 'pipe'] })
-
-    let stderrData = ''
-    ffmpeg.stderr.on('data', (chunk) => { stderrData += chunk.toString() })
-    ffmpeg.stderr.on('end', () => {
-      if (stderrData.trim()) console.error('ffmpeg stderr:', stderrData)
-    })
-
-    ffmpeg.stdout.pipe(res)
-
-    ffmpeg.on('error', (err) => {
-      console.error('ffmpeg error:', err.message)
-      if (!res.headersSent) res.status(500).json({ error: 'ffmpeg not found', detail: err.message })
-    })
-
-    ffmpeg.on('close', (code) => {
-      if (code !== 0 && !res.headersSent) {
-        console.error('ffmpeg exited with code', code, stderrData)
-        res.status(500).json({ error: 'Download failed', code, detail: stderrData.slice(0, 500) })
+    if (save === 'true') {
+      if (!fs.existsSync(DOWNLOADS_DIR)) {
+        fs.mkdirSync(DOWNLOADS_DIR, { recursive: true })
       }
-    })
+      const outputPath = path.join(DOWNLOADS_DIR, outputFilename)
 
-    req.on('close', () => {
-      ffmpeg.kill('SIGTERM')
-    })
+      const ffArgs = [
+        '-headers', dlHeaders,
+        '-allowed_extensions', 'ALL',
+        '-i', cdnUrl,
+        '-f', 'mp4',
+        '-movflags', 'frag_keyframe+empty_moov',
+        '-loglevel', 'error',
+        '-y',
+        outputPath,
+      ]
+
+      if (compress === 'true') {
+        ffArgs.splice(ffArgs.length - 5, 0,
+          '-c:v', 'libx264',
+          '-crf', '23',
+          '-preset', 'fast',
+          '-c:a', 'aac',
+          '-b:a', '128k',
+        )
+      } else {
+        ffArgs.splice(ffArgs.length - 5, 0,
+          '-c', 'copy',
+          '-bsf:a', 'aac_adtstoasc',
+        )
+      }
+
+      const ffmpeg = spawn(ffmpegPath, ffArgs, { stdio: ['pipe', 'pipe', 'pipe'] })
+
+      let stderrData = ''
+      ffmpeg.stderr.on('data', (chunk) => { stderrData += chunk.toString() })
+      ffmpeg.stderr.on('end', () => {
+        if (stderrData.trim()) console.error('ffmpeg stderr:', stderrData)
+      })
+
+      ffmpeg.on('error', (err) => {
+        console.error('ffmpeg error:', err.message)
+        if (!res.headersSent) res.status(500).json({ error: 'ffmpeg not found', detail: err.message })
+      })
+
+      ffmpeg.on('close', (code) => {
+        if (code === 0) {
+          const stat = fs.statSync(outputPath)
+          res.json({ success: true, file: { name: outputFilename, size: stat.size, path: outputPath } })
+        } else if (!res.headersSent) {
+          console.error('ffmpeg exited with code', code, stderrData)
+          res.status(500).json({ error: 'Download failed', code, detail: stderrData.slice(0, 500) })
+        }
+      })
+
+      req.on('close', () => {
+        ffmpeg.kill('SIGTERM')
+      })
+    } else {
+      res.setHeader('Content-Disposition', `attachment; filename="${outputFilename}"`)
+      res.setHeader('Content-Type', 'video/mp4')
+      res.setHeader('Access-Control-Allow-Origin', '*')
+      res.setHeader('Transfer-Encoding', 'chunked')
+
+      const ffArgs = [
+        '-headers', dlHeaders,
+        '-allowed_extensions', 'ALL',
+        '-i', cdnUrl,
+        '-f', 'mp4',
+        '-movflags', 'frag_keyframe+empty_moov',
+        '-loglevel', 'error',
+        '-y',
+        'pipe:1',
+      ]
+
+      if (compress === 'true') {
+        ffArgs.splice(ffArgs.length - 4, 0,
+          '-c:v', 'libx264',
+          '-crf', '23',
+          '-preset', 'fast',
+          '-c:a', 'aac',
+          '-b:a', '128k',
+        )
+      } else {
+        ffArgs.splice(ffArgs.length - 4, 0,
+          '-c', 'copy',
+          '-bsf:a', 'aac_adtstoasc',
+        )
+      }
+
+      const ffmpeg = spawn(ffmpegPath, ffArgs, { stdio: ['pipe', 'pipe', 'pipe'] })
+
+      let stderrData = ''
+      ffmpeg.stderr.on('data', (chunk) => { stderrData += chunk.toString() })
+      ffmpeg.stderr.on('end', () => {
+        if (stderrData.trim()) console.error('ffmpeg stderr:', stderrData)
+      })
+
+      ffmpeg.stdout.pipe(res)
+
+      ffmpeg.on('error', (err) => {
+        console.error('ffmpeg error:', err.message)
+        if (!res.headersSent) res.status(500).json({ error: 'ffmpeg not found', detail: err.message })
+      })
+
+      ffmpeg.on('close', (code) => {
+        if (code !== 0 && !res.headersSent) {
+          console.error('ffmpeg exited with code', code, stderrData)
+          res.status(500).json({ error: 'Download failed', code, detail: stderrData.slice(0, 500) })
+        }
+      })
+
+      req.on('close', () => {
+        ffmpeg.kill('SIGTERM')
+      })
+    }
   } catch (err) {
     console.error(err.message)
     if (!res.headersSent) res.status(500).json({ error: 'Download failed' })
   }
+}
+
+export async function serveDownloadedFile(req, res) {
+  const filename = req.params.filename
+  const filePath = path.join(DOWNLOADS_DIR, filename)
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'File not found' })
+  }
+  const stat = fs.statSync(filePath)
+  res.setHeader('Content-Type', 'video/mp4')
+  res.setHeader('Content-Length', stat.size)
+  const stream = fs.createReadStream(filePath)
+  stream.pipe(res)
 }
 
 export async function proxy(req, res) {

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import type { UserProfile } from '../types'
 
 interface WatchlistItem {
   id: number
@@ -20,11 +21,31 @@ interface ContinueWatchingItem {
   duration: number
 }
 
+interface PlaybackSettings {
+  defaultQuality: 'auto' | '720p' | '1080p' | '4k'
+  subtitleSize: 'small' | 'medium' | 'large'
+  autoplay: boolean
+  subtitleLanguage: string
+}
+
+interface NotificationSettings {
+  newReleases: boolean
+  watchlistUpdates: boolean
+  creatorActivity: boolean
+  marketing: boolean
+}
+
 interface Store {
   watchlist: WatchlistItem[]
   continueWatching: ContinueWatchingItem[]
   recentlySearched: string[]
   sidebarCollapsed: boolean
+  mobileDrawerOpen: boolean
+  currentProfile: string | null
+  profiles: UserProfile[]
+  playbackSettings: PlaybackSettings
+  notificationSettings: NotificationSettings
+
   addToWatchlist: (item: WatchlistItem) => void
   removeFromWatchlist: (id: number) => void
   isInWatchlist: (id: number) => boolean
@@ -33,6 +54,12 @@ interface Store {
   addRecentSearch: (query: string) => void
   toggleSidebar: () => void
   setSidebarCollapsed: (collapsed: boolean) => void
+  setMobileDrawerOpen: (open: boolean) => void
+  toggleMobileDrawer: () => void
+  setCurrentProfile: (id: string | null) => void
+  setProfiles: (profiles: UserProfile[]) => void
+  updatePlaybackSettings: (settings: Partial<PlaybackSettings>) => void
+  updateNotificationSettings: (settings: Partial<NotificationSettings>) => void
 }
 
 export const useStore = create<Store>()(
@@ -42,6 +69,21 @@ export const useStore = create<Store>()(
       continueWatching: [],
       recentlySearched: [],
       sidebarCollapsed: false,
+      mobileDrawerOpen: false,
+      currentProfile: null,
+      profiles: [],
+      playbackSettings: {
+        defaultQuality: 'auto',
+        subtitleSize: 'medium',
+        autoplay: true,
+        subtitleLanguage: 'en',
+      },
+      notificationSettings: {
+        newReleases: true,
+        watchlistUpdates: true,
+        creatorActivity: false,
+        marketing: false,
+      },
 
       addToWatchlist: (item) =>
         set((state) => {
@@ -84,6 +126,22 @@ export const useStore = create<Store>()(
         set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 
       setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
+      setMobileDrawerOpen: (open) => set({ mobileDrawerOpen: open }),
+      toggleMobileDrawer: () => set((state) => ({ mobileDrawerOpen: !state.mobileDrawerOpen })),
+
+      setCurrentProfile: (id) => set({ currentProfile: id }),
+
+      setProfiles: (profiles) => set({ profiles }),
+
+      updatePlaybackSettings: (settings) =>
+        set((state) => ({
+          playbackSettings: { ...state.playbackSettings, ...settings },
+        })),
+
+      updateNotificationSettings: (settings) =>
+        set((state) => ({
+          notificationSettings: { ...state.notificationSettings, ...settings },
+        })),
     }),
     {
       name: 'novaflix-storage',
@@ -91,6 +149,10 @@ export const useStore = create<Store>()(
         watchlist: state.watchlist,
         continueWatching: state.continueWatching,
         recentlySearched: state.recentlySearched,
+        currentProfile: state.currentProfile,
+        profiles: state.profiles,
+        playbackSettings: state.playbackSettings,
+        notificationSettings: state.notificationSettings,
       }),
     }
   )

@@ -1,9 +1,16 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Settings as SettingsIcon, Monitor, Globe, Eye, Subtitles, Play, Bell, Shield, User, Crown, BarChart3, Upload, ShoppingBag, BookOpen, Check } from 'lucide-react'
+import Icon from '../components/ui/Icon'
 import Button from '../components/ui/Button'
 import PremiumBadge from '../components/ui/PremiumBadge'
 import { getLocale, setLocale, t, type Locale } from '../i18n'
+
+interface SectionItem {
+  label: string
+  description: string
+  icon: string
+  link?: string
+}
 
 const locales: { code: Locale; label: string }[] = [
   { code: 'en', label: 'English' },
@@ -11,65 +18,68 @@ const locales: { code: Locale; label: string }[] = [
   { code: 'fr', label: 'Français' },
 ]
 
-const sections = [
+const sections: { title: string; icon: string; items: SectionItem[] }[] = [
   {
     title: 'Subscription',
-    icon: Crown,
+    icon: 'workspace_premium' as const,
     items: [
-      { label: 'Current Plan', description: 'Free tier — 720p, ad-supported', icon: Crown, link: '/pricing' },
-      { label: 'Billing History', description: 'No payment history', icon: Crown },
-      { label: 'Compare Plans', description: 'See what Premium offers', icon: Crown, link: '/pricing' },
+      { label: 'Current Plan', description: 'Free tier — 720p, ad-supported', icon: 'workspace_premium' as const, link: '/pricing' },
+      { label: 'Billing History', description: 'No payment history', icon: 'receipt_long' as const },
+      { label: 'Compare Plans', description: 'See what Premium offers', icon: 'compare_arrows' as const, link: '/pricing' },
     ],
   },
   {
     title: 'Appearance',
-    icon: Monitor,
+    icon: 'palette' as const,
     items: [
-      { label: 'Theme', description: 'Dark mode (default)', icon: Monitor },
-      { label: 'Language', description: 'English', icon: Globe },
-      { label: 'Accessibility', description: 'Reduced motion, contrast', icon: Eye },
+      { label: 'Theme', description: 'Dark mode (default)', icon: 'dark_mode' as const },
+      { label: 'Language', description: 'English', icon: 'language' as const },
+      { label: 'Accessibility', description: 'Reduced motion, contrast', icon: 'accessibility_new' as const },
     ],
   },
   {
     title: 'Playback',
-    icon: Play,
+    icon: 'play_circle' as const,
     items: [
-      { label: 'Subtitle Preferences', description: 'Font size, color, background', icon: Subtitles },
-      { label: 'Default Quality', description: 'Auto (recommended)', icon: Monitor },
-      { label: 'Autoplay', description: 'Next episode automatically', icon: Play },
+      { label: 'Subtitle Preferences', description: 'Font size, color, background', icon: 'subtitles' as const },
+      { label: 'Default Quality', description: 'Auto (recommended)', icon: 'hd' as const },
+      { label: 'Autoplay', description: 'Next episode automatically', icon: 'autorenew' as const },
     ],
   },
   {
     title: 'Notifications',
-    icon: Bell,
+    icon: 'notifications' as const,
     items: [
-      { label: 'New Releases', description: 'Get notified about new content', icon: Bell },
-      { label: 'Watchlist Updates', description: 'When items change', icon: Bell },
+      { label: 'New Releases', description: 'Get notified about new content', icon: 'notifications_active' as const },
+      { label: 'Watchlist Updates', description: 'When items change', icon: 'notifications' as const },
     ],
   },
   {
     title: 'Privacy & Security',
-    icon: Shield,
+    icon: 'shield' as const,
     items: [
-      { label: 'Privacy', description: 'Data collection preferences', icon: Shield },
-      { label: 'Security', description: 'Account security settings', icon: Shield },
+      { label: 'Privacy', description: 'Data collection preferences', icon: 'shield' as const },
+      { label: 'Security', description: 'Account security settings', icon: 'lock' as const },
     ],
   },
   {
-    title: 'Account',
-    icon: User,
+    title: 'Your Library',
+    icon: 'bookmark' as const,
     items: [
-      { label: 'Profile', description: 'Manage your profile', icon: User },
+      { label: 'Watchlist', description: 'Movies & shows you saved', icon: 'bookmark' as const, link: '/watchlist' },
+      { label: 'Profile', description: 'Manage your profile', icon: 'person' as const, link: '/profile' },
+      { label: 'Continue Watching', description: 'Pick up where you left off', icon: 'play_circle' as const, link: '/home' },
+      { label: 'Refer & Earn', description: 'Invite friends, earn rewards', icon: 'share' as const, link: '/referrals' },
     ],
   },
   {
     title: 'Creator Tools',
-    icon: BarChart3,
+    icon: 'bar_chart' as const,
     items: [
-      { label: 'Creator Dashboard', description: 'Analytics & revenue', icon: BarChart3, link: '/creator' },
-      { label: 'Upload Film', description: 'Share your work', icon: Upload, link: '/upload' },
-      { label: 'E-Learning', description: 'Filmmaking courses', icon: BookOpen, link: '/learn' },
-      { label: 'Merch Store', description: 'Sell branded gear', icon: ShoppingBag, link: '/store' },
+      { label: 'Creator Dashboard', description: 'Analytics & revenue', icon: 'bar_chart' as const, link: '/creator' },
+      { label: 'Upload Film', description: 'Share your work', icon: 'cloud_upload' as const, link: '/upload' },
+      { label: 'E-Learning', description: 'Filmmaking courses', icon: 'school' as const, link: '/learn' },
+      { label: 'Merch Store', description: 'Sell branded gear', icon: 'storefront' as const, link: '/store' },
     ],
   },
 ]
@@ -79,36 +89,38 @@ export default function Settings() {
   const currentLang = getLocale()
 
   return (
-    <div className="min-h-screen px-4 md:px-8 pt-6 md:pt-10 pb-20">
+    <div className="min-h-screen px-margin-mobile md:px-margin-desktop pt-6 md:pt-10 pb-nav">
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center gap-3 mb-8">
-          <SettingsIcon className="w-8 h-8 text-accent" />
-          <h1 className="text-3xl md:text-section font-bold">{t('settings.title')}</h1>
+          <Icon name="settings" className="w-8 h-8 text-primary-container" />
+          <h1 className="text-headline-lg font-bold">{t('settings.title')}</h1>
         </div>
 
         <div className="space-y-8">
           {sections.map((section) => (
             <div key={section.title}>
-              <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                <section.icon className="w-5 h-5 text-accent" />
+              <h2 className="font-label-md text-label-md mb-3 flex items-center gap-2 text-on-surface-variant uppercase tracking-widest">
+                <Icon name={section.icon} className="text-primary-container" />
                 {section.title}
               </h2>
-              <div className="bg-surface-card border border-white/10 rounded-2xl divide-y divide-white/5">
+              <div className="bg-surface-container-high border border-white/5 rounded-xl divide-y divide-outline/10">
                 {section.items.map((item) => {
-                  const Icon = item.icon
                   const isLang = item.label === 'Language'
+                  const isPlan = item.label === 'Current Plan'
                   const content = (
                     <>
                       <div className="flex items-center gap-3">
-                        <Icon className="w-5 h-5 text-gray-400" />
+                        <Icon name={item.icon} className="text-on-surface-variant" />
                         <div>
-                          <p className="text-sm font-medium">{item.label}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">
+                          <p className="font-label-md text-label-md text-on-surface">
+                            {isLang ? locales.find((l) => l.code === currentLang)?.label : item.label}
+                          </p>
+                          <p className="text-on-surface-variant/60 text-sm">
                             {isLang ? locales.find((l) => l.code === currentLang)?.label : item.description}
                           </p>
                         </div>
                       </div>
-                      <span className="text-gray-500 text-sm">→</span>
+                      <Icon name="chevron_right" className="text-on-surface-variant/40" />
                     </>
                   )
                   if (isLang) {
@@ -116,6 +128,20 @@ export default function Settings() {
                       <button key={item.label} onClick={() => setShowLangPicker(!showLangPicker)} className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/5 transition-colors text-left">
                         {content}
                       </button>
+                    )
+                  }
+                  if (isPlan) {
+                    return (
+                      <Link key={item.label} to={item.link!} className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/5 transition-colors text-left">
+                        <div className="flex items-center gap-3">
+                          <Icon name="workspace_premium" className="text-primary-container" />
+                          <div>
+                            <p className="font-label-md text-label-md text-on-surface">{item.label}</p>
+                            <p className="text-on-surface-variant/60 text-sm">{item.description}</p>
+                          </div>
+                        </div>
+                        <Button size="sm" variant="secondary">Upgrade</Button>
+                      </Link>
                     )
                   }
                   return item.link ? (
@@ -130,7 +156,7 @@ export default function Settings() {
                 })}
               </div>
               {showLangPicker && (
-                <div className="mt-2 bg-surface-card border border-white/10 rounded-xl overflow-hidden">
+                <div className="mt-2 bg-surface-container-high border border-white/5 rounded-xl overflow-hidden">
                   {locales.map((loc) => (
                     <button
                       key={loc.code}
@@ -139,10 +165,10 @@ export default function Settings() {
                         setShowLangPicker(false)
                         window.location.reload()
                       }}
-                      className={`w-full flex items-center justify-between px-5 py-3 text-sm hover:bg-white/5 transition-colors ${currentLang === loc.code ? 'text-accent' : 'text-gray-300'}`}
+                      className={`w-full flex items-center justify-between px-5 py-3 text-sm hover:bg-white/5 transition-colors ${currentLang === loc.code ? 'text-primary' : 'text-on-surface-variant'}`}
                     >
                       <span>{loc.label}</span>
-                      {currentLang === loc.code && <Check className="w-4 h-4" />}
+                      {currentLang === loc.code && <Icon name="check" className="text-primary" />}
                     </button>
                   ))}
                 </div>
@@ -151,16 +177,16 @@ export default function Settings() {
           ))}
         </div>
 
-        <div className="mt-8 bg-gradient-to-r from-accent/10 to-accent-secondary/5 border border-premium/20 rounded-2xl p-6">
+        <div className="mt-8 bg-surface-container-high border border-primary-container/20 rounded-xl p-6">
           <div className="flex items-center gap-4">
             <PremiumBadge size="lg" />
             <div className="flex-1">
-              <h3 className="text-lg font-bold text-white">Go Premium</h3>
-              <p className="text-sm text-gray-400">4K HDR • Offline • No ads</p>
+              <h3 className="font-label-md text-label-md text-on-surface">Go Premium</h3>
+              <p className="text-on-surface-variant/60 text-sm">4K HDR • Offline • No ads</p>
             </div>
             <Link to="/pricing">
               <Button size="sm">
-                <Crown className="w-4 h-4 fill-current" /> Upgrade
+                <Icon name="workspace_premium" fill={true} /> Upgrade
               </Button>
             </Link>
           </div>

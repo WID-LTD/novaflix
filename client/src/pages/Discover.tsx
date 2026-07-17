@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Compass, Search, SlidersHorizontal, Grid3X3, List } from 'lucide-react'
+import Icon from '../components/ui/Icon'
 import { searchMedia } from '../lib/api'
 import Button from '../components/ui/Button'
-import Input from '../components/ui/Input'
+import SearchInput from '../components/ui/SearchInput'
 import Tabs from '../components/ui/Tabs'
-import Badge from '../components/ui/Badge'
 import Skeleton from '../components/ui/Skeleton'
 import MovieCard from '../components/features/MovieCard'
 import type { MediaItem } from '../types'
@@ -95,47 +94,43 @@ export default function Discover() {
   }
 
   return (
-    <div className="min-h-screen px-4 md:px-8 pt-6 md:pt-10">
+    <div className="min-h-screen px-margin-mobile md:px-margin-desktop pt-6 md:pt-10 pb-nav">
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center gap-3 mb-6">
-          <Compass className="w-8 h-8 text-accent" />
-          <h1 className="text-3xl md:text-section font-bold">Discover</h1>
+          <Icon name="explore" className="w-8 h-8 text-primary-container" />
+          <h1 className="text-headline-lg font-bold">Discover</h1>
         </div>
 
-        <form onSubmit={handleSearch} className="mb-6">
-          <Input
-            icon={<Search className="w-5 h-5" />}
+        <div className="mb-6">
+          <SearchInput
             placeholder="Search within discover..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onSubmit={handleSearch}
           />
-        </form>
+        </div>
 
         <div className="flex flex-wrap items-center gap-4 mb-6">
           <Tabs tabs={typeTabs} activeTab={type} onChange={(id) => setType(id as any)} />
 
           <div className="flex items-center gap-2">
-            <SlidersHorizontal className="w-4 h-4 text-gray-400" />
+            <Icon name="tune" className="text-on-surface-variant" />
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value)}
-              className="bg-surface-card border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent"
+              className="bg-surface-container-high border border-outline/20 rounded-lg px-3 py-2 text-sm on-surface focus:outline-none focus:border-primary-container"
             >
               {sortOptions.map((opt) => (
-                <option key={opt.id} value={opt.id}>
-                  {opt.label}
-                </option>
+                <option key={opt.id} value={opt.id}>{opt.label}</option>
               ))}
             </select>
             <select
               value={genre}
               onChange={(e) => setGenre(e.target.value)}
-              className="bg-surface-card border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent"
+              className="bg-surface-container-high border border-outline/20 rounded-lg px-3 py-2 text-sm on-surface focus:outline-none focus:border-primary-container"
             >
               {genreOptions.map((opt) => (
-                <option key={opt.id} value={opt.id}>
-                  {opt.label}
-                </option>
+                <option key={opt.id} value={opt.id}>{opt.label}</option>
               ))}
             </select>
           </div>
@@ -143,25 +138,27 @@ export default function Discover() {
           <div className="flex items-center gap-1 ml-auto">
             <button
               onClick={() => setViewMode('grid')}
-              className={`p-2 rounded-lg transition-colors ${
-                viewMode === 'grid' ? 'bg-accent/20 text-accent' : 'text-gray-400 hover:text-white'
+              className={`p-3 rounded-lg transition-colors ${
+                viewMode === 'grid' ? 'bg-primary-container/20 text-primary-container' : 'text-on-surface-variant hover:text-on-surface'
               }`}
+              aria-label="Grid view"
             >
-              <Grid3X3 className="w-4 h-4" />
+              <Icon name="grid_view" />
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`p-2 rounded-lg transition-colors ${
-                viewMode === 'list' ? 'bg-accent/20 text-accent' : 'text-gray-400 hover:text-white'
+              className={`p-3 rounded-lg transition-colors ${
+                viewMode === 'list' ? 'bg-primary-container/20 text-primary-container' : 'text-on-surface-variant hover:text-on-surface'
               }`}
+              aria-label="List view"
             >
-              <List className="w-4 h-4" />
+              <Icon name="view_list" />
             </button>
           </div>
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-gutter">
             {Array.from({ length: 12 }).map((_, i) => (
               <div key={i}>
                 <Skeleton variant="poster" className="w-full" />
@@ -170,19 +167,19 @@ export default function Discover() {
               </div>
             ))}
           </div>
-        ) : results.length > 0 ? (
+        ) : results.length > 0 && (
           <div className="flex items-center gap-2 mb-4">
-            <p className="text-sm text-gray-400">
+            <p className="text-on-surface-variant text-sm">
               {results.length} result{results.length !== 1 ? 's' : ''}
             </p>
           </div>
-        ) : null}
+        )}
 
         {results.length > 0 ? (
           <div
             className={
               viewMode === 'grid'
-                ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4'
+                ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-gutter'
                 : 'flex flex-col gap-3'
             }
           >
@@ -192,9 +189,9 @@ export default function Discover() {
           </div>
         ) : !loading ? (
           <div className="text-center py-20">
-            <Compass className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-400 mb-2">No results</h3>
-            <p className="text-gray-600">Try adjusting your filters</p>
+            <Icon name="explore" className="w-16 h-16 text-on-surface-variant/40 mx-auto mb-4" />
+            <h3 className="font-label-md text-label-md text-on-surface-variant mb-2">No results</h3>
+            <p className="text-on-surface-variant/60">Try adjusting your filters</p>
           </div>
         ) : null}
       </div>

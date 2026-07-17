@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { Crown } from 'lucide-react'
+import Icon from './Icon'
 
 interface PremiumBadgeProps {
   size?: 'sm' | 'md' | 'lg'
@@ -24,7 +24,7 @@ const PremiumBadge: FC<PremiumBadgeProps> = ({ size = 'sm', label = 'Premium', c
     <span
       className={`inline-flex items-center font-semibold rounded-full bg-gradient-to-r from-accent to-accent-secondary-light text-black ${sizeStyles[size]} ${className}`}
     >
-      <Crown className={`${iconSizes[size]} fill-current`} />
+      <Icon name="workspace_premium" fill={true} className={iconSizes[size]} />
       {label}
     </span>
   )

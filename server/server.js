@@ -10,15 +10,18 @@ import { spawn } from 'child_process';
 import http from 'http';
 import { WebSocketServer } from 'ws';
 import { v4 as uuidv4 } from 'uuid';
+import jwt from 'jsonwebtoken';
 import { closeBrowser } from './scraper.mjs';
 import { initDatabase } from './config/database.js';
 import apiRoutes from './routes/index.js';
+import { getPlanRank } from './controllers/planUtils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3030;
+const JWT_SECRET = process.env.JWT_SECRET || 'novaflix-secret-key-change-in-production';
 const TMDB_ACCESS_TOKEN = process.env.TMDB_ACCESS_TOKEN;
 
 if (!TMDB_ACCESS_TOKEN) {
@@ -77,6 +80,18 @@ const rooms = new Map()
 wss.on('connection', (ws, req) => {
   let userId = null
   let currentRoom = null
+  let userPlan = 'free'
+
+  // Authenticate via token in query param
+  const url = new URL(req.url, `http://${req.headers.host}`)
+  const token = url.searchParams.get('token')
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET)
+      userId = decoded.id
+      userPlan = decoded.plan || 'free'
+    } catch {}
+  }
 
   ws.on('message', (raw) => {
     try {
@@ -85,7 +100,12 @@ wss.on('connection', (ws, req) => {
 
       switch (type) {
         case 'join': {
-          userId = user?.id || uuidv4()
+          const roomUserId = userId || user?.id || uuidv4()
+          if (getPlanRank(userPlan) < 3) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Watch Parties require a Premium plan. Please upgrade to join.' }))
+            return
+          }
+          userId = roomUserId
           currentRoom = room
           if (!rooms.has(room)) rooms.set(room, new Map())
           const roomUsers = rooms.get(room)
@@ -136,7 +156,13 @@ wss.on('connection', (ws, req) => {
   }
 })
 
+import { deactivateExpiredSubscriptions } from './jobs/subscriptionExpiry.js'
+
 initDatabase().then(() => {
+  // Subscription expiry — run every hour
+  deactivateExpiredSubscriptions()
+  setInterval(deactivateExpiredSubscriptions, 60 * 60 * 1000)
+
   server.listen(PORT, () => {
     console.log(`NovaFlix engine alive on http://localhost:${PORT}`);
     console.log(`WebSocket available at ws://localhost:${PORT}/ws`);

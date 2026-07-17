@@ -13,6 +13,41 @@ interface User {
   createdAt: string
 }
 
+const PLAN_RANK: Record<string, number> = {
+  free: 0,
+  student: 1,
+  basic: 2,
+  standard: 3,
+  premium: 4,
+}
+
+export interface PlanFeatures {
+  maxResolution: string
+  maxResolutionNum: number
+  concurrentScreens: number
+  downloadDevices: number
+  adFree: boolean
+  unlimitedSkips: boolean
+  spatialAudio: boolean
+  premierAccess: boolean
+}
+
+const PLAN_FEATURES: Record<string, PlanFeatures> = {
+  free: { maxResolution: '480p', maxResolutionNum: 480, concurrentScreens: 1, downloadDevices: 0, adFree: false, unlimitedSkips: false, spatialAudio: false, premierAccess: false },
+  student: { maxResolution: '720p', maxResolutionNum: 720, concurrentScreens: 1, downloadDevices: 1, adFree: false, unlimitedSkips: false, spatialAudio: false, premierAccess: false },
+  basic: { maxResolution: '720p', maxResolutionNum: 720, concurrentScreens: 1, downloadDevices: 1, adFree: false, unlimitedSkips: false, spatialAudio: false, premierAccess: false },
+  standard: { maxResolution: '1080p', maxResolutionNum: 1080, concurrentScreens: 2, downloadDevices: 2, adFree: true, unlimitedSkips: true, spatialAudio: false, premierAccess: false },
+  premium: { maxResolution: '4K', maxResolutionNum: 2160, concurrentScreens: 4, downloadDevices: 6, adFree: true, unlimitedSkips: true, spatialAudio: true, premierAccess: true },
+}
+
+export function getPlanRank(plan: string): number {
+  return PLAN_RANK[plan] ?? 0
+}
+
+export function getPlanFeatures(plan: string): PlanFeatures {
+  return PLAN_FEATURES[plan] ?? PLAN_FEATURES.free
+}
+
 interface AuthContextType {
   user: User | null
   loading: boolean
@@ -25,6 +60,9 @@ interface AuthContextType {
   isPremium: boolean
   isCreator: boolean
   isAdmin: boolean
+  planFeatures: PlanFeatures
+  planRank: number
+  meetsPlan: (minPlan: string) => boolean
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -103,13 +141,18 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
     setPendingUserId(null)
   }
 
+  const currentPlan = user?.plan || 'free'
+
   return (
     <AuthContext.Provider value={{
       user, loading, pendingUserId,
       login, register, verifyEmail, resendVerification, logout,
-      isPremium: user?.plan === 'premium' || user?.plan === 'duo',
+      isPremium: currentPlan !== 'free',
       isCreator: user?.role === 'creator' || user?.role === 'admin',
       isAdmin: user?.role === 'admin',
+      planFeatures: getPlanFeatures(currentPlan),
+      planRank: getPlanRank(currentPlan),
+      meetsPlan: (minPlan: string) => getPlanRank(currentPlan) >= getPlanRank(minPlan),
     }}>
       {children}
     </AuthContext.Provider>

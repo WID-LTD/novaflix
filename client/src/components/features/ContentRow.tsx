@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { MediaItem } from '../../types'
 import MovieCard from './MovieCard'
 import Skeleton from '../ui/Skeleton'
+import Icon from '../ui/Icon'
 
 interface ContentRowProps {
   title: string
@@ -34,15 +34,18 @@ export default function ContentRow({ title, items, loading, link }: ContentRowPr
   }
 
   return (
-    <section className="relative mb-8 md:mb-10">
-      <div className="flex items-center justify-between mb-4 px-4 md:px-8">
-        <h2 className="text-xl md:text-section font-bold text-white">{title}</h2>
+    <section className="relative mb-8 md:mb-10 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-headline-md text-on-surface flex items-center gap-2">
+          {title}
+          <Icon name="chevron_right" className="text-primary" />
+        </h2>
         {link && (
           <Link
             to={link}
-            className="text-sm text-gray-400 hover:text-accent transition-colors font-medium"
+            className="font-label-md text-label-md text-primary hover:underline transition-colors"
           >
-            See All
+            View All
           </Link>
         )}
       </div>
@@ -51,16 +54,17 @@ export default function ContentRow({ title, items, loading, link }: ContentRowPr
         {showLeft && (
           <button
             onClick={() => scroll('left')}
-            className="absolute left-0 top-0 bottom-0 z-10 w-12 md:w-16 bg-gradient-to-r from-surface to-transparent flex items-center justify-start pl-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+            className="absolute left-0 top-0 bottom-0 z-10 w-12 md:w-16 bg-gradient-to-r from-background to-transparent flex items-center justify-start pl-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+            aria-label="Scroll left"
           >
-            <ChevronLeft className="w-6 h-6 text-white" />
+            <Icon name="chevron_left" className="text-on-surface" />
           </button>
         )}
 
         <div
           ref={scrollRef}
           onScroll={handleScroll}
-          className="flex gap-3 overflow-x-auto px-4 md:px-8 scrollbar-hide pb-2"
+          className="flex gap-4 overflow-x-auto hide-scrollbar pb-4 snap-x"
         >
           {loading
             ? Array.from({ length: 6 }).map((_, i) => (
@@ -78,9 +82,10 @@ export default function ContentRow({ title, items, loading, link }: ContentRowPr
         {showRight && (
           <button
             onClick={() => scroll('right')}
-            className="absolute right-0 top-0 bottom-0 z-10 w-12 md:w-16 bg-gradient-to-l from-surface to-transparent flex items-center justify-end pr-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+            className="absolute right-0 top-0 bottom-0 z-10 w-12 md:w-16 bg-gradient-to-l from-background to-transparent flex items-center justify-end pr-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+            aria-label="Scroll right"
           >
-            <ChevronRight className="w-6 h-6 text-white" />
+            <Icon name="chevron_right" className="text-on-surface" />
           </button>
         )}
       </div>

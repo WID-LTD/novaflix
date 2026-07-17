@@ -12,6 +12,18 @@ import emailRoutes from './emailRoutes.js'
 import recommendationRoutes from './recommendationRoutes.js'
 import interactionRoutes from './interactionRoutes.js'
 import payoutRoutes from './payoutRoutes.js'
+import adRoutes from './adRoutes.js'
+import sessionRoutes from './sessionRoutes.js'
+import hooksRoutes from './hooksRoutes.js'
+import campaignRoutes from './campaignRoutes.js'
+import affiliateRoutes from './affiliateRoutes.js'
+import membershipRoutes from './membershipRoutes.js'
+import eventRoutes from './eventRoutes.js'
+import storeRoutes from './storeRoutes.js'
+import courseRoutes from './courseRoutes.js'
+import archiveRoutes from './archiveRoutes.js'
+import communityRoutes from './communityRoutes.js'
+import downloadRoutes from './downloadRoutes.js'
 
 const router = Router()
 
@@ -26,7 +38,19 @@ router.use('/newsletter', emailRoutes)
 router.use('/recommendations', recommendationRoutes)
 router.use('/interactions', interactionRoutes)
 router.use('/payouts', payoutRoutes)
+router.use('/ads', adRoutes)
+router.use('/sessions', sessionRoutes)
+router.use('/hooks', hooksRoutes)
+router.use('/campaigns', campaignRoutes)
+router.use('/affiliate', affiliateRoutes)
+router.use('/memberships', membershipRoutes)
+router.use('/events', eventRoutes)
+router.use('/store', storeRoutes)
+router.use('/courses', courseRoutes)
+router.use('/archive', archiveRoutes)
 router.use('/', tmdbRoutes)
 router.use('/', streamRoutes)
+router.use('/community', communityRoutes)
+router.use('/downloads', downloadRoutes)
 
 export default router

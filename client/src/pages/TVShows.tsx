@@ -1,15 +1,15 @@
 import { useState, useEffect } from 'react'
-import { Tv, TrendingUp, Star, Flame } from 'lucide-react'
+import Icon from '../components/ui/Icon'
 import { searchMedia } from '../lib/api'
 import Tabs from '../components/ui/Tabs'
 import ContentRow from '../components/features/ContentRow'
 import type { MediaItem } from '../types'
 
 const categories = [
-  { id: 'trending', label: 'Trending', keyword: 'stranger things', icon: Flame },
-  { id: 'popular', label: 'Popular', keyword: 'game of thrones', icon: TrendingUp },
-  { id: 'top_rated', label: 'Top Rated', keyword: 'breaking bad', icon: Star },
-  { id: 'new', label: 'New Releases', keyword: '2024', icon: Tv },
+  { id: 'trending', label: 'Trending', keyword: 'stranger things', icon: 'local_fire_department' as const },
+  { id: 'popular', label: 'Popular', keyword: 'game of thrones', icon: 'trending_up' as const },
+  { id: 'top_rated', label: 'Top Rated', keyword: 'breaking bad', icon: 'star' as const },
+  { id: 'new', label: 'New Releases', keyword: '2024', icon: 'tv' as const },
 ]
 
 const genreTabs = [
@@ -72,11 +72,11 @@ export default function TVShows() {
   }, [activeTab])
 
   return (
-    <div className="min-h-screen pt-6 md:pt-10">
-      <div className="px-4 md:px-8 mb-8">
+    <div className="min-h-screen pt-6 md:pt-10 pb-nav">
+      <div className="px-margin-mobile md:px-margin-desktop mb-8">
         <div className="flex items-center gap-3 mb-4">
-          <Tv className="w-8 h-8 text-accent" />
-          <h1 className="text-3xl md:text-section font-bold">TV Shows</h1>
+          <Icon name="tv" className="w-8 h-8 text-primary-container" />
+          <h1 className="text-headline-lg font-bold">TV Shows</h1>
         </div>
         <Tabs
           tabs={genreTabs}

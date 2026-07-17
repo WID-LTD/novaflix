@@ -1,6 +1,6 @@
 import { type FC, type ReactNode, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X } from 'lucide-react'
+import Icon from './Icon'
 
 interface ModalProps {
   isOpen: boolean
@@ -47,9 +47,10 @@ const Modal: FC<ModalProps> = ({ isOpen, onClose, title, children, className = '
                 <h2 className="text-lg font-semibold">{title}</h2>
                 <button
                   onClick={onClose}
-                  className="p-1 rounded-lg hover:bg-white/10 transition-colors"
+                  className="p-3 rounded-lg hover:bg-white/10 transition-colors"
+                  aria-label="Close dialog"
                 >
-                  <X className="w-5 h-5" />
+                  <Icon name="close" />
                 </button>
               </div>
             )}

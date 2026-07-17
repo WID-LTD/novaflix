@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Play, Heart, Bookmark } from 'lucide-react'
 import type { MediaItem } from '../../types'
 import Badge from '../ui/Badge'
+import Icon from '../ui/Icon'
+import PremiumBadge from '../ui/PremiumBadge'
 
 interface MovieCardProps {
   item: MediaItem
@@ -22,10 +23,10 @@ export default function MovieCard({ item, index = 0 }: MovieCardProps) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: index * 0.05 }}
-      className="group relative flex-shrink-0 w-[160px] md:w-[180px]"
+      className="group relative flex-shrink-0 w-[160px] md:w-[220px] snap-start"
     >
       <Link to={detailUrl} className="block">
-        <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-surface-card">
+        <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-surface-container card-hover-effect shadow-lg">
           {!imgLoaded && !imgError && (
             <div className="absolute inset-0 shimmer" />
           )}
@@ -41,8 +42,22 @@ export default function MovieCard({ item, index = 0 }: MovieCardProps) {
               }`}
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-gray-600 text-sm p-4 text-center">
+            <div className="w-full h-full flex items-center justify-center text-on-surface-variant/60 text-sm p-4 text-center">
               {item.title}
+            </div>
+          )}
+
+          {item.premium && (
+            <div className="absolute top-2 left-2 z-10">
+              <PremiumBadge size="sm" />
+            </div>
+          )}
+          {item.promoted && (
+            <div className="absolute top-2 right-2 z-10">
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-primary-container/90 text-on-primary-container">
+                <Icon name="campaign" className="w-2.5 h-2.5" />
+                Promoted
+              </span>
             </div>
           )}
 
@@ -53,44 +68,34 @@ export default function MovieCard({ item, index = 0 }: MovieCardProps) {
               <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
-                className="w-10 h-10 rounded-full bg-accent flex items-center justify-center shadow-lg"
+                className="w-12 h-12 rounded-full bg-primary-container flex items-center justify-center shadow-lg"
                 onClick={(e) => {
                   e.preventDefault()
                   window.location.href = `/watch?id=${item.id}&type=${item.type}`
                 }}
+                aria-label={`Play ${item.title}`}
               >
-                <Play className="w-5 h-5 fill-white text-white ml-0.5" />
+                <Icon name="play_arrow" fill={true} className="text-on-primary-container" />
               </motion.button>
               <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
-                className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center"
-                onClick={(e) => {
-                  e.preventDefault()
-                }}
+                className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center"
+                onClick={(e) => e.preventDefault()}
+                aria-label="Add to favorites"
               >
-                <Heart className="w-4 h-4" />
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center"
-                onClick={(e) => {
-                  e.preventDefault()
-                }}
-              >
-                <Bookmark className="w-4 h-4" />
+                <Icon name="favorite" className="text-white" />
               </motion.button>
             </div>
           </div>
         </div>
 
-        <div className="mt-2.5">
-          <h3 className="text-sm font-semibold text-white truncate group-hover:text-accent transition-colors">
+        <div className="mt-2.5 px-1">
+          <h3 className="font-label-md text-label-md text-on-surface truncate group-hover:text-primary transition-colors">
             {item.title}
           </h3>
           <div className="flex items-center gap-2 mt-1">
-            <span className="text-xs text-gray-500">{item.year}</span>
+            <span className="text-xs text-on-surface-variant">{item.year}</span>
             <Badge variant="outline" className="text-[10px] px-1.5 py-0">
               {item.type === 'tv' ? 'TV' : 'Movie'}
             </Badge>

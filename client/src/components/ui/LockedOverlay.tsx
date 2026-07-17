@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { Lock, Crown } from 'lucide-react'
+import Icon from './Icon'
 import { useNavigate } from 'react-router-dom'
 import Button from './Button'
 
@@ -21,7 +21,7 @@ const LockedOverlay: FC<LockedOverlayProps> = ({
       className={`absolute inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-20 ${className}`}
     >
       <div className="w-12 h-12 rounded-full bg-accent/20 border border-premium/30 flex items-center justify-center">
-        <Lock className="w-6 h-6 text-accent" />
+        <Icon name="lock" className="w-6 h-6 text-primary-container" />
       </div>
       <p className="text-white font-semibold text-lg">{feature}</p>
       <p className="text-gray-400 text-sm">{description}</p>
@@ -30,7 +30,7 @@ const LockedOverlay: FC<LockedOverlayProps> = ({
         onClick={() => navigate('/pricing')}
         className="mt-2"
       >
-        <Crown className="w-4 h-4 fill-current" /> Upgrade to Premium
+        <Icon name="workspace_premium" fill={true} /> Upgrade to Premium
       </Button>
     </div>
   )

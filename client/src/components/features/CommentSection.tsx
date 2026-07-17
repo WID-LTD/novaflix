@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { MessageCircle, Send, Trash2, User } from 'lucide-react'
+import Icon from '../ui/Icon'
 import { useAuth } from '../../lib/AuthContext'
 import { getComments, postComment, deleteComment } from '../../lib/auth'
 
@@ -54,14 +54,14 @@ export default function CommentSection({ contentId, contentType, creatorId }: Pr
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-gray-400">
-        <MessageCircle className="w-4 h-4" />
+        <Icon name="chat_bubble" size="sm" />
         <span className="text-sm font-medium">Comments ({comments.length})</span>
       </div>
 
       {user && (
         <div className="flex gap-3">
           <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
-            <User className="w-4 h-4 text-accent" />
+                  <Icon name="person" size="sm" className="text-accent" />
           </div>
           <div className="flex-1 flex gap-2">
             <input
@@ -76,7 +76,7 @@ export default function CommentSection({ contentId, contentType, creatorId }: Pr
               disabled={!text.trim() || sending}
               className="px-3 py-2 bg-accent text-white rounded-xl disabled:opacity-50 hover:bg-red-700 transition-colors"
             >
-              <Send className="w-4 h-4" />
+              <Icon name="send" />
             </button>
           </div>
         </div>
@@ -109,7 +109,7 @@ export default function CommentSection({ contentId, contentType, creatorId }: Pr
                 {comment.user_avatar ? (
                   <img src={comment.user_avatar} alt="" className="w-full h-full object-cover" />
                 ) : (
-                  <User className="w-4 h-4 text-accent" />
+            <Icon name="person" size="sm" className="text-accent" />
                 )}
               </div>
               <div className="flex-1 min-w-0">
@@ -120,7 +120,7 @@ export default function CommentSection({ contentId, contentType, creatorId }: Pr
                   </span>
                   {user?.id === comment.user_id && (
                     <button onClick={() => handleDelete(comment.id)} className="ml-auto text-gray-500 hover:text-accent transition-colors">
-                      <Trash2 className="w-3 h-3" />
+                      <Icon name="delete" size="sm" />
                     </button>
                   )}
                 </div>

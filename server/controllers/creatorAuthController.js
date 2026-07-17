@@ -11,7 +11,7 @@ function generateCode() {
 }
 
 function signToken(user) {
-  return jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '30d' })
+  return jwt.sign({ id: user.id, email: user.email, role: user.role, plan: user.plan || 'free' }, JWT_SECRET, { expiresIn: '30d' })
 }
 
 export async function register(req, res) {

@@ -1,40 +1,54 @@
 import { NavLink } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import {
-  Home, Clapperboard, Tv, TrendingUp, Star, Compass,
-  Bookmark, User, Settings, ChevronLeft, Film,
-  Crown, BarChart3, Upload, ShoppingBag, BookOpen, Users,
-  Shield, LogIn,
-} from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { useAuth } from '../../lib/AuthContext'
+import Icon from '../ui/Icon'
+
+interface NavItem {
+  to: string
+  icon: string
+  label: string
+  auth?: boolean
+  creatorOnly?: boolean
+  adminOnly?: boolean
+  color?: string
+}
+
+const navItems: NavItem[] = [
+  { to: '/home', icon: 'home', label: 'Home' },
+  { to: '/search?type=movie', icon: 'movie', label: 'Movies' },
+  { to: '/tv-shows', icon: 'live_tv', label: 'TV Shows' },
+  { to: '/discover?sort=trending', icon: 'trending_up', label: 'Trending' },
+  { to: '/discover?sort=top_rated', icon: 'star', label: 'Top Rated' },
+  { to: '/discover', icon: 'explore', label: 'Discover' },
+  { to: '/community', icon: 'diversity_3', label: 'Community', auth: true },
+  { to: '/watchlist', icon: 'bookmark', label: 'Watchlist', auth: true },
+  { to: '/profile', icon: 'person', label: 'Profile', auth: true },
+  { to: '/downloads', icon: 'download', label: 'Downloads', auth: true },
+  { to: '/referrals', icon: 'share', label: 'Refer & Earn', auth: true },
+  { to: '/archive', icon: 'archive', label: 'Archive Vault', auth: true },
+  { to: '/events', icon: 'event', label: 'Live Events' },
+  { to: '/red-carpet', icon: 'star', label: 'Red Carpet' },
+  { to: '/settings', icon: 'settings', label: 'Settings' },
+]
+
+const businessItems: NavItem[] = [
+  { to: '/pricing', icon: 'workspace_premium', label: 'Plans', color: 'text-primary' },
+  { to: '/creator', icon: 'bar_chart', label: 'Creator Hub', auth: true, creatorOnly: true, color: 'text-primary' },
+  { to: '/upload', icon: 'cloud_upload', label: 'Upload Film', auth: true, creatorOnly: true, color: 'text-primary' },
+  { to: '/creator/campaigns', icon: 'campaign', label: 'Promotions', auth: true, creatorOnly: true, color: 'text-primary' },
+  { to: '/creator/memberships', icon: 'card_membership', label: 'Memberships', auth: true, creatorOnly: true, color: 'text-primary' },
+  { to: '/creator/events', icon: 'live_tv', label: 'Live Events', auth: true, creatorOnly: true, color: 'text-primary' },
+  { to: '/creator/products', icon: 'inventory_2', label: 'Products', auth: true, creatorOnly: true, color: 'text-primary' },
+  { to: '/creator/courses', icon: 'school', label: 'Courses', auth: true, creatorOnly: true, color: 'text-primary' },
+  { to: '/store', icon: 'shopping_bag', label: 'Merch Store', color: 'text-primary' },
+  { to: '/learn', icon: 'school', label: 'E-Learning', color: 'text-primary' },
+  { to: '/watch-party', icon: 'diversity_3', label: 'Watch Party', auth: true, color: 'text-primary' },
+]
 
 export default function Sidebar() {
   const collapsed = useStore((s) => s.sidebarCollapsed)
-  const toggle = useStore((s) => s.toggleSidebar)
   const { user, isCreator, isAdmin } = useAuth()
-
-  const navItems = [
-    { to: '/home', icon: Home, label: 'Home', auth: false },
-    { to: '/search?type=movie', icon: Clapperboard, label: 'Movies', auth: false },
-    { to: '/tv-shows', icon: Tv, label: 'TV Shows', auth: false },
-    { to: '/discover?sort=trending', icon: TrendingUp, label: 'Trending', auth: false },
-    { to: '/discover?sort=top_rated', icon: Star, label: 'Top Rated', auth: false },
-    { to: '/discover', icon: Compass, label: 'Discover', auth: false },
-    { to: '/creators', icon: Users, label: 'Creators', auth: false },
-    { to: '/watchlist', icon: Bookmark, label: 'Watchlist', auth: true },
-    { to: '/profile', icon: User, label: 'Profile', auth: true },
-    { to: '/settings', icon: Settings, label: 'Settings', auth: false },
-  ]
-
-  const businessItems = [
-    { to: '/pricing', icon: Crown, label: 'Plans', color: 'text-accent', auth: false },
-    { to: '/creator', icon: BarChart3, label: 'Creator Hub', color: 'text-accent', auth: true, creatorOnly: true },
-    { to: '/upload', icon: Upload, label: 'Upload Film', color: 'text-accent', auth: true, creatorOnly: true },
-    { to: '/store', icon: ShoppingBag, label: 'Merch Store', color: 'text-accent', auth: false },
-    { to: '/learn', icon: BookOpen, label: 'E-Learning', color: 'text-accent', auth: false },
-    { to: '/watch-party', icon: Users, label: 'Watch Party', color: 'text-accent', auth: true },
-  ]
 
   const visibleNav = navItems.filter(i => !i.auth || user)
   const visibleBusiness = businessItems.filter(i => {
@@ -47,19 +61,12 @@ export default function Sidebar() {
     <motion.nav
       animate={{ width: collapsed ? 64 : 240 }}
       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-      className="fixed left-0 top-0 h-screen bg-surface-secondary border-r border-white/10 z-40 flex flex-col py-4 overflow-hidden"
+      className="hidden lg:flex fixed left-0 top-0 h-screen bg-surface-container-lowest border-r border-white/5 z-30 flex-col py-4 overflow-hidden pt-16"
     >
       <div className="flex items-center gap-3 px-4 mb-6 h-10">
-        <Film className="w-7 h-7 text-accent shrink-0" />
-        {!collapsed && (
-          <motion.span
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-xl font-bold tracking-tight"
-          >
-            Nova<span className="text-accent">Flix</span>
-          </motion.span>
-        )}
+        <span className={`text-headline-md font-extrabold text-primary-container tracking-tight ${collapsed ? 'text-center w-full' : ''}`}>
+          {collapsed ? 'N' : 'NovaFlix'}
+        </span>
       </div>
 
       <div className="flex-1 flex flex-col gap-1 px-2 overflow-y-auto">
@@ -70,14 +77,14 @@ export default function Sidebar() {
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors duration-200 ${
                 isActive
-                  ? 'bg-accent/20 text-accent'
-                  : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  ? 'bg-primary-container/20 text-primary'
+                  : 'text-on-surface-variant/60 hover:text-on-surface hover:bg-white/5'
               }`
             }
           >
-            <item.icon className="w-5 h-5 shrink-0" />
+            <Icon name={item.icon} size="sm" className="shrink-0" />
             {!collapsed && (
-              <span className="text-sm font-medium whitespace-nowrap">{item.label}</span>
+              <span className="font-label-md text-label-md whitespace-nowrap">{item.label}</span>
             )}
           </NavLink>
         ))}
@@ -85,16 +92,16 @@ export default function Sidebar() {
         {!user && (
           <NavLink
             to="/login"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-on-surface-variant/60 hover:text-on-surface hover:bg-white/5 transition-colors"
           >
-            <LogIn className="w-5 h-5 shrink-0" />
-            {!collapsed && <span className="text-sm font-medium whitespace-nowrap">Sign In</span>}
+            <Icon name="login" size="sm" className="shrink-0" />
+            {!collapsed && <span className="font-label-md text-label-md whitespace-nowrap">Sign In</span>}
           </NavLink>
         )}
 
-        {!collapsed && (
+        {!collapsed && visibleBusiness.length > 0 && (
           <div className="my-3 px-3">
-            <div className="h-px bg-white/10" />
+            <div className="h-px bg-white/5" />
           </div>
         )}
 
@@ -106,13 +113,13 @@ export default function Sidebar() {
               `flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors duration-200 ${
                 isActive
                   ? `${item.color} bg-white/5`
-                  : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  : 'text-on-surface-variant/60 hover:text-on-surface hover:bg-white/5'
               }`
             }
           >
-            <item.icon className={`w-5 h-5 shrink-0 ${item.color}`} />
+            <Icon name={item.icon} size="sm" className={`shrink-0 ${item.color || ''}`} />
             {!collapsed && (
-              <span className="text-sm font-medium whitespace-nowrap">{item.label}</span>
+              <span className="font-label-md text-label-md whitespace-nowrap">{item.label}</span>
             )}
           </NavLink>
         ))}
@@ -122,28 +129,14 @@ export default function Sidebar() {
             to="/admin"
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors duration-200 ${
-                isActive ? 'text-green-400 bg-white/5' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                isActive ? 'text-secondary bg-white/5' : 'text-on-surface-variant/60 hover:text-on-surface hover:bg-white/5'
               }`
             }
           >
-            <Shield className="w-5 h-5 shrink-0 text-green-400" />
-            {!collapsed && <span className="text-sm font-medium whitespace-nowrap">Admin Panel</span>}
+            <Icon name="admin_panel_settings" size="sm" className="shrink-0 text-secondary" />
+            {!collapsed && <span className="font-label-md text-label-md whitespace-nowrap">Admin Panel</span>}
           </NavLink>
         )}
-      </div>
-
-      <div className="px-2 mt-auto">
-        <button
-          onClick={toggle}
-          className="flex items-center justify-center w-full p-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
-        >
-          <motion.div
-            animate={{ rotate: collapsed ? 180 : 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </motion.div>
-        </button>
       </div>
     </motion.nav>
   )

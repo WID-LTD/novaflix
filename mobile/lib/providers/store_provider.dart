@@ -1,0 +1,209 @@
+import 'dart:convert';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+const _storage = FlutterSecureStorage();
+const _storeKey = 'novaflix-store';
+
+class ContinueWatchingItem {
+  final int id;
+  final String title;
+  final String? poster;
+  final String type;
+  final int? season;
+  final int? episode;
+  final double progress;
+  final double duration;
+
+  ContinueWatchingItem({
+    required this.id,
+    required this.title,
+    this.poster,
+    required this.type,
+    this.season,
+    this.episode,
+    this.progress = 0,
+    this.duration = 0,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'id': id, 'title': title, 'poster': poster, 'type': type,
+    if (season != null) 'season': season,
+    if (episode != null) 'episode': episode,
+    'progress': progress, 'duration': duration,
+  };
+
+  factory ContinueWatchingItem.fromJson(Map<String, dynamic> json) => ContinueWatchingItem(
+    id: json['id'] as int,
+    title: json['title'] as String,
+    poster: json['poster'] as String?,
+    type: json['type'] as String,
+    season: json['season'] as int?,
+    episode: json['episode'] as int?,
+    progress: (json['progress'] as num?)?.toDouble() ?? 0,
+    duration: (json['duration'] as num?)?.toDouble() ?? 0,
+  );
+}
+
+class PlaybackSettings {
+  final String defaultQuality;
+  final double subtitleSize;
+  final bool autoplay;
+  final String subtitleLanguage;
+
+  const PlaybackSettings({
+    this.defaultQuality = 'Auto',
+    this.subtitleSize = 1.0,
+    this.autoplay = true,
+    this.subtitleLanguage = 'en',
+  });
+
+  Map<String, dynamic> toJson() => {
+    'defaultQuality': defaultQuality,
+    'subtitleSize': subtitleSize,
+    'autoplay': autoplay,
+    'subtitleLanguage': subtitleLanguage,
+  };
+
+  factory PlaybackSettings.fromJson(Map<String, dynamic> json) => PlaybackSettings(
+    defaultQuality: json['defaultQuality'] as String? ?? 'Auto',
+    subtitleSize: (json['subtitleSize'] as num?)?.toDouble() ?? 1.0,
+    autoplay: json['autoplay'] as bool? ?? true,
+    subtitleLanguage: json['subtitleLanguage'] as String? ?? 'en',
+  );
+
+  PlaybackSettings copyWith({String? defaultQuality, double? subtitleSize, bool? autoplay, String? subtitleLanguage}) =>
+      PlaybackSettings(
+        defaultQuality: defaultQuality ?? this.defaultQuality,
+        subtitleSize: subtitleSize ?? this.subtitleSize,
+        autoplay: autoplay ?? this.autoplay,
+        subtitleLanguage: subtitleLanguage ?? this.subtitleLanguage,
+      );
+}
+
+class NotificationSettings {
+  final bool newReleases;
+  final bool watchlistUpdates;
+  final bool creatorActivity;
+  final bool marketing;
+
+  const NotificationSettings({
+    this.newReleases = true,
+    this.watchlistUpdates = true,
+    this.creatorActivity = true,
+    this.marketing = false,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'newReleases': newReleases,
+    'watchlistUpdates': watchlistUpdates,
+    'creatorActivity': creatorActivity,
+    'marketing': marketing,
+  };
+
+  factory NotificationSettings.fromJson(Map<String, dynamic> json) => NotificationSettings(
+    newReleases: json['newReleases'] as bool? ?? true,
+    watchlistUpdates: json['watchlistUpdates'] as bool? ?? true,
+    creatorActivity: json['creatorActivity'] as bool? ?? true,
+    marketing: json['marketing'] as bool? ?? false,
+  );
+
+  NotificationSettings copyWith({bool? newReleases, bool? watchlistUpdates, bool? creatorActivity, bool? marketing}) =>
+      NotificationSettings(
+        newReleases: newReleases ?? this.newReleases,
+        watchlistUpdates: watchlistUpdates ?? this.watchlistUpdates,
+        creatorActivity: creatorActivity ?? this.creatorActivity,
+        marketing: marketing ?? this.marketing,
+      );
+}
+
+class StoreState {
+  final List<ContinueWatchingItem> continueWatching;
+  final List<String> recentlySearched;
+  final PlaybackSettings playbackSettings;
+  final NotificationSettings notificationSettings;
+
+  const StoreState({
+    this.continueWatching = const [],
+    this.recentlySearched = const [],
+    this.playbackSettings = const PlaybackSettings(),
+    this.notificationSettings = const NotificationSettings(),
+  });
+
+  Map<String, dynamic> toJson() => {
+    'continueWatching': continueWatching.map((e) => e.toJson()).toList(),
+    'recentlySearched': recentlySearched,
+    'playbackSettings': playbackSettings.toJson(),
+    'notificationSettings': notificationSettings.toJson(),
+  };
+
+  factory StoreState.fromJson(Map<String, dynamic> json) => StoreState(
+    continueWatching: (json['continueWatching'] as List?)?.map((e) => ContinueWatchingItem.fromJson(e as Map<String, dynamic>)).toList() ?? [],
+    recentlySearched: (json['recentlySearched'] as List?)?.cast<String>() ?? [],
+    playbackSettings: json['playbackSettings'] != null ? PlaybackSettings.fromJson(json['playbackSettings'] as Map<String, dynamic>) : PlaybackSettings(),
+    notificationSettings: json['notificationSettings'] != null ? NotificationSettings.fromJson(json['notificationSettings'] as Map<String, dynamic>) : NotificationSettings(),
+  );
+}
+
+class StoreNotifier extends StateNotifier<StoreState> {
+  StoreNotifier() : super(StoreState()) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final raw = await _storage.read(key: _storeKey);
+    if (raw != null) {
+      try {
+        state = StoreState.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _save() async {
+    await _storage.write(key: _storeKey, value: jsonEncode(state.toJson()));
+  }
+
+  void addToContinueWatching(ContinueWatchingItem item) {
+    final list = List<ContinueWatchingItem>.from(state.continueWatching);
+    list.removeWhere((e) => e.id == item.id && e.type == item.type);
+    list.insert(0, item);
+    if (list.length > 20) list.removeLast();
+    state = StoreState(
+      continueWatching: list,
+      recentlySearched: state.recentlySearched,
+      playbackSettings: state.playbackSettings,
+      notificationSettings: state.notificationSettings,
+    );
+    _save();
+  }
+
+  void updateProgress(int id, String type, double progress) {
+    final list = state.continueWatching.map((e) {
+      if (e.id == id && e.type == type) return ContinueWatchingItem(id: e.id, title: e.title, poster: e.poster, type: e.type, season: e.season, episode: e.episode, progress: progress, duration: e.duration);
+      return e;
+    }).toList();
+    state = StoreState(continueWatching: list, recentlySearched: state.recentlySearched, playbackSettings: state.playbackSettings, notificationSettings: state.notificationSettings);
+    _save();
+  }
+
+  void addRecentSearch(String query) {
+    final list = List<String>.from(state.recentlySearched);
+    list.remove(query);
+    list.insert(0, query);
+    if (list.length > 10) list.removeLast();
+    state = StoreState(continueWatching: state.continueWatching, recentlySearched: list, playbackSettings: state.playbackSettings, notificationSettings: state.notificationSettings);
+    _save();
+  }
+
+  void updatePlaybackSettings(PlaybackSettings settings) {
+    state = StoreState(continueWatching: state.continueWatching, recentlySearched: state.recentlySearched, playbackSettings: settings, notificationSettings: state.notificationSettings);
+    _save();
+  }
+
+  void updateNotificationSettings(NotificationSettings settings) {
+    state = StoreState(continueWatching: state.continueWatching, recentlySearched: state.recentlySearched, playbackSettings: state.playbackSettings, notificationSettings: settings);
+    _save();
+  }
+}
+
+final storeProvider = StateNotifierProvider<StoreNotifier, StoreState>((ref) => StoreNotifier());

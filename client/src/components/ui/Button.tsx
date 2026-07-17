@@ -1,6 +1,6 @@
 import { type ButtonHTMLAttributes, type FC } from 'react'
 import { motion } from 'framer-motion'
-import { Loader2 } from 'lucide-react'
+import Icon from './Icon'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'ghost' | 'outline'
@@ -43,7 +43,7 @@ const Button: FC<ButtonProps> = ({
       disabled={disabled || loading}
       {...(props as any)}
     >
-      {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+      {loading && <Icon name="progress_activity" className="w-4 h-4 animate-spin" />}
       {children}
     </motion.button>
   )

@@ -97,32 +97,6 @@ export async function getUserStats(token: string): Promise<any> {
   }
 }
 
-export async function createCheckout(token: string, plan: string): Promise<any> {
-  try {
-    const res = await fetch(`${BASE}/payment/create-checkout`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ plan }),
-    })
-    return res.json()
-  } catch {
-    return { success: false, error: 'Network error' }
-  }
-}
-
-export async function confirmPayment(token: string, plan: string): Promise<any> {
-  try {
-    const res = await fetch(`${BASE}/payment/confirm`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ plan }),
-    })
-    return res.json()
-  } catch {
-    return { success: false, error: 'Network error' }
-  }
-}
-
 export async function getPaymentStatus(token: string): Promise<any> {
   try {
     const res = await fetch(`${BASE}/payment/status`, {
@@ -354,6 +328,109 @@ export async function adminGetNewsletterSubscribers(token: string): Promise<any>
   }
 }
 
+// Communities
+export async function getCommunities(search?: string): Promise<any> {
+  try {
+    const token = getToken()
+    const params = search ? `?search=${encodeURIComponent(search)}` : ''
+    const res = await fetch(`${BASE}/community${params}`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, communities: [], error: 'Network error' } }
+}
+
+export async function getCommunity(id: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/community/${id}`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function createCommunity(data: { name: string; description?: string; avatar?: string }): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/community`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function joinCommunity(id: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/community/${id}/join`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function leaveCommunity(id: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/community/${id}/leave`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getMyCommunities(): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/community/mine`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, communities: [], error: 'Network error' } }
+}
+
+export async function addCommunityPost(communityId: string, content: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/community/${communityId}/posts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ content }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function deleteCommunityPost(communityId: string, postId: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/community/${communityId}/posts/${postId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+// Downloads
+export async function getDownloadedFiles(): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/downloads/list`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, files: [], error: 'Network error' } }
+}
+
+export async function deleteDownloadedFile(filename: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/downloads/${encodeURIComponent(filename)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
 // Recommendations
 export async function getForYouRecommendations(token: string): Promise<any> {
   try {
@@ -519,6 +596,347 @@ export async function getArtistGraph(token: string): Promise<any> {
     })
     return res.json()
   } catch { return { success: false, nodes: [], edges: [], error: 'Network error' } }
+}
+
+// Membership tiers
+export async function createTier(token: string, data: { name: string; description?: string; price: number; benefits?: string[] }): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/memberships/tiers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function updateTier(token: string, id: string, data: any): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/memberships/tiers/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getCreatorTiers(creatorId: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/memberships/tiers/${creatorId}`)
+    return res.json()
+  } catch { return { success: false, tiers: [], error: 'Network error' } }
+}
+
+export async function getMyTiers(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/memberships/my-tiers`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, tiers: [], error: 'Network error' } }
+}
+
+export async function subscribeToTier(token: string, tierId: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/memberships/subscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ tierId }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function verifyMembershipPayment(token: string, reference: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/memberships/verify?reference=${reference}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getMyMemberships(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/memberships/my-memberships`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, memberships: [], error: 'Network error' } }
+}
+
+export async function cancelMembership(token: string, id: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/memberships/${id}/cancel`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getMySubscribers(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/memberships/my-subscribers`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, subscribers: [], stats: {}, error: 'Network error' } }
+}
+
+// Live events
+export async function createEvent(token: string, data: any): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function updateEvent(token: string, id: string, data: any): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/events/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getEvents(includePast?: boolean): Promise<any> {
+  try {
+    const params = includePast ? '?includePast=true' : ''
+    const res = await fetch(`${BASE}/events${params}`)
+    return res.json()
+  } catch { return { success: false, events: [], error: 'Network error' } }
+}
+
+export async function getEvent(id: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/events/${id}`)
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getMyEvents(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/events/mine`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, events: [], error: 'Network error' } }
+}
+
+export async function purchaseEventTicket(token: string, eventId: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/events/purchase`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ eventId }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function verifyTicketPayment(token: string, reference: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/events/purchase/verify?reference=${reference}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getMyTickets(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/events/my-tickets`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, tickets: [], error: 'Network error' } }
+}
+
+// Store / Products
+export async function getProducts(category?: string): Promise<any> {
+  try {
+    const params = category && category !== 'all' ? `?category=${category}` : ''
+    const res = await fetch(`${BASE}/store${params}`)
+    return res.json()
+  } catch { return { success: false, products: [], error: 'Network error' } }
+}
+
+export async function getProduct(id: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/store/${id}`)
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function createProduct(token: string, data: any): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/store`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function updateProduct(token: string, id: string, data: any): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/store/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getMyProducts(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/store/mine`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, products: [], error: 'Network error' } }
+}
+
+export async function checkoutStore(token: string, items: { productId: string; quantity: number }[]): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/store/checkout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ items }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function verifyStoreOrder(token: string, reference: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/store/checkout/verify?reference=${reference}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getMyOrders(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/store/orders/mine`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, orders: [], error: 'Network error' } }
+}
+
+// Courses
+export async function getCourses(category?: string): Promise<any> {
+  try {
+    const params = category && category !== 'all' ? `?category=${category}` : ''
+    const res = await fetch(`${BASE}/courses${params}`)
+    return res.json()
+  } catch { return { success: false, courses: [], error: 'Network error' } }
+}
+
+export async function getCourse(id: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/courses/${id}`)
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function createCourse(token: string, data: any): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/courses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function updateCourse(token: string, id: string, data: any): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/courses/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getMyCourses(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/courses/mine`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, courses: [], error: 'Network error' } }
+}
+
+export async function enrollCourse(token: string, courseId: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/courses/enroll`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ courseId }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function verifyCoursePayment(token: string, reference: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/courses/enroll/verify?reference=${reference}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getMyEnrollments(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/courses/enrollments/mine`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, enrollments: [], error: 'Network error' } }
+}
+
+export async function updateCourseProgress(token: string, courseId: string, progress: number): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/courses/progress`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ courseId, progress }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+// Archive
+export async function getArchiveItems(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/archive`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, items: [], error: 'Network error' } }
+}
+
+export async function getArchiveItem(token: string, id: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/archive/${id}`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
 }
 
 // Token management

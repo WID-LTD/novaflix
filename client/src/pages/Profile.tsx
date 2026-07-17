@@ -1,15 +1,15 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { User, Settings, Bookmark, Clock, Star, Film, Tv, Crown, BarChart3, Award, TrendingUp, LogOut } from 'lucide-react'
+import Icon from '../components/ui/Icon'
 import { useStore } from '../store/useStore'
 import { useAuth } from '../lib/AuthContext'
 import Button from '../components/ui/Button'
 import PremiumBadge from '../components/ui/PremiumBadge'
 
 const badges = [
-  { icon: Star, label: 'Film Buff', desc: 'Watch 10+ films', earned: false },
-  { icon: TrendingUp, label: 'Trend Setter', desc: 'Add 5 to watchlist', earned: false },
-  { icon: Clock, label: 'Night Owl', desc: 'Watch after midnight', earned: false },
-  { icon: Award, label: 'Explorer', desc: 'Visit 5 genres', earned: false },
+  { icon: 'star' as const, label: 'Film Buff', desc: 'Watch 10+ films', earned: false },
+  { icon: 'trending_up' as const, label: 'Trend Setter', desc: 'Add 5 to watchlist', earned: false },
+  { icon: 'schedule' as const, label: 'Night Owl', desc: 'Watch after midnight', earned: false },
+  { icon: 'emoji_events' as const, label: 'Explorer', desc: 'Visit 5 genres', earned: false },
 ]
 
 export default function Profile() {
@@ -31,21 +31,21 @@ export default function Profile() {
   }
 
   return (
-    <div className="min-h-screen px-4 md:px-8 pt-6 md:pt-10 pb-20">
+    <div className="min-h-screen px-margin-mobile md:px-margin-desktop pt-6 md:pt-10 pb-nav">
       <div className="max-w-4xl mx-auto">
         {!isPremium && (
-          <div className="bg-gradient-to-r from-accent/10 to-accent-secondary/5 border border-premium/20 rounded-2xl p-6 mb-8">
+          <div className="bg-surface-container-high border border-primary-container/20 rounded-xl p-6 mb-8">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-full bg-gradient-to-br from-accent to-accent-secondary-light flex items-center justify-center">
-                <Crown className="w-7 h-7 text-black" />
+              <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary-container to-secondary flex items-center justify-center">
+                <Icon name="workspace_premium" fill={true} className="w-7 h-7" />
               </div>
               <div className="flex-1">
-                <h3 className="text-lg font-bold text-white">Upgrade to Premium</h3>
-                <p className="text-sm text-gray-400">Unlock 4K, offline downloads, ad-free streaming</p>
+                <h3 className="font-label-md text-label-md text-on-surface">Upgrade to Premium</h3>
+                <p className="text-on-surface-variant/60 text-sm">Unlock 4K, offline downloads, ad-free streaming</p>
               </div>
               <Link to="/pricing">
                 <Button size="sm">
-                  <Crown className="w-4 h-4 fill-current" /> View Plans
+                  <Icon name="workspace_premium" fill={true} /> View Plans
                 </Button>
               </Link>
             </div>
@@ -53,12 +53,12 @@ export default function Profile() {
         )}
 
         <div className="flex items-center gap-6 mb-10">
-          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-accent to-accent-secondary flex items-center justify-center">
-            <User className="w-10 h-10 text-white" />
+          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary-container to-secondary flex items-center justify-center">
+            <Icon name="person" className="w-10 h-10" />
           </div>
           <div className="flex-1">
-            <h1 className="text-2xl md:text-3xl font-bold">{user?.name || 'Guest'}</h1>
-            <p className="text-gray-400 text-sm mt-1">{user?.email || 'Sign in to sync across devices'}</p>
+            <h1 className="text-headline-lg">{user?.name || 'Guest'}</h1>
+            <p className="text-on-surface-variant/60 text-sm mt-1">{user?.email || 'Sign in to sync across devices'}</p>
             {isPremium && (
               <div className="mt-2">
                 <PremiumBadge size="sm" />
@@ -66,45 +66,45 @@ export default function Profile() {
             )}
           </div>
           {user && (
-            <button onClick={handleLogout} className="p-2 rounded-xl hover:bg-white/10 transition-colors text-gray-400">
-              <LogOut className="w-5 h-5" />
+            <button onClick={handleLogout} className="p-3 rounded-xl hover:bg-white/10 transition-colors text-on-surface-variant" aria-label="Sign out">
+              <Icon name="logout" />
             </button>
           )}
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-          <div className="bg-surface-card border border-white/10 rounded-2xl p-5">
-            <Bookmark className="w-6 h-6 text-accent mb-3" />
-            <p className="text-2xl font-bold">{watchlist.length}</p>
-            <p className="text-xs text-gray-400 mt-1">Total Saved</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-gutter mb-10">
+          <div className="bg-surface-container-high border border-white/5 rounded-xl p-5">
+            <Icon name="bookmark" className="text-primary-container mb-3" />
+            <p className="text-2xl font-bold text-on-surface">{watchlist.length}</p>
+            <p className="text-on-surface-variant/60 text-sm">Total Saved</p>
           </div>
-          <div className="bg-surface-card border border-white/10 rounded-2xl p-5">
-            <Film className="w-6 h-6 text-accent mb-3" />
-            <p className="text-2xl font-bold">{movieCount}</p>
-            <p className="text-xs text-gray-400 mt-1">Movies</p>
+          <div className="bg-surface-container-high border border-white/5 rounded-xl p-5">
+            <Icon name="movie" className="text-primary-container mb-3" />
+            <p className="text-2xl font-bold text-on-surface">{movieCount}</p>
+            <p className="text-on-surface-variant/60 text-sm">Movies</p>
           </div>
-          <div className="bg-surface-card border border-white/10 rounded-2xl p-5">
-            <Tv className="w-6 h-6 text-accent mb-3" />
-            <p className="text-2xl font-bold">{tvCount}</p>
-            <p className="text-xs text-gray-400 mt-1">TV Shows</p>
+          <div className="bg-surface-container-high border border-white/5 rounded-xl p-5">
+            <Icon name="tv" className="text-primary-container mb-3" />
+            <p className="text-2xl font-bold text-on-surface">{tvCount}</p>
+            <p className="text-on-surface-variant/60 text-sm">TV Shows</p>
           </div>
-          <div className="bg-surface-card border border-white/10 rounded-2xl p-5">
-            <Clock className="w-6 h-6 text-accent-secondary mb-3" />
-            <p className="text-2xl font-bold">{totalMinutes}</p>
-            <p className="text-xs text-gray-400 mt-1">Minutes Watched</p>
+          <div className="bg-surface-container-high border border-white/5 rounded-xl p-5">
+            <Icon name="schedule" className="text-secondary mb-3" />
+            <p className="text-2xl font-bold text-on-surface">{totalMinutes}</p>
+            <p className="text-on-surface-variant/60 text-sm">Minutes Watched</p>
           </div>
         </div>
 
         {continueWatching.length > 0 && (
           <div className="mb-10">
-            <h2 className="text-lg font-semibold mb-4">Continue Watching</h2>
+            <h2 className="font-label-md text-label-md text-on-surface uppercase tracking-widest mb-4">Continue Watching</h2>
             <div className="space-y-2">
               {continueWatching.slice(0, 5).map((item) => (
                 <div
                   key={`${item.id}-${item.type}`}
-                  className="flex items-center gap-4 bg-surface-card border border-white/10 rounded-xl p-4"
+                  className="flex items-center gap-4 bg-surface-container-high border border-white/5 rounded-xl p-4"
                 >
-                  <div className="w-12 h-16 rounded-lg bg-surface-secondary overflow-hidden shrink-0">
+                  <div className="w-12 h-16 rounded-lg bg-surface-container overflow-hidden shrink-0">
                     {item.poster && (
                       <img
                         src={item.poster}
@@ -114,15 +114,15 @@ export default function Profile() {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{item.title}</p>
-                    <p className="text-xs text-gray-500">
+                    <p className="font-label-md text-label-md text-on-surface truncate">{item.title}</p>
+                    <p className="text-on-surface-variant/60 text-sm">
                       {item.type === 'tv' && item.season
                         ? `S${item.season} E${item.episode}`
                         : 'Movie'}
                     </p>
-                    <div className="w-full h-1 bg-surface rounded-full mt-2">
+                    <div className="w-full h-1 bg-surface-container rounded-full mt-2">
                       <div
-                        className="h-full bg-accent rounded-full"
+                        className="h-full bg-primary-container rounded-full"
                         style={{
                           width: `${item.duration > 0 ? (item.progress / item.duration) * 100 : 0}%`,
                         }}
@@ -145,51 +145,48 @@ export default function Profile() {
         )}
 
         <div className="mb-10">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Award className="w-5 h-5 text-accent" /> Achievements
+          <h2 className="font-label-md text-label-md text-on-surface uppercase tracking-widest mb-4 flex items-center gap-2">
+            <Icon name="emoji_events" className="text-primary-container" /> Achievements
           </h2>
           <div className="grid grid-cols-4 gap-3">
-            {badges.map((b) => {
-              const Icon = b.icon
-              return (
-                <div
-                  key={b.label}
-                  className={`bg-surface-card border rounded-2xl p-4 text-center ${
-                    false ? 'border-premium/30' : 'border-white/10 opacity-40'
-                  }`}
-                >
-                  <Icon className="w-6 h-6 mx-auto mb-2 text-gray-500" />
-                  <p className="text-xs font-semibold text-gray-400">{b.label}</p>
-                  <p className="text-[10px] text-gray-600 mt-0.5">{b.desc}</p>
-                </div>
-              )
-            })}
+            {badges.map((b) => (
+              <div
+                key={b.label}
+                className={`bg-surface-container-high border rounded-xl p-4 text-center ${
+                  b.earned ? 'border-primary-container/30' : 'border-white/5 opacity-40'
+                }`}
+              >
+                <Icon name={b.icon} className="mx-auto mb-2 text-on-surface-variant" />
+                <p className="font-label-sm text-label-sm text-on-surface-variant">{b.label}</p>
+                <p className="text-on-surface-variant/40 text-sm">{b.desc}</p>
+              </div>
+            ))}
           </div>
         </div>
 
-        <div className="bg-surface-card border border-white/10 rounded-2xl p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">Quick Links</h2>
+        <div className="bg-surface-container-high border border-white/5 rounded-xl p-6 mb-6">
+          <h2 className="font-label-md text-label-md text-on-surface uppercase tracking-widest mb-4">Quick Links</h2>
           <div className="space-y-2">
             <Link to="/settings" className="w-full flex items-center justify-between px-4 py-3 rounded-xl hover:bg-white/5 transition-colors">
               <div className="flex items-center gap-3">
-                <Settings className="w-5 h-5 text-gray-400" />
-                <span className="text-sm">Settings</span>
+                <Icon name="settings" className="text-on-surface-variant" />
+                <span className="font-label-md text-label-md text-on-surface">Settings</span>
               </div>
-              <span className="text-gray-500 text-sm">→</span>
+              <Icon name="chevron_right" className="text-on-surface-variant/40" />
             </Link>
             <Link to="/creator" className="w-full flex items-center justify-between px-4 py-3 rounded-xl hover:bg-white/5 transition-colors">
               <div className="flex items-center gap-3">
-                <BarChart3 className="w-5 h-5 text-accent" />
-                <span className="text-sm">Creator Dashboard</span>
+                <Icon name="bar_chart" className="text-primary-container" />
+                <span className="font-label-md text-label-md text-on-surface">Creator Dashboard</span>
               </div>
-              <span className="text-gray-500 text-sm">→</span>
+              <Icon name="chevron_right" className="text-on-surface-variant/40" />
             </Link>
             <Link to="/pricing" className="w-full flex items-center justify-between px-4 py-3 rounded-xl hover:bg-white/5 transition-colors">
               <div className="flex items-center gap-3">
-                <Crown className="w-5 h-5 text-accent" />
-                <span className="text-sm">Premium Plans</span>
+                <Icon name="workspace_premium" className="text-primary-container" />
+                <span className="font-label-md text-label-md text-on-surface">Premium Plans</span>
               </div>
-              <span className="text-gray-500 text-sm">→</span>
+              <Icon name="chevron_right" className="text-on-surface-variant/40" />
             </Link>
           </div>
         </div>

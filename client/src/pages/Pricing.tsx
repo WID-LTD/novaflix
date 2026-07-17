@@ -1,197 +1,206 @@
 import { useState } from 'react'
-import { motion } from 'framer-motion'
-import { useNavigate } from 'react-router-dom'
-import { Crown, Check, X, Monitor, Download, Sparkles, Film } from 'lucide-react'
+import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
-import { confirmPayment } from '../lib/auth'
+import { initializePayment } from '../lib/auth'
 import Button from '../components/ui/Button'
-import PremiumBadge from '../components/ui/PremiumBadge'
 import { useToast } from '../components/ui/Toast'
+import Icon from '../components/ui/Icon'
+
+interface Feature {
+  label: string
+  included: boolean
+  bold?: boolean
+}
 
 const plans = [
   {
-    name: 'Free',
-    price: '$0',
-    period: '/month',
-    description: 'Explore and discover',
-    features: [
-      { label: 'Ad-supported streaming', included: true },
-      { label: '720p max resolution', included: true },
-      { label: 'Basic recommendations', included: true },
-      { label: 'Skip ads', included: false },
-      { label: '4K HDR streaming', included: false },
-      { label: 'Offline downloads', included: false },
-      { label: 'Early access to premieres', included: false },
-      { label: 'Creator analytics', included: false },
-    ],
-    cta: 'Get Started',
+    id: 'student',
+    name: 'Student',
+    price: '₦800',
+    description: 'For learners on a budget',
     popular: false,
+    features: [
+      { label: '720p HD Quality', included: true },
+      { label: '1 device at a time', included: true },
+      { label: 'Offline downloads (1 device)', included: true },
+      { label: 'Ad-free listening', included: false },
+      { label: '6 skips per hour', included: true },
+    ],
   },
   {
-    name: 'Premium',
-    price: '$9.99',
-    period: '/month',
-    description: 'The full experience',
+    id: 'basic',
+    name: 'Basic',
+    price: '₦1,500',
+    description: 'Solo streaming essentials',
+    popular: false,
     features: [
-      { label: 'Ad-free streaming', included: true },
-      { label: '4K HDR streaming', included: true },
-      { label: 'Offline downloads', included: true },
-      { label: 'Early access to premieres', included: true },
-      { label: 'Advanced recommendations', included: true },
-      { label: 'Creator analytics dashboard', included: true },
-      { label: 'Watch parties', included: true },
-      { label: 'Priority support', included: true },
+      { label: '720p HD Quality', included: true },
+      { label: '1 device at a time', included: true },
+      { label: 'Offline downloads (1 device)', included: true },
+      { label: 'Ad-free listening', included: false },
+      { label: '6 skips per hour', included: true },
     ],
-    cta: 'Start Free Trial',
+  },
+  {
+    id: 'standard',
+    name: 'Standard',
+    price: '₦2,500',
+    description: 'The sweet spot',
     popular: true,
+    features: [
+      { label: '1080p Full HD', included: true, bold: true },
+      { label: '2 devices simultaneously', included: true },
+      { label: 'Offline downloads (2 devices)', included: true },
+      { label: 'Completely ad-free', included: true },
+      { label: 'Unlimited skips', included: true },
+    ],
   },
   {
-    name: 'Duo',
-    price: '$14.99',
-    period: '/month',
-    description: 'Share with someone',
-    features: [
-      { label: 'Everything in Premium', included: true },
-      { label: '2 separate profiles', included: true },
-      { label: 'Simultaneous streams', included: true },
-      { label: 'Shared watchlist', included: true },
-      { label: 'Duo playlists', included: true },
-    ],
-    cta: 'Start Free Trial',
+    id: 'premium',
+    name: 'Premium',
+    price: '₦5,500',
+    description: 'Cinema grade experience',
     popular: false,
+    features: [
+      { label: '4K UHD + HDR10 / Dolby Vision', included: true, bold: true },
+      { label: 'Spatial Audio', included: true },
+      { label: '4 devices simultaneously', included: true },
+      { label: 'Offline downloads (6 devices)', included: true },
+      { label: 'Completely ad-free', included: true },
+      { label: 'Exclusive premier access', included: true },
+    ],
   },
 ]
 
 export default function Pricing() {
   const navigate = useNavigate()
-  const { user, isPremium } = useAuth()
+  const { user } = useAuth()
   const toast = useToast()
   const [loading, setLoading] = useState<string | null>(null)
+  const [selectedPlan, setSelectedPlan] = useState('standard')
 
-  const handleSelectPlan = async (planName: string) => {
+  const handleSelectPlan = async (planId: string) => {
+    setSelectedPlan(planId)
     if (!user) {
       navigate('/login')
       return
     }
-    if (planName === 'Free') {
-      toast.info('You are already on the Free plan')
-      return
-    }
-    setLoading(planName)
-    const res = await confirmPayment(localStorage.getItem('novaflix-token') || '', planName.toLowerCase())
+    if (planId === 'free') return
+    setLoading(planId)
+    const token = localStorage.getItem('novaflix-token') || ''
+    const res = await initializePayment(token, planId)
     setLoading(null)
     if (res.success) {
-      toast.success(`Upgraded to ${planName}!`)
-      setTimeout(() => window.location.reload(), 1000)
+      if (res.authorization_url) {
+        window.location.href = res.authorization_url
+      } else {
+        toast.error('Unexpected response from payment server')
+      }
     } else {
       toast.error(res.error || 'Payment failed')
     }
   }
 
+  const currentPlan = user?.plan || 'free'
+  const isCurrentPlan = (planId: string) => currentPlan === planId && currentPlan !== 'free'
+
   return (
-    <div className="min-h-screen px-4 md:px-8 pt-6 md:pt-10 pb-20">
-      <div className="max-w-5xl mx-auto">
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-accent/10 mb-4">
-            <Crown className="w-8 h-8 text-accent" />
-          </div>
-          <h1 className="text-3xl md:text-section font-bold mb-3">
-            Choose Your <span className="text-accent">Plan</span>
-          </h1>
-          <p className="text-gray-400 max-w-xl mx-auto">
-            {user ? `You're on the ${isPremium ? 'Premium' : 'Free'} plan` : 'Start free and upgrade when you\'re ready. No hidden fees, cancel anytime.'}
-          </p>
+    <div className="min-h-screen bg-background">
+      <div className="relative pt-32 pb-24 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[600px] opacity-20 pointer-events-none blur-[120px] bg-gradient-to-b from-primary-container to-transparent" />
+
+        <div className="relative z-10 text-center mb-16">
+          <span className="inline-block px-4 py-1.5 rounded-full bg-surface-container-highest text-secondary font-label-md text-label-md mb-6 uppercase tracking-widest">Pricing Tiers</span>
+          <h1 className="text-headline-lg md:text-display-lg mb-4 text-balance">Choose the plan that's right for you</h1>
+          <p className="text-body-lg text-on-surface-variant max-w-2xl mx-auto">From students to cinephiles — every tier unlocks a premium NovaFlix experience.</p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6">
-          {plans.map((plan, i) => (
-            <motion.div
-              key={plan.name}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
-              className={`relative bg-surface-card border rounded-2xl p-6 flex flex-col ${
-                plan.popular
-                  ? 'border-premium/50 ring-1 ring-premium/30'
-                  : 'border-white/10'
-              }`}
-            >
-              {plan.popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <PremiumBadge size="md" label="Most Popular" />
-                </div>
-              )}
-
-              <div className="mb-6">
-                <h2 className="text-xl font-bold text-white mb-1">{plan.name}</h2>
-                <p className="text-sm text-gray-400 mb-4">{plan.description}</p>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-bold text-white">{plan.price}</span>
-                  <span className="text-gray-500 text-sm">{plan.period}</span>
-                </div>
-              </div>
-
-              <ul className="space-y-3 mb-8 flex-1">
-                {plan.features.map((f) => (
-                  <li key={f.label} className="flex items-center gap-3 text-sm">
-                    {f.included ? (
-                      <Check className="w-4 h-4 text-accent shrink-0" />
-                    ) : (
-                      <X className="w-4 h-4 text-gray-600 shrink-0" />
-                    )}
-                    <span className={f.included ? 'text-gray-200' : 'text-gray-500'}>
-                      {f.label}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-
-              <Button
-                variant={plan.popular ? 'primary' : 'outline'}
-                className="w-full"
-                size="lg"
-                loading={loading === plan.name}
-                onClick={() => handleSelectPlan(plan.name)}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-20" id="plan-selector">
+          {plans.map((plan) => {
+            const isSelected = selectedPlan === plan.id
+            const isActive = isCurrentPlan(plan.id)
+            return (
+              <div
+                key={plan.id}
+                className={`relative group flex flex-col p-6 rounded-xl border transition-all cursor-pointer ${
+                  isSelected
+                    ? 'bg-surface-container-high border-primary-container/50 scale-105 z-10 shadow-2xl'
+                    : 'bg-surface-container border-outline-variant/30 hover:translate-y-[-8px]'
+                }`}
               >
-                {plan.cta}
-              </Button>
-            </motion.div>
-          ))}
+                {plan.popular && (
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-primary-container text-on-primary-container px-4 py-1 rounded-full font-label-md text-label-sm font-bold uppercase tracking-tighter whitespace-nowrap">
+                    Most Popular
+                  </div>
+                )}
+                {isActive && (
+                  <div className="absolute -top-4 right-4 bg-secondary text-black px-3 py-1 rounded-full font-label-md text-label-sm font-bold">
+                    Current
+                  </div>
+                )}
+
+                <div className="mb-6">
+                  <h3 className="text-headline-md mb-1">{plan.name}</h3>
+                  <p className="font-label-sm text-label-sm text-on-surface-variant">{plan.description}</p>
+                  <div className="mt-4">
+                    <span className="text-headline-lg font-bold">{plan.price}</span>
+                    <span className="text-on-surface-variant text-body-md">/month</span>
+                  </div>
+                </div>
+
+                <div className="space-y-3 mb-8 flex-grow">
+                  {plan.features.map((f) => (
+                    <div key={f.label} className="flex items-center gap-3">
+                      {f.included ? (
+                        <Icon name="check_circle" className="text-primary text-[20px]" />
+                      ) : (
+                        <Icon name="cancel" className="text-on-surface-variant/40 text-[20px]" />
+                      )}
+                      <span className={`text-body-md ${f.included ? (f.bold ? 'font-bold text-on-surface' : '') : 'text-on-surface-variant/60'}`}>
+                        {f.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  disabled={isActive}
+                  onClick={() => handleSelectPlan(plan.id)}
+                  className={`w-full py-4 rounded-lg font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                    isSelected
+                      ? 'bg-primary-container text-on-primary-container shadow-lg shadow-primary-container/20 hover:brightness-110 active:scale-95'
+                      : 'border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container'
+                  }`}
+                >
+                  {loading === plan.id ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      Processing...
+                    </span>
+                  ) : isActive ? (
+                    'Current Plan'
+                  ) : (
+                    `Subscribe — ${plan.price}`
+                  )}
+                </button>
+              </div>
+            )
+          })}
         </div>
 
-        <div className="mt-12 bg-surface-card border border-white/10 rounded-2xl p-6 md:p-8">
-          <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-accent" /> Compare Features
-          </h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/10">
-                  <th className="text-left py-3 pr-4 text-gray-400 font-medium">Feature</th>
-                  <th className="text-center py-3 px-4 text-gray-400 font-medium">Free</th>
-                  <th className="text-center py-3 px-4 text-accent font-semibold">Premium</th>
-                  <th className="text-center py-3 pl-4 text-gray-400 font-medium">Duo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  ['Streaming quality', '720p', '4K HDR', '4K HDR'],
-                  ['Ads', 'Yes', 'No', 'No'],
-                  ['Offline downloads', 'No', 'Yes', 'Yes'],
-                  ['Simultaneous streams', '1', '3', '6'],
-                  ['Profiles', '1', '3', '2'],
-                  ['Creator analytics', 'No', 'Yes', 'Yes'],
-                  ['Watch parties', 'No', 'Yes', 'Yes'],
-                ].map((row) => (
-                  <tr key={row[0]} className="border-b border-white/5">
-                    <td className="py-3 pr-4 text-gray-300">{row[0]}</td>
-                    <td className="text-center py-3 px-4 text-gray-500">{row[1]}</td>
-                    <td className="text-center py-3 px-4 text-accent font-medium">{row[2]}</td>
-                    <td className="text-center py-3 pl-4 text-gray-300">{row[3]}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="text-center">
+          <Link to="/settings" className="inline-flex items-center gap-2 font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors group">
+            Manage your subscription
+            <Icon name="arrow_forward" size="sm" className="group-hover:translate-x-1 transition-transform" />
+          </Link>
+        </div>
+
+        <div className="mt-24 rounded-2xl overflow-hidden h-64 md:h-96 relative">
+          <div className="w-full h-full bg-gradient-to-br from-primary-container/20 via-surface to-surface" />
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent" />
+          <div className="absolute inset-0 flex flex-col justify-end p-8 md:p-12">
+            <p className="font-label-md text-label-md text-secondary mb-2">EXPERIENCE THE NEXUS</p>
+            <h4 className="text-headline-md md:text-headline-lg max-w-xl">Studio quality content in every frame, everywhere you are.</h4>
           </div>
         </div>
       </div>

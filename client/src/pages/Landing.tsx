@@ -1,15 +1,16 @@
 import { useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import Icon from '../components/ui/Icon'
 import { useAuth } from '../lib/AuthContext'
 import { subscribeNewsletter } from '../lib/auth'
 
 const features = [
-  { icon: '🎬', title: 'Unlimited Streaming', desc: 'Watch thousands of movies and TV shows on any device, anytime.' },
-  { icon: '✨', title: 'Personalized Picks', desc: 'Smart recommendations tailored to your taste and watch history.' },
-  { icon: '👥', title: 'Watch Parties', desc: 'Watch together in real-time with friends — built-in chat and sync.' },
-  { icon: '🎥', title: 'Creator Hub', desc: 'Upload your films, earn revenue, and build your audience.', link: '/creators' },
-  { icon: '📥', title: 'Smart Downloads', desc: 'Download to watch offline. Choose quality or let our algorithm decide.' },
-  { icon: '🌍', title: 'Global Library', desc: 'Curated films from around the world, from indie gems to blockbusters.' },
+  { icon: 'play_circle' as const, title: 'Unlimited Streaming', desc: 'Watch thousands of movies and TV shows on any device, anytime.' },
+  { icon: 'auto_awesome' as const, title: 'Personalized Picks', desc: 'Smart recommendations tailored to your taste and watch history.' },
+  { icon: 'group' as const, title: 'Watch Parties', desc: 'Watch together in real-time with friends — built-in chat and sync.' },
+  { icon: 'videocam' as const, title: 'Creator Hub', desc: 'Upload your films, earn revenue, and build your audience.', link: '/creators' },
+  { icon: 'download' as const, title: 'Smart Downloads', desc: 'Download to watch offline. Choose quality or let our algorithm decide.' },
+  { icon: 'language' as const, title: 'Global Library', desc: 'Curated films from around the world, from indie gems to blockbusters.' },
 ]
 
 const plans = [
@@ -42,10 +43,10 @@ export default function Landing() {
       {/* Nav */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-surface/80 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <span className="text-xl font-bold text-accent">NovaFlix</span>
+          <span className="text-xl font-bold text-primary-container">NovaFlix</span>
           <div className="flex items-center gap-4">
-            <Link to="/login" className="text-sm text-gray-300 hover:text-white transition-colors">Sign In</Link>
-            <Link to="/login" className="text-sm bg-accent text-white px-5 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors">Get Started</Link>
+            <Link to="/login" className="text-sm text-on-surface-variant hover:text-on-surface transition-colors">Sign In</Link>
+            <Link to="/login" className="text-sm bg-primary-container text-on-primary-container px-5 py-2 rounded-lg font-medium hover:brightness-110 transition-colors">Get Started</Link>
           </div>
         </div>
       </nav>
@@ -56,14 +57,14 @@ export default function Landing() {
         <div className="max-w-4xl mx-auto relative">
           <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
             Premium Streaming for{' '}
-            <span className="bg-gradient-to-r from-accent to-accent-secondary bg-clip-text text-transparent">Everyone</span>
+            <span className="bg-gradient-to-r from-primary-container to-secondary bg-clip-text text-transparent">Everyone</span>
           </h1>
           <p className="text-lg md:text-xl text-gray-400 mb-10 max-w-2xl mx-auto">
             Discover thousands of movies, TV shows, and exclusive creator content. Watch anywhere, anytime.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/login" className="bg-accent text-white px-8 py-3.5 rounded-xl font-semibold text-lg hover:bg-red-700 transition-colors">Start Free Trial</Link>
-            <a href="#features" className="bg-white/5 text-white px-8 py-3.5 rounded-xl font-semibold text-lg hover:bg-white/10 transition-colors border border-white/10">Explore Features</a>
+            <Link to="/login" className="bg-primary-container text-on-primary-container px-8 py-3.5 rounded-xl font-semibold text-lg hover:brightness-110 transition-colors">Start Free Trial</Link>
+            <a href="#features" className="bg-surface-variant/20 text-on-surface px-8 py-3.5 rounded-xl font-semibold text-lg hover:bg-surface-variant/40 transition-colors border border-outline/20">Explore Features</a>
           </div>
           <p className="text-sm text-gray-500 mt-4">No credit card required. Free plan available forever.</p>
         </div>
@@ -78,8 +79,8 @@ export default function Landing() {
             {features.map((f, i) => {
               const Wrapper = f.link ? Link : 'div'
               return (
-                <Wrapper key={i} to={f.link || ''} className={`bg-surface-secondary border border-white/5 rounded-2xl p-6 hover:border-accent/30 transition-all group ${f.link ? 'cursor-pointer' : ''}`}>
-                  <span className="text-3xl mb-4 block">{f.icon}</span>
+                <Wrapper key={i} to={f.link || ''} className={`bg-surface-container-high border border-white/5 rounded-xl p-6 hover:border-primary-container/30 transition-all group ${f.link ? 'cursor-pointer' : ''}`}>
+                  <Icon name={f.icon} className="text-3xl mb-4 block text-primary-container" />
                   <h3 className="text-lg font-semibold mb-2">{f.title}</h3>
                   <p className="text-gray-400 text-sm">{f.desc}</p>
                 </Wrapper>
@@ -96,8 +97,8 @@ export default function Landing() {
           <p className="text-gray-400 text-center mb-16 max-w-xl mx-auto">Choose the plan that fits you. Upgrade anytime.</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             {plans.map((p, i) => (
-              <div key={i} className={`relative bg-surface-secondary border ${p.featured ? 'border-accent/50 ring-1 ring-accent/30' : 'border-white/5'} rounded-2xl p-8`}>
-                {p.featured && <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-accent text-xs font-semibold px-4 py-1 rounded-full">Most Popular</span>}
+              <div key={i} className={`relative bg-surface-container-high border ${p.featured ? 'border-primary-container/50 ring-1 ring-primary-container/30' : 'border-white/5'} rounded-xl p-8`}>
+                {p.featured && <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary-container text-on-primary-container text-xs font-semibold px-4 py-1 rounded-full">Most Popular</span>}
                 <h3 className="text-xl font-bold mb-2">{p.name}</h3>
                 <div className="mb-6">
                   <span className="text-4xl font-bold">{p.price}</span>
@@ -110,7 +111,7 @@ export default function Landing() {
                     </li>
                   ))}
                 </ul>
-                <Link to="/login" className={`block text-center w-full py-3 rounded-xl font-semibold text-sm transition-colors ${p.featured ? 'bg-accent text-white hover:bg-red-700' : 'bg-white/5 text-white hover:bg-white/10 border border-white/10'}`}>
+                <Link to="/login" className={`block text-center w-full py-3 rounded-xl font-semibold text-sm transition-colors ${p.featured ? 'bg-primary-container text-on-primary-container hover:brightness-110' : 'bg-surface-variant/20 text-on-surface hover:bg-surface-variant/40 border border-outline/20'}`}>
                   {p.name === 'Free' ? 'Get Started' : 'Subscribe'}
                 </Link>
               </div>
@@ -128,7 +129,7 @@ export default function Landing() {
             {testimonials.map((t, i) => (
               <div key={i} className="bg-surface-secondary border border-white/5 rounded-2xl p-6">
                 <div className="flex items-center gap-2 mb-4">
-                  {[1,2,3,4,5].map(s => <span key={s} className="text-accent text-sm">★</span>)}
+                  {[1,2,3,4,5].map(s => <Icon key={s} name="star" fill={true} className="text-primary-container" />)}
                 </div>
                 <p className="text-gray-300 text-sm mb-6 italic">"{t.text}"</p>
                 <div>
@@ -147,8 +148,8 @@ export default function Landing() {
           <h2 className="text-2xl font-bold mb-2">Stay in the loop</h2>
           <p className="text-gray-400 text-sm mb-6">Get the latest movies, creator highlights, and platform updates.</p>
           <form onSubmit={async (e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); await subscribeNewsletter(fd.get('email') as string); alert('Subscribed!') }} className="flex gap-3">
-            <input name="email" type="email" required placeholder="your@email.com" className="flex-1 bg-surface-secondary border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-accent/50" />
-            <button type="submit" className="bg-accent text-white px-6 py-3 rounded-xl font-semibold text-sm hover:bg-red-700 transition-colors whitespace-nowrap">Subscribe</button>
+            <input name="email" type="email" required placeholder="your@email.com" className="flex-1 bg-surface-variant/20 border border-outline/20 rounded-xl px-4 py-3 text-sm on-surface placeholder-on-surface-variant/50 focus:outline-none focus:border-primary-container/50" />
+            <button type="submit" className="bg-primary-container text-on-primary-container px-6 py-3 rounded-xl font-semibold text-sm hover:brightness-110 transition-colors whitespace-nowrap">Subscribe</button>
           </form>
         </div>
       </section>

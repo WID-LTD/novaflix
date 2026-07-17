@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { motion } from 'framer-motion'
-import { Film, Users, MapPin } from 'lucide-react'
+import Icon from './Icon'
 
 interface CreatorCardProps {
   name: string
@@ -42,16 +42,16 @@ const CreatorCard: FC<CreatorCardProps> = ({
 
       <div className="flex items-center gap-4 mt-4 pt-4 border-t border-white/10">
         <div className="flex items-center gap-1.5 text-xs text-gray-500">
-          <Film className="w-3.5 h-3.5" />
+          <Icon name="movie" size="sm" />
           <span>{filmCount} films</span>
         </div>
         <div className="flex items-center gap-1.5 text-xs text-gray-500">
-          <Users className="w-3.5 h-3.5" />
+          <Icon name="group" size="sm" />
           <span>{followers}</span>
         </div>
         {location && (
           <div className="flex items-center gap-1.5 text-xs text-gray-500">
-            <MapPin className="w-3.5 h-3.5" />
+            <Icon name="location_on" size="sm" />
             <span>{location}</span>
           </div>
         )}

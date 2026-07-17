@@ -30,6 +30,12 @@ const CreatorGuard: FC<Props> = ({ children }) => {
     return <Navigate to="/home" replace />
   }
 
+  // Creators must pick a paid plan before accessing the dashboard
+  const isOnChoosePlan = location.pathname === '/creator/choose-plan'
+  if (user.plan === 'free' && !isOnChoosePlan) {
+    return <Navigate to="/creator/choose-plan" replace />
+  }
+
   return <>{children}</>
 }
 

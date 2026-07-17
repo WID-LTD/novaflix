@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search as SearchIcon, X } from 'lucide-react'
+import Icon from '../components/ui/Icon'
 import { searchMedia } from '../lib/api'
 import { useStore } from '../store/useStore'
-import Input from '../components/ui/Input'
+import SearchInput from '../components/ui/SearchInput'
 import Tabs from '../components/ui/Tabs'
 import Badge from '../components/ui/Badge'
 import Skeleton from '../components/ui/Skeleton'
@@ -85,36 +85,25 @@ export default function Search() {
   }
 
   return (
-    <div className="min-h-screen px-4 md:px-8 pt-6 md:pt-10">
+    <div className="min-h-screen px-margin-mobile md:px-margin-desktop pt-6 md:pt-10 pb-nav">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl md:text-section font-bold mb-6">Search</h1>
+        <h1 className="text-headline-lg font-bold mb-6">Search</h1>
 
-        <form onSubmit={handleSubmit} className="mb-6">
-          <div className="relative">
-            <Input
-              icon={<SearchIcon className="w-5 h-5" />}
-              placeholder="Search movies, TV shows..."
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              className="text-base py-4 pl-12 pr-12"
-            />
-            {inputValue && (
-              <button
-                type="button"
-                onClick={() => {
-                  setInputValue('')
-                  setQuery('')
-                  setResults([])
-                  setSearched(false)
-                  setSearchParams({ type: mediaType })
-                }}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            )}
-          </div>
-        </form>
+        <div className="mb-6">
+          <SearchInput
+            placeholder="Search movies, TV shows..."
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onSubmit={handleSubmit}
+            onClear={() => {
+              setInputValue('')
+              setQuery('')
+              setResults([])
+              setSearched(false)
+              setSearchParams({ type: mediaType })
+            }}
+          />
+        </div>
 
         <div className="mb-6">
           <Tabs tabs={searchTabs} activeTab={mediaType} onChange={handleTabChange} />
@@ -122,13 +111,13 @@ export default function Search() {
 
         {!searched && recentlySearched.length > 0 && (
           <div className="mb-8">
-            <h3 className="text-sm text-gray-400 font-medium mb-3">Recent Searches</h3>
+            <h3 className="text-on-surface-variant font-label-sm mb-3">Recent Searches</h3>
             <div className="flex flex-wrap gap-2">
               {recentlySearched.map((s) => (
                 <button
                   key={s}
                   onClick={() => handleRecentClick(s)}
-                  className="px-3 py-1.5 bg-surface-card border border-white/10 rounded-lg text-sm text-gray-300 hover:border-accent/50 hover:text-white transition-colors"
+                  className="px-3 py-1.5 bg-surface-container-high border border-outline/20 rounded-lg text-sm text-on-surface-variant hover:border-primary-container/50 hover:text-on-surface transition-colors"
                 >
                   {s}
                 </button>
@@ -138,7 +127,7 @@ export default function Search() {
         )}
 
         {loading && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-gutter">
             {Array.from({ length: 10 }).map((_, i) => (
               <div key={i}>
                 <Skeleton variant="poster" className="w-full" />
@@ -151,23 +140,23 @@ export default function Search() {
 
         {!loading && searched && results.length === 0 && (
           <div className="text-center py-20">
-            <SearchIcon className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-400 mb-2">No results found</h3>
-            <p className="text-gray-600">Try a different search term</p>
+            <Icon name="search" className="w-16 h-16 text-on-surface-variant/40 mx-auto mb-4" />
+            <h3 className="font-label-md text-label-md text-on-surface-variant mb-2">No results found</h3>
+            <p className="text-on-surface-variant/60">Try a different search term</p>
           </div>
         )}
 
         {!loading && results.length > 0 && (
           <>
             <div className="flex items-center justify-between mb-4">
-              <p className="text-sm text-gray-400">
+              <p className="text-on-surface-variant text-sm">
                 {results.length} result{results.length !== 1 ? 's' : ''}
               </p>
               <Badge variant="outline">
                 {mediaType === 'movie' ? 'Movies' : 'TV Shows'}
               </Badge>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-gutter">
               {results.map((item, i) => (
                 <MovieCard key={`${item.id}-${item.type}`} item={item} index={i} />
               ))}

@@ -11,7 +11,7 @@ function generateCode() {
 }
 
 function signToken(user) {
-  return jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '30d' })
+  return jwt.sign({ id: user.id, email: user.email, role: user.role, plan: user.plan || 'free' }, JWT_SECRET, { expiresIn: '30d' })
 }
 
 export async function register(req, res) {
@@ -63,12 +63,7 @@ export async function login(req, res) {
     if (!match) return res.status(401).json({ error: 'Invalid credentials' })
 
     if (!user.email_verified) {
-      const code = generateCode()
-      await saveVerificationCode(user.id, code)
-      try {
-        await sendVerificationCode(email, code, user.name)
-      } catch {}
-      return res.json({ success: true, needsVerification: true, message: 'Please verify your email first', userId: user.id })
+      return res.json({ success: true, needsVerification: true, userId: user.id, error: 'Email not verified' })
     }
 
     const token = signToken(user)

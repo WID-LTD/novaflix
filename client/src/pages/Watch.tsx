@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, Info } from 'lucide-react'
+import Icon from '../components/ui/Icon'
 import { getStreamSource, getManifestInfo, getTVSeason, getDetails } from '../lib/api'
 import { useStore } from '../store/useStore'
 import { useAuth } from '../lib/AuthContext'
 import { recordWatch } from '../lib/auth'
 import VideoPlayer from '../components/features/VideoPlayer'
+import BingePassModal from '../components/features/BingePassModal'
 import Button from '../components/ui/Button'
 import Badge from '../components/ui/Badge'
 import Skeleton from '../components/ui/Skeleton'
@@ -28,8 +29,12 @@ export default function Watch() {
   const [selectedVariant, setSelectedVariant] = useState<Variant | null>(null)
   const [currentStreamUrl, setCurrentStreamUrl] = useState<string>('')
   const [manifestVariants, setManifestVariants] = useState<Variant[]>([])
+  const [showBingePass, setShowBingePass] = useState(false)
+  const [bingePassActive, setBingePassActive] = useState(false)
+  const [downloading, setDownloading] = useState(false)
+  const [downloadDone, setDownloadDone] = useState(false)
   const addToContinueWatching = useStore((s) => s.addToContinueWatching)
-  const { user } = useAuth()
+  const { user, planRank } = useAuth()
   const lastRecordRef = useRef(0)
 
   const { data: detailsData } = useQuery({
@@ -59,7 +64,12 @@ export default function Watch() {
     if (sourceData?.success && sourceData.streamUrl) {
       setCurrentStreamUrl(sourceData.streamUrl)
 
-      getManifestInfo(sourceData.directUrl || sourceData.streamUrl, id, type, season, episode)
+      // Show binge pass offer for free tier (once per session)
+      if (planRank < 2 && !bingePassActive) {
+        setShowBingePass(true)
+      }
+
+      getManifestInfo(sourceData.directUrl || sourceData.streamUrl, id, type, season, episode, user?.plan)
         .then((manifest) => {
           if (manifest.success && manifest.variants.length > 0) {
             setManifestVariants(manifest.variants)
@@ -89,6 +99,23 @@ export default function Watch() {
     setSelectedVariant(v)
     setCurrentStreamUrl(v.url)
     setShowQuality(false)
+  }
+
+  const handleDownload = async () => {
+    if (!currentStreamUrl || !id || !details) return
+    setDownloading(true)
+    setDownloadDone(false)
+    try {
+      const token = localStorage.getItem('novaflix-token') || ''
+      const dlUrl = `${window.location.origin}/api/download?url=${encodeURIComponent(currentStreamUrl)}&title=${encodeURIComponent(details.title)}&save=true`
+      const res = await fetch(dlUrl, { headers: { Authorization: `Bearer ${token}` } })
+      const data = await res.json()
+      if (data.success) {
+        setDownloadDone(true)
+        setTimeout(() => setDownloadDone(false), 3000)
+      }
+    } catch {}
+    setDownloading(false)
   }
 
   const handleEpisodeSelect = (ep: number) => {
@@ -135,7 +162,7 @@ export default function Watch() {
             onClick={() => navigate(-1)}
             className="p-2 rounded-lg hover:bg-white/10 transition-colors"
           >
-            <ChevronLeft className="w-5 h-5" />
+            <Icon name="chevron_left" />
           </button>
           <div>
             <h1 className="text-sm font-semibold">{title}</h1>
@@ -152,7 +179,7 @@ export default function Watch() {
               size="sm"
               onClick={() => setShowQuality(true)}
             >
-              <Info className="w-4 h-4" />
+              <Icon name="info" />
               {selectedVariant?.label || 'Auto'}
             </Button>
           )}
@@ -166,6 +193,16 @@ export default function Watch() {
               Episodes
             </Button>
           )}
+
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleDownload}
+            disabled={!currentStreamUrl || downloading}
+          >
+            <Icon name="download" size="sm" />
+            {downloading ? 'Saving...' : downloadDone ? 'Downloaded!' : 'Download'}
+          </Button>
         </div>
       </div>
 
@@ -173,25 +210,45 @@ export default function Watch() {
         {sourceLoading ? (
           <Skeleton variant="hero" className="w-full aspect-video rounded-2xl" />
         ) : sourceError || (sourceData && !sourceData.success) ? (
-          <div className="flex flex-col items-center justify-center py-20">
-            <p className="text-red-400 text-lg font-semibold mb-2">
-              Stream unavailable
-            </p>
-            <p className="text-gray-500 text-sm mb-6">
-              {sourceData?.error || 'Could not load video source'}
-            </p>
-            <Button variant="secondary" onClick={() => navigate(-1)}>
-              Go Back
-            </Button>
-          </div>
+          (() => {
+            const errMsg = sourceData?.error || ''
+            if (errMsg.includes('401') || errMsg.includes('Unauthorized') || errMsg.includes('unauthenticated')) {
+              navigate(`/login?redirect=/watch?id=${id}&type=${type}${season ? `&season=${season}` : ''}${episode ? `&episode=${episode}` : ''}`, { replace: true })
+              return null
+            }
+            return (
+              <div className="flex flex-col items-center justify-center py-20">
+                <p className="text-red-400 text-lg font-semibold mb-2">
+                  Stream unavailable
+                </p>
+                <p className="text-gray-500 text-sm mb-6">
+                  {sourceData?.error || 'Could not load video source'}
+                </p>
+                <Button variant="secondary" onClick={() => navigate(-1)}>
+                  Go Back
+                </Button>
+              </div>
+            )
+          })()
         ) : currentStreamUrl ? (
           <VideoPlayer
             streamUrl={currentStreamUrl}
             subtitles={sourceData?.subtitles || []}
             title={episodeInfo ? `${title} - ${episodeInfo}` : title}
             onProgress={handleProgress}
+            plan={user?.plan || 'free'}
+            bingePassActive={bingePassActive}
           />
         ) : null}
+
+        <BingePassModal
+          open={showBingePass}
+          onClose={() => setShowBingePass(false)}
+          onGranted={() => {
+            setBingePassActive(true)
+            setShowBingePass(false)
+          }}
+        />
       </div>
 
       <Modal

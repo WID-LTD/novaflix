@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { Star } from 'lucide-react'
+import Icon from './Icon'
 
 interface RatingBadgeProps {
   rating: number
@@ -12,7 +12,7 @@ const RatingBadge: FC<RatingBadgeProps> = ({ rating, className = '' }) => {
 
   return (
     <div className={`inline-flex items-center gap-1 ${color} ${className}`}>
-      <Star className="w-4 h-4 fill-current" />
+      <Icon name="star" fill={true} className="w-4 h-4" />
       <span className="font-semibold text-sm">{rating.toFixed(1)}</span>
     </div>
   )

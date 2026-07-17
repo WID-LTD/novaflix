@@ -1,10 +1,10 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import Hls from 'hls.js'
-import {
-  Play, Pause, Volume2, VolumeX, Maximize, Minimize,
-  PictureInPicture2, Settings,
-} from 'lucide-react'
-import type { Subtitle } from '../../types'
+import Icon from '../ui/Icon'
+import AdOverlay, { AdTimelinePips } from './AdOverlay'
+import { getNextAd, recordAdImpression, getSkipLimit, incrementSkip } from '../../lib/api'
+import { useAuth } from '../../lib/AuthContext'
+import type { Subtitle, AdItem } from '../../types'
 
 interface VideoPlayerProps {
   streamUrl: string
@@ -12,6 +12,8 @@ interface VideoPlayerProps {
   title?: string
   onProgress?: (progress: number) => void
   onDuration?: (duration: number) => void
+  plan?: string
+  bingePassActive?: boolean
 }
 
 export default function VideoPlayer({
@@ -20,11 +22,16 @@ export default function VideoPlayer({
   title,
   onProgress,
   onDuration,
+  plan: _plan,
+  bingePassActive = false,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const hlsRef = useRef<Hls | null>(null)
   const controlsTimeout = useRef<ReturnType<typeof setTimeout>>()
+  const adTimerRef = useRef<ReturnType<typeof setInterval>>()
+  const midRollTriggered = useRef<Set<number>>(new Set())
+  const { planRank, planFeatures } = useAuth()
 
   const [playing, setPlaying] = useState(false)
   const [muted, setMuted] = useState(false)
@@ -39,6 +46,61 @@ export default function VideoPlayer({
   const [playbackRate, setPlaybackRate] = useState(1)
   const [showSettings, setShowSettings] = useState(false)
   const [activeSubtitle, setActiveSubtitle] = useState<string>('off')
+
+  // Ad state
+  const [ads, setAds] = useState<AdItem[]>([])
+  const [currentAd, setCurrentAd] = useState<AdItem | null>(null)
+  const [showPauseAd, setShowPauseAd] = useState(false)
+  const [adCount, setAdCount] = useState(0)
+  const [skipLimit, setSkipLimit] = useState({ skips_used: 0, skips_max: 999 })
+
+  // Load ads on mount
+  useEffect(() => {
+    const needsAds = planRank < 2 && !bingePassActive
+    if (!needsAds) return
+    getNextAd().then((res) => {
+      if (res.success && res.ads) setAds(res.ads)
+    })
+    getSkipLimit().then((res) => {
+      if (res.success) setSkipLimit(res)
+    })
+  }, [planRank, bingePassActive])
+
+  // Timer for pause ad dismissal
+  useEffect(() => {
+    if (!showPauseAd) return
+    const ad = ads.find((a) => a.position_type === 'pause')
+    if (!ad) return
+    const dur = (ad.duration_seconds || 15) * 1000
+    const timer = setTimeout(() => {
+      setShowPauseAd(false)
+      recordAdImpression(ad.id, true, ad.duration_seconds)
+    }, dur)
+    return () => clearTimeout(timer)
+  }, [showPauseAd, ads])
+
+  // Mid-roll ad trigger based on currentTime
+  useEffect(() => {
+    if (!ads.length || planRank >= 2 || bingePassActive) return
+    const midRolls = ads.filter((a) => a.position_type === 'mid_roll')
+    for (const ad of midRolls) {
+      if (
+        currentTime >= ad.cue_time_seconds &&
+        currentTime < ad.cue_time_seconds + 5 &&
+        !midRollTriggered.current.has(ad.cue_time_seconds) &&
+        !currentAd &&
+        playing
+      ) {
+        midRollTriggered.current.add(ad.cue_time_seconds)
+        const video = videoRef.current
+        if (video) {
+          video.pause()
+          setCurrentAd(ad)
+          setAdCount((c) => c + 1)
+        }
+      }
+    }
+  }, [currentTime, ads, planRank, currentAd, playing])
 
   const resetControlsTimer = useCallback(() => {
     setShowControls(true)
@@ -104,8 +166,21 @@ export default function VideoPlayer({
         setBuffered(video.buffered.end(video.buffered.length - 1))
       }
     }
-    const onPlay = () => setPlaying(true)
-    const onPause = () => setPlaying(false)
+    const onPlay = () => {
+      setPlaying(true)
+      setShowPauseAd(false)
+    }
+    const onPause = () => {
+      setPlaying(false)
+      // Show pause ad for free users
+      if (planRank < 2 && !currentAd) {
+        const pauseAd = ads.find((a) => a.position_type === 'pause')
+        if (pauseAd) {
+          setShowPauseAd(true)
+          recordAdImpression(pauseAd.id, false, 0)
+        }
+      }
+    }
     const onError = () => {
       setError('Playback error')
       setLoading(false)
@@ -132,11 +207,26 @@ export default function VideoPlayer({
       video.removeEventListener('waiting', onWaiting)
       video.removeEventListener('canplay', onCanPlay)
     }
-  }, [onProgress, onDuration])
+  }, [onProgress, onDuration, planRank, ads, currentAd])
+
+  const handleAdComplete = () => {
+    setCurrentAd(null)
+    const video = videoRef.current
+    if (video) video.play().catch(() => {})
+  }
+
+  const handleAdSkip = () => {
+    if (currentAd) {
+      midRollTriggered.current.delete(currentAd.cue_time_seconds)
+      recordAdImpression(currentAd.id, false, currentAd.duration_seconds / 2)
+    }
+    handleAdComplete()
+  }
 
   const togglePlay = () => {
     const video = videoRef.current
     if (!video) return
+    if (currentAd) return
     if (playing) {
       video.pause()
     } else {
@@ -146,7 +236,7 @@ export default function VideoPlayer({
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     const video = videoRef.current
-    if (!video) return
+    if (!video || currentAd) return
     const rect = e.currentTarget.getBoundingClientRect()
     const pos = (e.clientX - rect.left) / rect.width
     video.currentTime = pos * duration
@@ -199,10 +289,28 @@ export default function VideoPlayer({
     setShowSettings(false)
   }
 
+  const handleSkipForward = async () => {
+    const video = videoRef.current
+    if (!video) return
+    if (planRank < 2) {
+      const res = await getSkipLimit()
+      if (res.success) {
+        setSkipLimit(res)
+        if (res.skips_used >= res.skips_max) {
+          return
+        }
+      }
+      await incrementSkip()
+      setSkipLimit((prev) => ({ ...prev, skips_used: prev.skips_used + 1 }))
+    }
+    video.currentTime = Math.min(duration, video.currentTime + 10)
+  }
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const video = videoRef.current
       if (!video) return
+      if (currentAd) return
       switch (e.key) {
         case ' ':
           e.preventDefault()
@@ -218,7 +326,7 @@ export default function VideoPlayer({
           video.currentTime = Math.max(0, video.currentTime - 10)
           break
         case 'ArrowRight':
-          video.currentTime = Math.min(duration, video.currentTime + 10)
+          handleSkipForward()
           break
         case 'ArrowUp':
           video.volume = Math.min(1, video.volume + 0.1)
@@ -232,7 +340,7 @@ export default function VideoPlayer({
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [togglePlay, toggleFullscreen, toggleMute, duration])
+  }, [togglePlay, toggleFullscreen, toggleMute, duration, currentAd, handleSkipForward])
 
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60)
@@ -242,6 +350,8 @@ export default function VideoPlayer({
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
   const bufferProgress = duration > 0 ? (buffered / duration) * 100 : 0
+  const canSkipForward = skipLimit.skips_used < skipLimit.skips_max
+  const isFreeTier = planRank < 2
 
   const speeds = [0.5, 1, 1.5, 2]
 
@@ -252,9 +362,29 @@ export default function VideoPlayer({
       onMouseMove={resetControlsTimer}
       onMouseLeave={() => playing && setShowControls(false)}
     >
+      {/* Pause Ad Overlay (free tier only) */}
+      {showPauseAd && (
+        <AdOverlay
+          ad={ads.find((a) => a.position_type === 'pause') || null}
+          onComplete={() => setShowPauseAd(false)}
+          onSkip={() => setShowPauseAd(false)}
+          visible={showPauseAd}
+        />
+      )}
+
+      {/* Mid-roll Ad Overlay */}
+      {currentAd && (
+        <AdOverlay
+          ad={currentAd}
+          onComplete={handleAdComplete}
+          onSkip={handleAdSkip}
+          visible={!!currentAd}
+        />
+      )}
+
       <video
         ref={videoRef}
-        className="w-full aspect-video object-contain cursor-pointer"
+        className={`w-full aspect-video object-contain cursor-pointer ${currentAd || showPauseAd ? 'pointer-events-none' : ''}`}
         onClick={togglePlay}
         playsInline
         poster={undefined}
@@ -272,6 +402,12 @@ export default function VideoPlayer({
             <p className="text-red-400 text-lg font-semibold mb-2">Playback Error</p>
             <p className="text-gray-400 text-sm">{error}</p>
           </div>
+        </div>
+      )}
+
+      {isFreeTier && !loading && !error && !currentAd && !showPauseAd && (
+        <div className="absolute top-3 left-3 bg-black/50 backdrop-blur-sm px-2 py-1 rounded text-xs text-white/60 z-20">
+          480p
         </div>
       )}
 
@@ -300,17 +436,22 @@ export default function VideoPlayer({
             className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full opacity-0 group-hover/seek:opacity-100 transition-opacity"
             style={{ left: `${progress}%`, marginLeft: -6 }}
           />
+          <AdTimelinePips ads={ads} duration={duration} currentTime={currentTime} />
         </div>
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button onClick={togglePlay} className="text-white hover:text-accent transition-colors">
-              {playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+            <button onClick={togglePlay} className="text-white hover:text-accent transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label={playing ? 'Pause' : 'Play'}>
+              {playing ? <Icon name="pause" /> : <Icon name="play_arrow" />}
+            </button>
+
+            <button onClick={handleSkipForward} className="text-white hover:text-accent transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed" aria-label="Skip forward" disabled={!canSkipForward && isFreeTier}>
+              <Icon name="forward_10" />
             </button>
 
             <div className="flex items-center gap-2">
-              <button onClick={toggleMute} className="text-white hover:text-accent transition-colors">
-                {muted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+              <button onClick={toggleMute} className="text-white hover:text-accent transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label={muted ? 'Unmute' : 'Mute'}>
+                {muted || volume === 0 ? <Icon name="volume_off" /> : <Icon name="volume_up" />}
               </button>
               <input
                 type="range"
@@ -328,13 +469,20 @@ export default function VideoPlayer({
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            {isFreeTier && (
+              <span className="text-xs text-white/40 font-mono bg-white/5 px-2 py-1 rounded">
+                {skipLimit.skips_used}/{skipLimit.skips_max} skips
+              </span>
+            )}
+
             <div className="relative">
               <button
                 onClick={() => setShowSettings(!showSettings)}
-                className="text-white hover:text-accent transition-colors"
+                className="text-white hover:text-accent transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+                aria-label="Settings"
               >
-                <Settings className="w-4 h-4" />
+                <Icon name="settings" />
               </button>
               {showSettings && (
                 <div className="absolute bottom-full right-0 mb-2 bg-surface-secondary border border-white/10 rounded-xl p-2 min-w-[140px] shadow-2xl">
@@ -356,12 +504,12 @@ export default function VideoPlayer({
               )}
             </div>
 
-            <button onClick={togglePiP} className="text-white hover:text-accent transition-colors">
-              <PictureInPicture2 className="w-4 h-4" />
+            <button onClick={togglePiP} className="text-white hover:text-accent transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Picture in picture">
+              <Icon name="picture_in_picture" />
             </button>
 
-            <button onClick={toggleFullscreen} className="text-white hover:text-accent transition-colors">
-              {fullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+            <button onClick={toggleFullscreen} className="text-white hover:text-accent transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
+              {fullscreen ? <Icon name="fullscreen_exit" /> : <Icon name="fullscreen" />}
             </button>
           </div>
         </div>
