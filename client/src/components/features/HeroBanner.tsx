@@ -104,13 +104,8 @@ export default function HeroBanner({ items, loading, autoPlayInterval = 6000 }: 
       <AnimatePresence mode="wait">
         <button
           onClick={() => navigate(`/${currentItem.type}/${currentItem.id}`)}
-          className="absolute inset-0 w-full text-left cursor-pointer"
-          aria-label={`View ${currentItem.title}`}
-        >
-        <button
-          onClick={() => navigate(`/${currentItem.type}/${currentItem.id}`)}
           className="absolute inset-0 w-full h-full text-left cursor-pointer"
-          aria-label={`View ${currentItem.title} details`}
+          aria-label={`View ${currentItem.title}`}
         >
           <motion.div
             key={currentItem.id}
@@ -133,7 +128,6 @@ export default function HeroBanner({ items, loading, autoPlayInterval = 6000 }: 
             <div className="absolute inset-0 hero-gradient" />
             <div className="absolute inset-0 bg-gradient-to-r from-background/80 via-transparent to-transparent" />
           </motion.div>
-        </button>
         </button>
       </AnimatePresence>
 
