@@ -10,7 +10,7 @@ import Skeleton from '../components/ui/Skeleton'
 export default function Community() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, isCreator } = useAuth()
   const [communities, setCommunities] = useState<any[]>([])
   const [myCommunities, setMyCommunities] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -220,9 +220,11 @@ export default function Community() {
               <h1 className="text-headline-md font-bold mb-1">Community</h1>
               <p className="text-on-surface-variant text-sm">Connect with fellow movie lovers</p>
             </div>
-            <Button onClick={() => setShowCreate(true)}>
-              <Icon name="add" size="sm" /> New Community
-            </Button>
+            {isCreator && (
+              <Button onClick={() => setShowCreate(true)}>
+                <Icon name="add" size="sm" /> New Community
+              </Button>
+            )}
           </div>
 
           <div className="relative max-w-md">

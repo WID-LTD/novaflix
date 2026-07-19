@@ -97,6 +97,31 @@ export async function getUserStats(token: string): Promise<any> {
   }
 }
 
+export async function changePassword(token: string, currentPassword: string, newPassword: string): Promise<AuthResponse> {
+  try {
+    const res = await fetch(`${BASE}/user/change-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ currentPassword, newPassword }),
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function deleteAccount(token: string): Promise<AuthResponse> {
+  try {
+    const res = await fetch(`${BASE}/user/account`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
 export async function getPaymentStatus(token: string): Promise<any> {
   try {
     const res = await fetch(`${BASE}/payment/status`, {

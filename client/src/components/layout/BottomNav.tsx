@@ -26,7 +26,7 @@ function UserBottomNav(): NavItem[] {
     { to: '/search?type=movie', icon: 'search', label: 'Search', match: (p) => p.startsWith('/search') },
     { to: '/discover', icon: 'explore', label: 'Discover', match: (p) => p.startsWith('/discover') },
     { to: '/category', icon: 'category', label: 'Categories', match: (p) => p.startsWith('/category') },
-    { to: '/settings', icon: 'settings', label: 'Settings', match: (p) => p.startsWith('/settings') },
+    { to: '/profile', icon: 'person', label: 'Profile', match: (p) => p.startsWith('/profile') },
   ]
 }
 
@@ -36,7 +36,7 @@ function CreatorBottomNav(): NavItem[] {
     { to: '/creator', icon: 'bar_chart', label: 'Dashboard', match: (p) => p.startsWith('/creator') || p.startsWith('/upload') },
     { to: '/search?type=movie', icon: 'search', label: 'Search', match: (p) => p.startsWith('/search') },
     { to: '/discover', icon: 'explore', label: 'Discover', match: (p) => p.startsWith('/discover') },
-    { to: '/settings', icon: 'settings', label: 'Settings', match: (p) => p.startsWith('/settings') },
+    { to: '/profile', icon: 'person', label: 'Profile', match: (p) => p.startsWith('/profile') },
   ]
 }
 
@@ -46,7 +46,7 @@ function AdminBottomNav(): NavItem[] {
     { to: '/admin', icon: 'admin_panel_settings', label: 'Admin', match: (p) => p.startsWith('/admin') },
     { to: '/discover', icon: 'explore', label: 'Discover', match: (p) => p.startsWith('/discover') },
     { to: '/category', icon: 'category', label: 'Categories', match: (p) => p.startsWith('/category') },
-    { to: '/settings', icon: 'settings', label: 'Settings', match: (p) => p.startsWith('/settings') },
+    { to: '/profile', icon: 'person', label: 'Profile', match: (p) => p.startsWith('/profile') },
   ]
 }
 

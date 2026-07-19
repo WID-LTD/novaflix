@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid'
+import bcrypt from 'bcrypt'
 import { findUserById, updateUser, getUploadsByUserId, getTotalMinutesWatched, getUserSubscription, addWatchEntry, getWatchHistory } from '../db.js'
 
 export async function updateProfile(req, res) {
@@ -12,6 +13,39 @@ export async function updateProfile(req, res) {
     if (!updated) return res.status(404).json({ error: 'User not found' })
     const safe = { ...updated, password: undefined }
     res.json({ success: true, user: safe })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+export async function changePassword(req, res) {
+  try {
+    const { currentPassword, newPassword } = req.body
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current and new password required' })
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters' })
+    }
+    const user = await findUserById(req.userId)
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    const match = await bcrypt.compare(currentPassword, user.password)
+    if (!match) return res.status(401).json({ error: 'Current password is incorrect' })
+    const hashed = await bcrypt.hash(newPassword, 10)
+    await updateUser(req.userId, { password: hashed })
+    res.json({ success: true, message: 'Password updated successfully' })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+export async function deleteAccount(req, res) {
+  try {
+    const user = await findUserById(req.userId)
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    const pool = (await import('../db.js')).pool
+    await pool.query('DELETE FROM users WHERE id = $1', [req.userId])
+    res.json({ success: true, message: 'Account deleted' })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

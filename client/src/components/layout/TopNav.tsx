@@ -1,16 +1,20 @@
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
 import { useStore } from '../../store/useStore'
 import Icon from '../ui/Icon'
+import SearchLightbox from '../ui/SearchLightbox'
 
 export default function TopNav() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const toggleSidebar = useStore((s) => s.toggleSidebar)
   const toggleMobileDrawer = useStore((s) => s.toggleMobileDrawer)
+  const [searchOpen, setSearchOpen] = useState(false)
 
   return (
     <header className="fixed top-0 left-0 right-0 z-40 glass-panel h-16 flex justify-between items-center px-margin-mobile md:px-margin-desktop">
+      <SearchLightbox open={searchOpen} onClose={() => setSearchOpen(false)} />
       <div className="flex items-center gap-3">
         <button
           onClick={toggleMobileDrawer}
@@ -39,7 +43,7 @@ export default function TopNav() {
         </nav>
       </div>
       <div className="flex items-center gap-4">
-        <button onClick={() => navigate('/search')} className="text-on-surface-variant hover:text-primary transition-colors p-2" aria-label="Search">
+        <button onClick={() => setSearchOpen(true)} className="text-on-surface-variant hover:text-primary transition-colors p-2" aria-label="Search">
           <Icon name="search" />
         </button>
         {user && (

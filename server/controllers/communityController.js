@@ -25,6 +25,9 @@ export async function getById(req, res) {
 
 export async function create(req, res) {
   try {
+    if (req.user.role !== 'creator' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only creators can create communities' })
+    }
     const { name, description, avatar } = req.body
     if (!name) return res.status(400).json({ error: 'Name is required' })
     const id = uuidv4()

@@ -66,9 +66,14 @@ export default function Profile() {
             )}
           </div>
           {user && (
-            <button onClick={handleLogout} className="p-3 rounded-xl hover:bg-white/10 transition-colors text-on-surface-variant" aria-label="Sign out">
-              <Icon name="logout" />
-            </button>
+            <div className="flex items-center gap-2">
+              <Link to="/settings" className="p-3 rounded-xl hover:bg-white/10 transition-colors text-on-surface-variant" aria-label="Settings">
+                <Icon name="settings" />
+              </Link>
+              <button onClick={handleLogout} className="p-3 rounded-xl hover:bg-white/10 transition-colors text-on-surface-variant" aria-label="Sign out">
+                <Icon name="logout" />
+              </button>
+            </div>
           )}
         </div>
 
