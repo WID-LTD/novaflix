@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid'
-import bcrypt from 'bcrypt'
+import bcrypt from 'bcryptjs'
 import { findUserById, updateUser, getUploadsByUserId, getTotalMinutesWatched, getUserSubscription, addWatchEntry, getWatchHistory } from '../db.js'
 
 export async function updateProfile(req, res) {
