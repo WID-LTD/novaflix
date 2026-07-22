@@ -22,6 +22,14 @@ export default function HeroBanner({ items, loading, autoPlayInterval = 6000 }: 
   const { watchlist, addToWatchlist, removeFromWatchlist } = useStore()
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
+  const [trailerActive, setTrailerActive] = useState(false)
+  const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024)
+
+  useEffect(() => {
+    const handleResize = () => setIsDesktop(window.innerWidth >= 1024)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
   const intervalRef = useRef<ReturnType<typeof setInterval>>()
 
   const hasMultiple = items.length > 1
@@ -126,7 +134,22 @@ export default function HeroBanner({ items, loading, autoPlayInterval = 6000 }: 
               <div className="w-full h-full bg-gradient-to-br from-primary-container/20 to-surface" />
             )}
             <div className="absolute inset-0 hero-gradient" />
-            <div className="absolute inset-0 bg-gradient-to-r from-background/80 via-transparent to-transparent" />
+            <div
+              className="absolute inset-0 bg-gradient-to-r from-background/80 via-transparent to-transparent"
+              onMouseEnter={() => isDesktop && setTrailerActive(true)}
+              onMouseLeave={() => setTrailerActive(false)}
+            />
+            {trailerActive && currentItem.trailerKey && (
+              <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                <iframe
+                  src={`https://www.youtube-nocookie.com/embed/${currentItem.trailerKey}?autoplay=1&mute=1&loop=1&playlist=${currentItem.trailerKey}&controls=0&showinfo=0&rel=0&iv_load_policy=3&modestbranding=1`}
+                  className="absolute top-1/2 left-1/2 w-[200%] h-[200%] -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+                  allow="autoplay; encrypted-media"
+                  allowFullScreen
+                  title="Trailer"
+                />
+              </div>
+            )}
           </motion.div>
         </button>
       </AnimatePresence>

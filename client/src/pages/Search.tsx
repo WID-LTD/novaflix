@@ -3,8 +3,9 @@ import { useSearchParams } from 'react-router-dom'
 import Icon from '../components/ui/Icon'
 import { searchMedia } from '../lib/api'
 import { useStore } from '../store/useStore'
-import SearchInput from '../components/ui/SearchInput'
+
 import Tabs from '../components/ui/Tabs'
+
 import Badge from '../components/ui/Badge'
 import Skeleton from '../components/ui/Skeleton'
 import MovieCard from '../components/features/MovieCard'
@@ -19,7 +20,6 @@ export default function Search() {
   const [searchParams, setSearchParams] = useSearchParams()
   const typeParam = searchParams.get('type') || 'movie'
   const [query, setQuery] = useState(searchParams.get('q') || '')
-  const [inputValue, setInputValue] = useState(query)
   const [results, setResults] = useState<MediaItem[]>([])
   const [loading, setLoading] = useState(false)
   const [searched, setSearched] = useState(!!query)
@@ -62,13 +62,6 @@ export default function Search() {
     }
   }, [query, mediaType, doSearch])
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!inputValue.trim()) return
-    setQuery(inputValue.trim())
-    setSearchParams({ q: inputValue.trim(), type: mediaType })
-  }
-
   const handleTabChange = (id: string) => {
     setMediaType(id as 'movie' | 'tv')
     if (query) {
@@ -79,7 +72,6 @@ export default function Search() {
   }
 
   const handleRecentClick = (q: string) => {
-    setInputValue(q)
     setQuery(q)
     setSearchParams({ q, type: mediaType })
   }
@@ -87,23 +79,7 @@ export default function Search() {
   return (
     <div className="min-h-screen px-margin-mobile md:px-margin-desktop pt-6 md:pt-10 pb-nav">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-headline-lg font-bold mb-6">Search</h1>
-
-        <div className="mb-6">
-          <SearchInput
-            placeholder="Search movies, TV shows..."
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onSubmit={handleSubmit}
-            onClear={() => {
-              setInputValue('')
-              setQuery('')
-              setResults([])
-              setSearched(false)
-              setSearchParams({ type: mediaType })
-            }}
-          />
-        </div>
+        <h1 className="text-headline-lg font-bold mb-6">Search Results</h1>
 
         <div className="mb-6">
           <Tabs tabs={searchTabs} activeTab={mediaType} onChange={handleTabChange} />

@@ -9,9 +9,11 @@ import PremiumBadge from '../ui/PremiumBadge'
 interface MovieCardProps {
   item: MediaItem
   index?: number
+  progress?: number
+  duration?: number
 }
 
-export default function MovieCard({ item, index = 0 }: MovieCardProps) {
+export default function MovieCard({ item, index = 0, progress, duration }: MovieCardProps) {
   const [imgLoaded, setImgLoaded] = useState(false)
   const [imgError, setImgError] = useState(false)
 
@@ -62,6 +64,15 @@ export default function MovieCard({ item, index = 0 }: MovieCardProps) {
           )}
 
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+          {(progress !== undefined && (duration ?? 0) > 0) && (
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
+              <div
+                className="h-full bg-red-500 transition-all duration-300"
+                style={{ width: `${Math.min((progress / (duration ?? 1)) * 100, 100)}%` }}
+              />
+            </div>
+          )}
 
           <div className="absolute inset-0 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
             <div className="flex gap-2">

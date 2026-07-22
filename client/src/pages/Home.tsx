@@ -1,8 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { getTrendingFeed, getNowPlaying, getDetails } from '../lib/api'
 import { useStore } from '../store/useStore'
 import HeroBanner from '../components/features/HeroBanner'
 import ContentRow from '../components/features/ContentRow'
+import MovieCard from '../components/features/MovieCard'
+import Icon from '../components/ui/Icon'
 import type { MediaItem, MediaDetails } from '../types'
 
 function shuffleArray<T>(arr: T[]): T[] {
@@ -20,10 +23,32 @@ export default function Home() {
   const [heroItems, setHeroItems] = useState<MediaDetails[]>([])
   const continueWatching = useStore((s) => s.continueWatching)
   const watchlist = useStore((s) => s.watchlist)
+  const currentProfileId = useStore((s) => s.currentProfile)
+  const profiles = useStore((s) => s.profiles)
   const [trendingMovies, setTrendingMovies] = useState<MediaItem[]>([])
   const [trendingTV, setTrendingTV] = useState<MediaItem[]>([])
   const [nowPlaying, setNowPlaying] = useState<MediaItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [showScrollLeft, setShowScrollLeft] = useState(false)
+  const [showScrollRight, setShowScrollRight] = useState(true)
+  const cwScrollRef = useRef<HTMLDivElement>(null)
+  const userName = profiles.find((p) => p.id === currentProfileId)?.name || 'You'
+
+  const scrollCW = (dir: 'left' | 'right') => {
+    if (!cwScrollRef.current) return
+    const amount = cwScrollRef.current.clientWidth * 0.75
+    cwScrollRef.current.scrollBy({
+      left: dir === 'left' ? -amount : amount,
+      behavior: 'smooth',
+    })
+  }
+
+  const handleCWScroll = () => {
+    if (!cwScrollRef.current) return
+    const { scrollLeft, scrollWidth, clientWidth } = cwScrollRef.current
+    setShowScrollLeft(scrollLeft > 10)
+    setShowScrollRight(scrollLeft < scrollWidth - clientWidth - 10)
+  }
 
   useEffect(() => {
     async function load() {
@@ -60,27 +85,72 @@ export default function Home() {
     load()
   }, [])
 
-  const continueWatchingItems: MediaItem[] = continueWatching.map((cw) => ({
-    id: cw.id,
-    title: cw.title,
-    poster: cw.poster,
-    backdrop: null,
-    type: cw.type,
-    year: '',
-    overview: '',
-  }))
-
   return (
     <div className="min-h-screen">
       <HeroBanner items={heroItems} loading={loading} />
 
-      <main className="relative z-20 -mt-20 space-y-16 pb-nav">
-        {continueWatchingItems.length > 0 && (
-          <ContentRow
-            title="Continue Watching"
-            items={continueWatchingItems}
-            link="/watchlist"
-          />
+      <main className="relative z-20 space-y-16 pb-nav">
+        {continueWatching.length > 0 && (
+          <section className="relative mb-8 md:mb-10 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-headline-md text-on-surface flex items-center gap-2">
+                Continue Watching for {userName}
+                <Icon name="chevron_right" className="text-primary" />
+              </h2>
+              <Link
+                to="/watchlist"
+                className="font-label-md text-label-md text-primary hover:underline transition-colors"
+              >
+                View All
+              </Link>
+            </div>
+
+            <div className="relative group">
+              {showScrollLeft && (
+                <button
+                  onClick={() => scrollCW('left')}
+                  className="absolute left-0 top-0 bottom-0 z-10 w-12 md:w-16 bg-gradient-to-r from-background to-transparent flex items-center justify-start pl-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                  aria-label="Scroll left"
+                >
+                  <Icon name="chevron_left" className="text-on-surface" />
+                </button>
+              )}
+
+              <div
+                ref={cwScrollRef}
+                onScroll={handleCWScroll}
+                className="flex gap-4 overflow-x-auto hide-scrollbar pb-4 snap-x"
+              >
+                {continueWatching.map((cw, i) => (
+                  <MovieCard
+                    key={`${cw.id}-${cw.type}`}
+                    item={{
+                      id: cw.id,
+                      title: cw.title,
+                      poster: cw.poster,
+                      backdrop: null,
+                      type: cw.type,
+                      year: '',
+                      overview: '',
+                    }}
+                    index={i}
+                    progress={cw.progress}
+                    duration={cw.duration}
+                  />
+                ))}
+              </div>
+
+              {showScrollRight && (
+                <button
+                  onClick={() => scrollCW('right')}
+                  className="absolute right-0 top-0 bottom-0 z-10 w-12 md:w-16 bg-gradient-to-l from-background to-transparent flex items-center justify-end pr-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                  aria-label="Scroll right"
+                >
+                  <Icon name="chevron_right" className="text-on-surface" />
+                </button>
+              )}
+            </div>
+          </section>
         )}
 
         {trendingMovies.length > 0 && (

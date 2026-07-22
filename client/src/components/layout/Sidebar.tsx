@@ -23,13 +23,11 @@ const navItems: NavItem[] = [
   { to: '/discover', icon: 'explore', label: 'Discover' },
   { to: '/community', icon: 'diversity_3', label: 'Community', auth: true },
   { to: '/watchlist', icon: 'bookmark', label: 'Watchlist', auth: true },
-  { to: '/profile', icon: 'person', label: 'Profile', auth: true },
   { to: '/downloads', icon: 'download', label: 'Downloads', auth: true },
   { to: '/referrals', icon: 'share', label: 'Refer & Earn', auth: true },
   { to: '/archive', icon: 'archive', label: 'Archive Vault', auth: true },
   { to: '/events', icon: 'event', label: 'Live Events' },
   { to: '/red-carpet', icon: 'star', label: 'Red Carpet' },
-  { to: '/settings', icon: 'settings', label: 'Settings' },
 ]
 
 const businessItems: NavItem[] = [

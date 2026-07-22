@@ -26,11 +26,9 @@ const mainItems: NavItem[] = [
 const authItems: NavItem[] = [
   { to: '/community', icon: 'diversity_3', label: 'Community', auth: true },
   { to: '/watchlist', icon: 'bookmark', label: 'Watchlist', auth: true },
-  { to: '/profile', icon: 'person', label: 'Profile', auth: true },
   { to: '/referrals', icon: 'share', label: 'Refer & Earn', auth: true },
   { to: '/downloads', icon: 'download', label: 'Downloads', auth: true },
   { to: '/archive', icon: 'archive', label: 'Archive Vault', auth: true },
-  { to: '/settings', icon: 'settings', label: 'Settings' },
 ]
 
 const creatorItems: NavItem[] = [
@@ -97,7 +95,11 @@ export default function MobileDrawer() {
                 NovaFlix
               </span>
               <button
-                onClick={() => setOpen(false)}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setOpen(false)
+                }}
                 className="p-3 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-colors"
                 aria-label="Close navigation menu"
               >
