@@ -13,16 +13,19 @@ async function getPaystack() {
   } catch { return null }
 }
 
-// ---- Flutterwave ----
-let _flutterwave = null
-async function getFlutterwave() {
-  if (_flutterwave) return _flutterwave
-  if (!process.env.FLW_SECRET_KEY) return null
-  try {
-    const Flutterwave = require('flutterwave-node-v3')
-    _flutterwave = new Flutterwave(process.env.FLW_PUBLIC_KEY, process.env.FLW_SECRET_KEY)
-    return _flutterwave
-  } catch { return null }
+// ---- Flutterwave (direct API via axios) ----
+async function flutterwaveApi(method, path, data) {
+  const axios = (await import('axios')).default
+  return axios({
+    method,
+    url: `https://api.flutterwave.com/v3${path}`,
+    data: method === 'POST' ? data : undefined,
+    params: method === 'GET' ? data : undefined,
+    headers: {
+      Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`,
+      'Content-Type': 'application/json',
+    },
+  })
 }
 
 export async function initializePayment({ gateway, email, amount, reference, callbackUrl, metadata }) {
@@ -41,40 +44,26 @@ export async function initializePayment({ gateway, email, amount, reference, cal
   }
 
   if (gateway === 'flutterwave') {
-    const flw = await getFlutterwave()
-    if (!flw) return { success: false, error: 'Flutterwave not configured' }
+    if (!process.env.FLW_SECRET_KEY) return { success: false, error: 'Flutterwave not configured' }
 
-    const response = await flw.Charge.card({
-      card_number: '',
-      cvv: '',
-      expiry_month: '',
-      expiry_year: '',
-      currency: 'NGN',
-      amount,
-      email,
-      tx_ref: reference,
-      redirect_url: callbackUrl || `${CALLBACK_URL}?reference=${reference}`,
-      meta: metadata,
-    })
-    // Flutterwave returns a link for card charge
-    if (response.meta && response.meta.authorization && response.meta.authorization.redirect) {
-      return { success: true, authorization_url: response.meta.authorization.redirect, reference }
+    try {
+      const response = await flutterwaveApi('POST', '/payments', {
+        tx_ref: reference,
+        amount,
+        currency: 'NGN',
+        redirect_url: callbackUrl || `${CALLBACK_URL}?reference=${reference}`,
+        customer: { email },
+        customizations: { title: 'NovaFlix' },
+        meta: metadata,
+      })
+
+      if (response.data.status === 'success' && response.data.data?.link) {
+        return { success: true, authorization_url: response.data.data.link, reference }
+      }
+      return { success: false, error: response.data.message || 'Failed to initialize Flutterwave payment' }
+    } catch (err) {
+      return { success: false, error: err.response?.data?.message || err.message }
     }
-    // Fallback: use Flutterwave standard checkout
-    const payload = {
-      tx_ref: reference,
-      amount,
-      currency: 'NGN',
-      redirect_url: callbackUrl || `${CALLBACK_URL}?reference=${reference}`,
-      customer: { email },
-      customizations: { title: 'NovaFlix', logo: 'https://novaflix.app/logo.png' },
-      meta: metadata,
-    }
-    const checkoutRes = await flw.Payment.make(payload)
-    if (checkoutRes.status === 'success' && checkoutRes.data && checkoutRes.data.link) {
-      return { success: true, authorization_url: checkoutRes.data.link, reference }
-    }
-    return { success: false, error: 'Failed to initialize Flutterwave payment' }
   }
 
   return { success: false, error: `Unknown gateway: ${gateway}` }
@@ -94,14 +83,17 @@ export async function verifyPayment({ gateway, reference }) {
   }
 
   if (gateway === 'flutterwave') {
-    const flw = await getFlutterwave()
-    if (!flw) return { success: false, error: 'Flutterwave not configured' }
+    if (!process.env.FLW_SECRET_KEY) return { success: false, error: 'Flutterwave not configured' }
 
-    const response = await flw.Transaction.verify({ id: reference })
-    if (response.status === 'success' && response.data.status === 'successful') {
-      return { success: true, status: 'success', amount: response.data.amount }
+    try {
+      const response = await flutterwaveApi('GET', '/transactions/verify_by_reference', { tx_ref: reference })
+      if (response.data.status === 'success' && response.data.data.status === 'successful') {
+        return { success: true, status: 'success', amount: response.data.data.amount }
+      }
+      return { success: false, status: response.data.data?.status || 'failed' }
+    } catch (err) {
+      return { success: false, error: err.response?.data?.message || err.message }
     }
-    return { success: false, status: response.data?.status || 'failed' }
   }
 
   return { success: false, error: `Unknown gateway: ${gateway}` }

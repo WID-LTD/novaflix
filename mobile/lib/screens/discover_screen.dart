@@ -1,76 +1,51 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
 import '../services/api_service.dart';
 import '../models/media_item.dart';
-import '../theme/app_theme.dart';
+import '../widgets/ui/index.dart';
+import '../widgets/features/index.dart';
 
-class DiscoverScreen extends ConsumerStatefulWidget {
+final _discoverTypeProvider = StateProvider<String>((ref) => 'movie');
+final _discoverGenreProvider = StateProvider<int?>((ref) => null);
+final _discoverPageProvider = StateProvider<int>((ref) => 1);
+
+final _genresProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.read(apiServiceProvider);
+  final res = await api.getGenres(type: 'movie');
+  final data = res.data['data'] as List? ?? [];
+  return data.cast<Map<String, dynamic>>();
+});
+
+final _discoverResultsProvider = FutureProvider.family<List<MediaItem>, void>((ref, _) async {
+  final api = ref.read(apiServiceProvider);
+  final type = ref.watch(_discoverTypeProvider);
+  final genreId = ref.watch(_discoverGenreProvider);
+  final page = ref.watch(_discoverPageProvider);
+
+  if (genreId != null) {
+    final res = await api.getCategoryMovies(genreId, type: type, page: page);
+    final data = res.data['data'] as List? ?? [];
+    return data.map((e) => MediaItem.fromJson(e as Map<String, dynamic>)).toList();
+  }
+  final res = await api.searchMedia('', type: type);
+  final data = res.data['data'] as List? ?? [];
+  return data.map((e) => MediaItem.fromJson(e as Map<String, dynamic>)).toList();
+});
+
+class DiscoverScreen extends ConsumerWidget {
   const DiscoverScreen({super.key});
 
   @override
-  ConsumerState<DiscoverScreen> createState() => _DiscoverScreenState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final type = ref.watch(_discoverTypeProvider);
+    final genres = ref.watch(_genresProvider);
+    final results = ref.watch(_discoverResultsProvider(null));
 
-class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
-  String _type = 'movie';
-  int? _genreId;
-  List<MediaItem> _results = [];
-  List<Genre> _genres = [];
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() => _loading = true);
-    try {
-      final api = ref.read(apiServiceProvider);
-      final genreRes = await api.getGenres(type: _type);
-      final genreData = genreRes.data as Map<String, dynamic>;
-      setState(() {
-        _genres = ((genreData['genres'] as List?) ?? []).map((e) => Genre.fromJson(e as Map<String, dynamic>)).toList();
-      });
-      await _search();
-    } catch (_) {
-      setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _search() async {
-    setState(() => _loading = true);
-    try {
-      final api = ref.read(apiServiceProvider);
-      if (_genreId != null) {
-        final res = await api.getCategoryMovies(_genreId!, type: _type);
-        final data = res.data as Map<String, dynamic>;
-        final list = (data['results'] as List?) ?? [];
-        setState(() {
-          _results = list.map((e) => MediaItem.fromJson(e as Map<String, dynamic>)).toList();
-          _loading = false;
-        });
-      } else {
-        final res = await api.searchMedia('', type: _type);
-        final data = res.data as Map<String, dynamic>;
-        final list = (data['results'] as List?) ?? [];
-        setState(() {
-          _results = list.map((e) => MediaItem.fromJson(e as Map<String, dynamic>)).toList();
-          _loading = false;
-        });
-      }
-    } catch (e) {
-      setState(() => _loading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.black,
+      backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Discover')),
       body: Column(
         children: [
@@ -79,87 +54,59 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
             child: Row(
               children: [
                 Expanded(
-                  child: _DropdownButton<String>(
-                    value: _type,
-                    items: const ['movie', 'tv'],
-                    labels: const ['Movies', 'TV Shows'],
-                    onChanged: (v) { setState(() => _type = v!); _load(); },
+                  child: AppDropdown(
+                    value: type == 'movie' ? 'Movies' : 'TV Shows',
+                    items: ['Movies', 'TV Shows'],
+                    onChanged: (v) {
+                      ref.read(_discoverTypeProvider.notifier).state = v == 'Movies' ? 'movie' : 'tv';
+                      ref.read(_discoverPageProvider.notifier).state = 1;
+                    },
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: _DropdownButton<int?>(
-                    value: _genreId,
-                    items: [null, ..._genres.map((g) => g.id)],
-                    labels: ['All Genres', ..._genres.map((g) => g.name)],
-                    onChanged: (v) { setState(() => _genreId = v); _search(); },
+                  child: genres.when(
+                    data: (items) => AppDropdown(
+                      value: ref.watch(_discoverGenreProvider)?.toString() ?? 'All Genres',
+                      items: ['All Genres', ...items.map((g) => g['name'] as String)],
+                      onChanged: (v) {
+                        if (v == 'All Genres') {
+                          ref.read(_discoverGenreProvider.notifier).state = null;
+                        } else {
+                          final genre = items.firstWhere((g) => g['name'] == v);
+                          ref.read(_discoverGenreProvider.notifier).state = genre['id'] as int;
+                        }
+                        ref.read(_discoverPageProvider.notifier).state = 1;
+                      },
+                    ),
+                    loading: () => const SizedBox(height: 48),
+                    error: (_, __) => const SizedBox(height: 48),
                   ),
                 ),
               ],
             ),
           ),
-          const Divider(height: 1),
-          Expanded(child: _buildGrid()),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGrid() {
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_results.isEmpty) return Center(child: Text('No results', style: TextStyle(color: AppTheme.gray.withValues(alpha: 0.6))));
-
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 0.65,
-      ),
-      itemCount: _results.length,
-      itemBuilder: (context, i) {
-        final item = _results[i];
-        final path = '/${item.mediaType == 'tv' ? 'tv' : 'movie'}/${item.id}';
-        return GestureDetector(
-          onTap: () => context.go(path),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: item.posterUrl != null
-                ? CachedNetworkImage(imageUrl: item.posterUrl!, fit: BoxFit.cover)
-                : Container(color: AppTheme.card, child: const Icon(Icons.movie, color: AppTheme.gray)),
+          Expanded(
+            child: results.when(
+              data: (items) {
+                if (items.isEmpty) return const Center(child: Text('No results'));
+                return GridView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    childAspectRatio: 0.65,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                  ),
+                  itemCount: items.length,
+                  itemBuilder: (_, i) => MovieCard(item: items[i]),
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Center(child: Text('Error: $e')),
+            ),
           ),
-        );
-      },
-    );
-  }
-}
-
-class _DropdownButton<T> extends StatelessWidget {
-  final T value;
-  final List<T> items;
-  final List<String> labels;
-  final ValueChanged<T?> onChanged;
-
-  const _DropdownButton({required this.value, required this.items, required this.labels, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: AppTheme.card,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<T>(
-          value: value,
-          isExpanded: true,
-          dropdownColor: AppTheme.card,
-          style: const TextStyle(color: AppTheme.white, fontSize: 14),
-          items: List.generate(items.length, (i) => DropdownMenuItem(value: items[i], child: Text(labels[i]))),
-          onChanged: onChanged,
-        ),
+        ],
       ),
     );
   }

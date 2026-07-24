@@ -1,119 +1,89 @@
 import 'package:flutter/material.dart';
-import '../theme/app_theme.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
+import '../widgets/ui/index.dart';
 
 class PricingScreen extends StatelessWidget {
   const PricingScreen({super.key});
 
-  static const _plans = [
-    {'name': 'Basic', 'price': '\$9.99', 'quality': 'HD', 'devices': '1 Device'},
-    {'name': 'Standard', 'price': '\$15.99', 'quality': 'Full HD', 'devices': '2 Devices'},
-    {'name': 'Premium', 'price': '\$22.99', 'quality': '4K + HDR', 'devices': '4 Devices'},
-  ];
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.black,
-      appBar: AppBar(title: const Text('Choose Your Plan')),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
+      backgroundColor: AppColors.background,
+      appBar: AppBar(title: const Text('Plans & Pricing')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            const SizedBox(height: 32),
-            Text('Upgrade to Premium', style: TextStyle(
-              fontSize: 28, fontWeight: FontWeight.w700, color: AppTheme.white.withValues(alpha: 0.95),
-            )),
+            const SizedBox(height: 16),
+            Text('Choose Your Plan', style: AppTypography.headlineMd),
             const SizedBox(height: 8),
-            Text('Unlock exclusive content and features', style: const TextStyle(color: AppTheme.gray, fontSize: 15)),
-            const SizedBox(height: 40),
-            ..._plans.map((plan) => _PlanCard(
-              name: plan['name']!,
-              price: plan['price']!,
-              quality: plan['quality']!,
-              devices: plan['devices']!,
-              isPopular: plan['name'] == 'Standard',
-            )),
+            Text('Unlock premium features', style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant)),
+            const SizedBox(height: 32),
+            _planCard(context, 'Basic', '\$9.99', '720p', '1 Device', '1 Download', false),
+            const SizedBox(height: 16),
+            _planCard(context, 'Standard', '\$15.99', '1080p', '2 Devices', '2 Downloads', true, isPopular: true),
+            const SizedBox(height: 16),
+            _planCard(context, 'Premium', '\$22.99', '4K Ultra HD', '4 Devices', '6 Downloads', true, isPremium: true),
           ],
         ),
       ),
     );
   }
-}
 
-class _PlanCard extends StatelessWidget {
-  final String name;
-  final String price;
-  final String quality;
-  final String devices;
-  final bool isPopular;
-
-  const _PlanCard({required this.name, required this.price, required this.quality, required this.devices, this.isPopular = false});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _planCard(BuildContext context, String name, String price, String quality, String devices, String downloads, bool adFree, {bool isPopular = false, bool isPremium = false}) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: isPopular ? AppTheme.red.withValues(alpha: 0.1) : AppTheme.card,
-        borderRadius: BorderRadius.circular(12),
-        border: isPopular ? Border.all(color: AppTheme.red, width: 1.5) : null,
+        color: isPopular ? AppColors.primary.withValues(alpha: 0.1) : AppColors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isPopular ? AppColors.primary : AppColors.outlineVariant,
+          width: isPopular ? 2 : 0.5,
+        ),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text(name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppTheme.white)),
-              const Spacer(),
-              if (isPopular) Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(color: AppTheme.red, borderRadius: BorderRadius.circular(4)),
-                child: const Text('POPULAR', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppTheme.white)),
+          if (isPopular)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(20),
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(price, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: AppTheme.white)),
-          const SizedBox(height: 4),
-          Text('/month', style: TextStyle(color: AppTheme.gray.withValues(alpha: 0.7))),
-          const SizedBox(height: 16),
-          _Bullet(text: '$quality supported'),
-          _Bullet(text: 'Watch on $devices'),
-          _Bullet(text: 'No ads'),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: ElevatedButton(
-              onPressed: () {},
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isPopular ? AppTheme.red : AppTheme.card,
-                foregroundColor: AppTheme.white,
-                side: isPopular ? BorderSide.none : const BorderSide(color: AppTheme.gray),
-              ),
-              child: Text(isPopular ? 'Subscribe' : 'Choose $name'),
+              child: const Text('POPULAR', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
             ),
+          Text(name, style: AppTypography.headlineMd),
+          const SizedBox(height: 8),
+          Text(price, style: AppTypography.displayMd.copyWith(fontSize: 36)),
+          Text('/month', style: TextStyle(color: AppColors.onSurfaceVariant)),
+          const SizedBox(height: 20),
+          _feature(Icons.visibility, quality),
+          _feature(Icons.devices, devices),
+          _feature(Icons.download, downloads),
+          _feature(Icons.ad_units, adFree ? 'Ad-Free' : 'Ads Supported'),
+          const SizedBox(height: 24),
+          AppButton(
+            label: isPremium ? 'Subscribe' : 'Get Started',
+            onPressed: () {},
+            color: isPremium ? AppColors.primary : null,
           ),
         ],
       ),
     );
   }
-}
 
-class _Bullet extends StatelessWidget {
-  final String text;
-  const _Bullet({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _feature(IconData icon, String text) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
-          const Icon(Icons.check, size: 18, color: AppTheme.red),
-          const SizedBox(width: 8),
-          Text(text, style: const TextStyle(color: AppTheme.gray, fontSize: 14)),
+          Icon(icon, size: 18, color: AppColors.secondary),
+          const SizedBox(width: 12),
+          Text(text, style: AppTypography.bodyMd),
         ],
       ),
     );

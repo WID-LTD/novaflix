@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../theme/app_theme.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
 
 class AdminAssetQCScreen extends StatelessWidget {
   const AdminAssetQCScreen({super.key});
@@ -7,9 +8,9 @@ class AdminAssetQCScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.black,
+      backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Asset QC')),
-      body: const Center(child: Text('Asset quality control coming soon', style: TextStyle(color: AppTheme.gray))),
+      body: Center(child: Text('Asset quality control coming soon', style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant))),
     );
   }
 }

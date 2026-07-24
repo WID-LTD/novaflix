@@ -76,10 +76,12 @@ export default function Pricing() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const toast = useToast()
-  const [loading, setLoading] = useState<string | null>(null)
   const [selectedPlan, setSelectedPlan] = useState('standard')
-  const [gateway, setGateway] = useState<'paystack' | 'flutterwave'>('paystack')
   const [gateways, setGateways] = useState<{ paystack: { configured: boolean; publicKey: string }; flutterwave: { configured: boolean; publicKey: string } } | null>(null)
+  const [showModal, setShowModal] = useState(false)
+  const [modalPlan, setModalPlan] = useState<string | null>(null)
+  const [modalGateway, setModalGateway] = useState<'paystack' | 'flutterwave'>('flutterwave')
+  const [modalLoading, setModalLoading] = useState(false)
 
   useEffect(() => {
     if (user) {
@@ -87,23 +89,23 @@ export default function Pricing() {
     }
   }, [user])
 
-  const handleSelectPlan = async (planId: string) => {
-    setSelectedPlan(planId)
-    if (!user) {
-      navigate('/login')
-      return
-    }
+  const handleSelectPlan = (planId: string) => {
+    if (!user) { navigate('/login'); return }
     if (planId === 'free') return
-    setLoading(planId)
+    setSelectedPlan(planId)
+    setModalPlan(planId)
+    setShowModal(true)
+  }
+
+  const handlePayNow = async () => {
+    if (!modalPlan) return
+    setModalLoading(true)
     const token = localStorage.getItem('novaflix-token') || ''
-    const res = await initializePayment(token, planId, gateway)
-    setLoading(null)
-    if (res.success) {
-      if (res.authorization_url) {
-        window.location.href = res.authorization_url
-      } else {
-        toast.error('Unexpected response from payment server')
-      }
+    const res = await initializePayment(token, modalPlan, modalGateway)
+    setModalLoading(false)
+    setShowModal(false)
+    if (res.success && res.authorization_url) {
+      window.location.href = res.authorization_url
     } else {
       toast.error(res.error || 'Payment failed')
     }
@@ -113,7 +115,8 @@ export default function Pricing() {
   const isCurrentPlan = (planId: string) => currentPlan === planId && currentPlan !== 'free'
 
   return (
-    <div className="min-h-screen bg-background">
+    <>
+      <div className="min-h-screen bg-background">
       <div className="relative pt-32 pb-24 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[600px] opacity-20 pointer-events-none blur-[120px] bg-gradient-to-b from-primary-container to-transparent" />
 
@@ -180,56 +183,11 @@ export default function Pricing() {
                       : 'border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container'
                   }`}
                 >
-                  {loading === plan.id ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                      Processing...
-                    </span>
-                  ) : isActive ? (
-                    'Current Plan'
-                  ) : (
-                    `Subscribe — ${plan.price}`
-                  )}
+                  {isActive ? 'Current Plan' : `Subscribe — ${plan.price}`}
                 </button>
               </div>
             )
           })}
-        </div>
-
-        <div className="flex items-center justify-center gap-4 mb-12">
-          <span className="text-on-surface-variant text-body-md">Pay with</span>
-          <button
-            onClick={() => setGateway('paystack')}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-lg border transition-all ${
-              gateway === 'paystack'
-                ? 'bg-surface-container-high border-primary-container/50 scale-105 z-10'
-                : 'bg-surface-container border-outline-variant/30 hover:brightness-110'
-            }`}
-          >
-            <img src="/paystack-logo.svg" alt="Paystack" className="h-6" />
-            <span className="font-label-md text-label-sm">Paystack</span>
-            {gateways && !gateways.paystack.configured && (
-              <span className="tooltip" data-tip="Keys not set — unavailable">
-                <Icon name="warning" className="text-warning text-sm" />
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setGateway('flutterwave')}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-lg border transition-all ${
-              gateway === 'flutterwave'
-                ? 'bg-surface-container-high border-primary-container/50 scale-105 z-10'
-                : 'bg-surface-container border-outline-variant/30 hover:brightness-110'
-            }`}
-          >
-            <img src="/flutterwave-logo.svg" alt="Flutterwave" className="h-6" />
-            <span className="font-label-md text-label-sm">Flutterwave</span>
-            {gateways && !gateways.flutterwave.configured && (
-              <span className="tooltip" data-tip="Keys not set — unavailable">
-                <Icon name="warning" className="text-warning text-sm" />
-              </span>
-            )}
-          </button>
         </div>
 
         <div className="text-center">
@@ -248,6 +206,72 @@ export default function Pricing() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+
+      {showModal && modalPlan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowModal(false)}>
+          <div className="bg-surface-container-high rounded-2xl w-full max-w-md mx-4 p-8 relative shadow-2xl border border-outline-variant/30" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setShowModal(false)}
+              className="absolute top-4 right-4 p-2 rounded-full hover:bg-surface-container-higher transition-colors text-on-surface-variant"
+            >
+              <Icon name="close" />
+            </button>
+
+            <h2 className="text-headline-md mb-1">Complete Payment</h2>
+            <p className="text-body-md text-on-surface-variant mb-6">
+              {plans.find(p => p.id === modalPlan)?.name} — {plans.find(p => p.id === modalPlan)?.price}/month
+            </p>
+
+            <p className="font-label-md text-label-sm text-on-surface-variant mb-3">Select payment method</p>
+
+            <div className="space-y-3 mb-6">
+              <div
+                onClick={() => setModalGateway('flutterwave')}
+                className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all ${
+                  modalGateway === 'flutterwave'
+                    ? 'border-primary-container/50 bg-surface-container-high'
+                    : 'border-outline-variant/30 bg-surface-container hover:brightness-110'
+                }`}
+              >
+                <img src="/flutterwave-logo.svg" alt="Flutterwave" className="h-8" />
+                <span className="font-medium text-body-md flex-1">Flutterwave</span>
+                <Icon name={modalGateway === 'flutterwave' ? 'radio_button_checked' : 'radio_button_unchecked'} className="text-primary text-xl" />
+              </div>
+
+              <div
+                onClick={() => setModalGateway('paystack')}
+                className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all ${
+                  modalGateway === 'paystack'
+                    ? 'border-primary-container/50 bg-surface-container-high'
+                    : 'border-outline-variant/30 bg-surface-container hover:brightness-110'
+                }`}
+              >
+                <img src="/paystack-logo.svg" alt="Paystack" className="h-8" />
+                <span className="font-medium text-body-md flex-1">Paystack</span>
+                {gateways && !gateways.paystack.configured && (
+                  <span className="text-xs bg-surface-container-highest px-2 py-0.5 rounded-full text-on-surface-variant">Keys not set</span>
+                )}
+                <Icon name={modalGateway === 'paystack' ? 'radio_button_checked' : 'radio_button_unchecked'} className="text-primary text-xl" />
+              </div>
+            </div>
+
+            <Button
+              onClick={handlePayNow}
+              loading={modalLoading}
+              disabled={modalGateway === 'paystack' && gateways && !gateways.paystack.configured}
+              className="w-full justify-center"
+            >
+              {modalGateway === 'paystack' && gateways && !gateways.paystack.configured
+                ? 'Paystack unavailable — add keys in .env'
+                : 'Pay Now'}
+            </Button>
+            <p className="text-center text-body-sm text-on-surface-variant mt-4">
+              You'll be redirected to the payment portal
+            </p>
+          </div>
+        </div>
+      )}
+    </>
   )
 }

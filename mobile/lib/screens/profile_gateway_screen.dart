@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../theme/app_theme.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
+import '../widgets/ui/index.dart';
 
 class ProfileGatewayScreen extends StatelessWidget {
   const ProfileGatewayScreen({super.key});
@@ -8,49 +10,35 @@ class ProfileGatewayScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.black,
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('NOVAFLIX', style: TextStyle(fontSize: 36, fontWeight: FontWeight.w900, color: AppTheme.red, letterSpacing: 6)),
-            const SizedBox(height: 48),
-            const Text('Who\'s watching?', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w600, color: AppTheme.white)),
-            const SizedBox(height: 32),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _ProfileAvatar(initial: 'U', onTap: () => context.go('/home')),
-                const SizedBox(width: 24),
-                _ProfileAvatar(initial: '+', onTap: () {}),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ProfileAvatar extends StatelessWidget {
-  final String initial;
-  final VoidCallback onTap;
-  const _ProfileAvatar({required this.initial, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        children: [
-          CircleAvatar(
-            radius: 44,
-            backgroundColor: AppTheme.card,
-            child: Text(initial, style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w300, color: AppTheme.gray)),
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.play_circle_fill, size: 60, color: AppColors.primary),
+              const SizedBox(height: 16),
+              Text("Who's watching?", style: AppTypography.headlineMd),
+              const SizedBox(height: 32),
+              GestureDetector(
+                onTap: () => context.go('/home'),
+                child: Column(
+                  children: [
+                    CircleAvatar(
+                      radius: 48,
+                      backgroundColor: AppColors.surfaceContainerHighest,
+                      child: const Icon(Icons.person, size: 48, color: AppColors.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text('Default Profile', style: TextStyle(color: AppColors.onSurfaceVariant)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 48),
+              AppButton(label: 'Continue to Home', onPressed: () => context.go('/home')),
+            ],
           ),
-          const SizedBox(height: 8),
-          Text(initial == '+' ? 'Add Profile' : 'User', style: const TextStyle(color: AppTheme.gray, fontSize: 14)),
-        ],
+        ),
       ),
     );
   }

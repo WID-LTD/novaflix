@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../theme/app_theme.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
 
 class CreatorAnalyticsScreen extends StatelessWidget {
   const CreatorAnalyticsScreen({super.key});
@@ -7,9 +8,9 @@ class CreatorAnalyticsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.black,
+      backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Creator Analytics')),
-      body: const Center(child: Text('Detailed analytics coming soon', style: TextStyle(color: AppTheme.gray))),
+      body: Center(child: Text('Detailed analytics coming soon', style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant))),
     );
   }
 }

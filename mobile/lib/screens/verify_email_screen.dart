@@ -1,103 +1,68 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
 import '../providers/auth_provider.dart';
-import '../theme/app_theme.dart';
+import '../widgets/ui/index.dart';
 
-class VerifyEmailScreen extends ConsumerStatefulWidget {
+class VerifyEmailScreen extends ConsumerWidget {
   const VerifyEmailScreen({super.key});
 
   @override
-  ConsumerState<VerifyEmailScreen> createState() => _VerifyEmailScreenState();
-}
-
-class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
-  final _codeCtrl = TextEditingController();
-
-  @override
-  void dispose() {
-    _codeCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final state = ref.watch(authProvider);
-
-    ref.listen<AuthState>(authProvider, (prev, next) {
-      if (next.status == AuthStatus.unauthenticated && prev?.status == AuthStatus.loading) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Email verified! Please sign in.')),
-        );
-        context.go('/login');
-      }
-    });
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authProvider);
+    final codeCtl = TextEditingController();
 
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [AppTheme.black, AppTheme.dark, AppTheme.black],
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Column(
-                children: [
-                  const Icon(Icons.mark_email_unread, size: 64, color: AppTheme.red),
-                  const SizedBox(height: 24),
-                  Text('Verify Your Email', style: TextStyle(
-                    fontSize: 24, fontWeight: FontWeight.w600,
-                    color: AppTheme.white.withValues(alpha: 0.9),
-                  )),
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.mark_email_unread, size: 80, color: AppColors.primary),
+                const SizedBox(height: 24),
+                Text('Check Your Email', style: AppTypography.headlineMd),
+                const SizedBox(height: 8),
+                Text(
+                  authState.pendingEmail != null
+                      ? 'We sent a code to ${authState.pendingEmail}'
+                      : 'Enter verification code',
+                  style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 32),
+                AppInput(
+                  controller: codeCtl,
+                  hint: 'Enter 6-digit code',
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 24),
+                AppButton(
+                  label: 'Verify Email',
+                  onPressed: () => ref.read(authProvider.notifier).verifyEmail(codeCtl.text),
+                  loading: authState.status == AuthStatus.loading,
+                ),
+                if (authState.error != null) ...[
                   const SizedBox(height: 12),
-                  Text(
-                    state.pendingEmail != null
-                        ? 'Enter the verification code sent to ${state.pendingEmail}'
-                        : 'Enter the verification code sent to your email',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: AppTheme.gray, fontSize: 14),
-                  ),
-                  const SizedBox(height: 32),
-                  TextField(
-                    controller: _codeCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Verification Code',
-                      prefixIcon: Icon(Icons.pin_outlined, color: AppTheme.gray),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.errorContainer.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    keyboardType: TextInputType.number,
-                    textInputAction: TextInputAction.done,
-                    onSubmitted: (_) => ref.read(authProvider.notifier).verifyEmail(_codeCtrl.text.trim()),
-                  ),
-                  const SizedBox(height: 24),
-                  if (state.error != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Text(state.error!, style: const TextStyle(color: AppTheme.red, fontSize: 13)),
-                    ),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: state.status == AuthStatus.loading
-                          ? null
-                          : () => ref.read(authProvider.notifier).verifyEmail(_codeCtrl.text.trim()),
-                      child: state.status == AuthStatus.loading
-                          ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.white))
-                          : const Text('Verify'),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextButton(
-                    onPressed: () => ref.read(authProvider.notifier).resendVerification(),
-                    child: const Text('Resend Code'),
+                    child: Text(authState.error!, style: const TextStyle(color: AppColors.error, fontSize: 13)),
                   ),
                 ],
-              ),
+                const SizedBox(height: 24),
+                TextButton(
+                  onPressed: () => ref.read(authProvider.notifier).resendVerification(),
+                  child: const Text("Didn't get it? Resend", style: TextStyle(color: AppColors.primaryLight)),
+                ),
+              ],
             ),
           ),
         ),

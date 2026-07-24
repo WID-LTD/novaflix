@@ -1,78 +1,142 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../theme/app_theme.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
+import '../providers/auth_provider.dart';
 
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
-  late AnimationController _animCtrl;
-  late Animation<double> _fadeAnim;
+class _SplashScreenState extends ConsumerState<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
   late Animation<double> _scaleAnim;
+  late Animation<double> _fadeAnim;
+  late Animation<double> _progressAnim;
 
   @override
   void initState() {
     super.initState();
-    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 2000));
-    _fadeAnim = Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeIn));
-    _scaleAnim = Tween<double>(begin: 0.5, end: 1).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.elasticOut));
-    _animCtrl.forward();
-    Future.delayed(const Duration(milliseconds: 3500), () {
-      if (mounted) context.go('/home');
-    });
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 5000),
+    );
+    _scaleAnim = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: const Interval(0, 0.3, curve: Curves.easeOut)),
+    );
+    _fadeAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: const Interval(0, 0.3, curve: Curves.easeOut)),
+    );
+    _progressAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: const Interval(0.2, 0.8, curve: Curves.easeInOut)),
+    );
+
+    _controller.forward();
+
+    Timer(const Duration(seconds: 5), _navigateNext);
+  }
+
+  void _navigateNext() {
+    if (!mounted) return;
+    final authState = ref.read(authProvider);
+    if (authState.status == AuthStatus.authenticated) {
+      context.go('/home');
+    } else {
+      context.go('/landing');
+    }
   }
 
   @override
   void dispose() {
-    _animCtrl.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.black,
-      body: Center(
-        child: FadeTransition(
-          opacity: _fadeAnim,
-          child: ScaleTransition(
-            scale: _scaleAnim,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 80, height: 80,
-                  decoration: BoxDecoration(
-                    color: AppTheme.red,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Center(
-                    child: Text('N', style: TextStyle(fontSize: 48, fontWeight: FontWeight.w900, color: AppTheme.white)),
-                  ),
+      backgroundColor: AppColors.background,
+      body: Stack(
+        children: [
+          Center(
+            child: AnimatedBuilder(
+              animation: _controller,
+              builder: (_, child) => Opacity(
+                opacity: _fadeAnim.value,
+                child: Transform.scale(
+                  scale: _scaleAnim.value,
+                  child: child,
                 ),
-                const SizedBox(height: 24),
-                const Text('NOVAFLIX', style: TextStyle(fontSize: 36, fontWeight: FontWeight.w900, color: AppTheme.white, letterSpacing: 8)),
-                const SizedBox(height: 32),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.play_circle_fill, size: 80, color: AppColors.primary),
+                  const SizedBox(height: 16),
+                  ShaderMask(
+                    shaderCallback: (bounds) => LinearGradient(
+                      colors: [AppColors.primary, AppColors.primaryLight],
+                    ).createShader(bounds),
+                    child: Text('NOVAFLIX',
+                      style: AppTypography.displayLg.copyWith(
+                        color: Colors.white,
+                        fontSize: 48,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 6,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text('Movies & Creator Platform',
+                    style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            left: 40,
+            right: 40,
+            bottom: 80,
+            child: Column(
+              children: [
                 SizedBox(
-                  width: 200,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(2),
-                    child: const LinearProgressIndicator(
-                      backgroundColor: AppTheme.card,
-                      valueColor: AlwaysStoppedAnimation(AppTheme.red),
+                  height: 3,
+                  child: AnimatedBuilder(
+                    animation: _progressAnim,
+                    builder: (_, __) => ClipRRect(
+                      borderRadius: BorderRadius.circular(2),
+                      child: LinearProgressIndicator(
+                        value: _progressAnim.value,
+                        backgroundColor: AppColors.surfaceContainerHighest,
+                        valueColor: AlwaysStoppedAnimation(AppColors.primary),
+                      ),
                     ),
                   ),
                 ),
                 const SizedBox(height: 12),
-                Text('Initializing Core', style: TextStyle(color: AppTheme.gray.withValues(alpha: 0.6), fontSize: 13)),
+                AnimatedBuilder(
+                  animation: _fadeAnim,
+                  builder: (_, __) => Opacity(
+                    opacity: _fadeAnim.value > 0.7 ? (_fadeAnim.value - 0.7) / 0.3 : 0,
+                    child: Text('Initializing Core',
+                      style: AppTypography.labelSm.copyWith(
+                        color: AppColors.onSurfaceVariant,
+                        letterSpacing: 3,
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
-        ),
+        ],
       ),
     );
   }

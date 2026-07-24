@@ -11,7 +11,7 @@ export async function getNextAd(req, res) {
     const planRank = getPlanRank(userPlan)
 
     // Paid plans get no ads
-    if (planRank >= 2) {
+    if (planRank >= 3) {
       return res.json({ success: true, ads: [] })
     }
 
@@ -174,7 +174,7 @@ export async function getSkipLimit(req, res) {
     }
 
     const planRank = getPlanRank(req.user?.plan || 'free')
-    const maxSkips = planRank >= 2 ? 999 : planRank >= 1 ? 6 : 6
+    const maxSkips = planRank >= 3 ? 999 : planRank >= 1 ? 6 : 6
 
     res.json({ success: true, skips_used: 0, skips_max: maxSkips })
   } catch (err) {
@@ -201,7 +201,7 @@ export async function incrementSkip(req, res) {
       )
     } else {
       const planRank = getPlanRank(req.user?.plan || 'free')
-      const maxSkips = planRank >= 2 ? 999 : 6
+      const maxSkips = planRank >= 3 ? 999 : 6
       await pool.query(
         `INSERT INTO skip_limits (id, user_id, skips_used, skips_max, window_start)
          VALUES ($1, $2, 1, $3, NOW())`,

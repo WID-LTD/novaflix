@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../theme/app_theme.dart';
+import '../theme/app_colors.dart';
 
 class Skeleton extends StatefulWidget {
   final double width;
@@ -48,7 +48,7 @@ class _SkeletonState extends State<Skeleton> with SingleTickerProviderStateMixin
         width: widget.width,
         height: widget.height,
         decoration: BoxDecoration(
-          color: AppTheme.card.withValues(alpha: _anim.value),
+          color: AppColors.surfaceContainerHighest.withValues(alpha: _anim.value),
           borderRadius: BorderRadius.circular(widget.borderRadius),
         ),
       ),
