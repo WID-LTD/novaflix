@@ -8,6 +8,12 @@ export interface MediaItem {
   type: 'movie' | 'tv'
   premium?: boolean
   promoted?: boolean
+  genres?: string[]
+  ageRating?: string
+  trailerKey?: string | null
+  source?: string
+  url?: string
+  rating?: number
 }
 
 export interface Genre {
@@ -57,6 +63,7 @@ export interface MediaDetails {
   runtime: number | null
   seasons?: Season[]
   totalSeasons?: number
+  ageRating?: string
 }
 
 export interface Subtitle {

@@ -55,6 +55,10 @@ export function getTrendingFeed(): Promise<{ success: boolean; data: { movies: M
   return fetchJson(`${BASE}/trending`)
 }
 
+export function searchAll(query: string): Promise<{ success: boolean; data: MediaItem[]; error?: string }> {
+  return fetchJson(`${BASE}/search/all`, { q: query })
+}
+
 export function getNowPlaying(): Promise<{ success: boolean; data: MediaItem[]; error?: string }> {
   return fetchJson(`${BASE}/now-playing`)
 }
@@ -121,6 +125,22 @@ export interface AdItem {
   cue_time_seconds: number
   duration_seconds: number
   skip_after_seconds: number
+}
+
+export function getDiscover(params: {
+  genre_id?: string
+  type?: string
+  sort_by?: string
+  page?: number
+  min_votes?: number
+}): Promise<{ success: boolean; data: MediaItem[]; total_pages?: number; page?: number; error?: string }> {
+  const queryParams: Record<string, string> = {}
+  if (params.genre_id) queryParams.genre_id = params.genre_id
+  if (params.type) queryParams.type = params.type
+  if (params.sort_by) queryParams.sort_by = params.sort_by
+  if (params.page && params.page > 1) queryParams.page = String(params.page)
+  if (params.min_votes) queryParams.min_votes = String(params.min_votes)
+  return fetchJson(`${BASE}/discover`, queryParams)
 }
 
 export function getHooksFeed(page?: number): Promise<{ success: boolean; data: HookItem[]; nextPage?: number }> {

@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid'
 import bcrypt from 'bcryptjs'
-import { findUserById, updateUser, getUploadsByUserId, getTotalMinutesWatched, getUserSubscription, addWatchEntry, getWatchHistory } from '../db.js'
+import { findUserById, updateUser, getUploadsByUserId, getTotalMinutesWatched, getUserSubscription, addWatchEntry, getWatchHistory, checkAndAwardAchievements } from '../db.js'
+import { uploadFile } from '../lib/r2.js'
 
 export async function updateProfile(req, res) {
   try {
@@ -89,6 +90,7 @@ export async function addWatchEntryHandler(req, res) {
       episode: episode || null,
     }
     await addWatchEntry(entry)
+    checkAndAwardAchievements(req.userId).catch(() => {})
     res.json({ success: true, entry })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -99,6 +101,28 @@ export async function getWatchHistoryHandler(req, res) {
   try {
     const history = await getWatchHistory(req.userId)
     res.json({ success: true, history })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+export async function uploadAvatar(req, res) {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file provided' })
+
+    const ext = req.file.mimetype === 'image/png' ? 'png' : req.file.mimetype === 'image/webp' ? 'webp' : 'jpg'
+    const key = `avatars/${req.userId}.${ext}`
+
+    const result = await uploadFile({
+      buffer: req.file.buffer,
+      key,
+      contentType: req.file.mimetype,
+    })
+
+    if (!result.success) return res.status(500).json({ error: 'Upload failed' })
+
+    await updateUser(req.userId, { avatar: result.url })
+    res.json({ success: true, url: result.url })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

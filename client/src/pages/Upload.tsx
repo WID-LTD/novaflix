@@ -40,8 +40,8 @@ export default function Upload() {
       title,
       description,
       genre,
-      filename: videoFile?.name || 'video.mp4',
-      filesize: videoFile?.size || 0,
+      videoFile: videoFile || undefined,
+      posterFile: posterFile || undefined,
     })
     setUploading(false)
     if (res.success) {

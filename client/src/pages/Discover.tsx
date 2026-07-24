@@ -6,7 +6,7 @@ import Button from '../components/ui/Button'
 import SearchInput from '../components/ui/SearchInput'
 import Tabs from '../components/ui/Tabs'
 import Skeleton from '../components/ui/Skeleton'
-import MovieCard from '../components/features/MovieCard'
+import HoverCard from '../components/features/HoverCard'
 import type { MediaItem } from '../types'
 
 const sortOptions = [
@@ -184,7 +184,7 @@ export default function Discover() {
             }
           >
             {results.map((item, i) => (
-              <MovieCard key={`${item.id}-${item.type}`} item={item} index={i} />
+              <HoverCard key={`${item.id}-${item.type}`} item={item} index={i} />
             ))}
           </div>
         ) : !loading ? (

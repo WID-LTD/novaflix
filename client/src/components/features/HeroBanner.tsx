@@ -9,6 +9,7 @@ import Skeleton from '../ui/Skeleton'
 import Icon from '../ui/Icon'
 import { useStore } from '../../store/useStore'
 import { useToast } from '../ui/Toast'
+import { checkAchievements } from '../../lib/auth'
 
 interface HeroBannerProps {
   items: MediaDetails[]
@@ -89,6 +90,7 @@ export default function HeroBanner({ items, loading, autoPlayInterval = 6000 }: 
         year: currentItem.year,
       })
       toast.success('Added to watchlist')
+      checkAchievements()
     }
   }
 

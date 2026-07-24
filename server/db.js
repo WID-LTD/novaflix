@@ -63,9 +63,9 @@ export async function updateUser(id, updates) {
 
 export async function addUpload(upload) {
   const { rows } = await pool.query(
-    `INSERT INTO uploads (id, user_id, title, description, genre, filename, filesize, status, views, minutes_watched, revenue)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-    [upload.id, upload.userId, upload.title, upload.description || '', upload.genre, upload.filename, upload.filesize, upload.status || 'pending', upload.views || 0, upload.minutesWatched || 0, upload.revenue || 0]
+    `INSERT INTO uploads (id, user_id, title, description, genre, filename, thumbnail_url, filesize, status, views, minutes_watched, revenue)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+    [upload.id, upload.userId, upload.title, upload.description || '', upload.genre, upload.filename, upload.thumbnailUrl || '', upload.filesize, upload.status || 'pending', upload.views || 0, upload.minutesWatched || 0, upload.revenue || 0]
   )
   return rows[0]
 }
@@ -304,6 +304,67 @@ export async function deleteComment(id, userId) {
     [id, userId]
   )
   return rows[0] || null
+}
+
+// Followers
+export async function addFollower(followerId, followingId) {
+  const { rows } = await pool.query(
+    'INSERT INTO followers (follower_id, following_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING *',
+    [followerId, followingId]
+  )
+  return rows[0] || null
+}
+
+export async function removeFollower(followerId, followingId) {
+  const { rows } = await pool.query(
+    'DELETE FROM followers WHERE follower_id = $1 AND following_id = $2 RETURNING *',
+    [followerId, followingId]
+  )
+  return rows[0] || null
+}
+
+export async function isFollowing(followerId, followingId) {
+  const { rows } = await pool.query(
+    'SELECT 1 FROM followers WHERE follower_id = $1 AND following_id = $2 LIMIT 1',
+    [followerId, followingId]
+  )
+  return rows.length > 0
+}
+
+export async function getFollowerCount(userId) {
+  const { rows } = await pool.query(
+    'SELECT COUNT(*) as count FROM followers WHERE following_id = $1',
+    [userId]
+  )
+  return parseInt(rows[0].count) || 0
+}
+
+export async function getFollowingCount(userId) {
+  const { rows } = await pool.query(
+    'SELECT COUNT(*) as count FROM followers WHERE follower_id = $1',
+    [userId]
+  )
+  return parseInt(rows[0].count) || 0
+}
+
+export async function getFollowers(userId) {
+  const { rows } = await pool.query(
+    `SELECT u.id, u.name, u.avatar
+     FROM followers f JOIN users u ON u.id = f.follower_id
+     WHERE f.following_id = $1 ORDER BY f.created_at DESC`,
+    [userId]
+  )
+  return rows
+}
+
+export async function getFollowing(userId) {
+  const { rows } = await pool.query(
+    `SELECT u.id, u.name, u.avatar
+     FROM followers f JOIN users u ON u.id = f.following_id
+     WHERE f.follower_id = $1 ORDER BY f.created_at DESC`,
+    [userId]
+  )
+  return rows
 }
 
 // Artist Graph
@@ -1014,4 +1075,87 @@ export async function getActors(limit = 50, offset = 0) {
 export async function getActorCount() {
   const { rows } = await pool.query('SELECT COUNT(*) as count FROM actors')
   return parseInt(rows[0].count) || 0
+}
+
+// Achievements
+const ACHIEVEMENT_DEFS = [
+  { key: 'first_watch', name: 'Film Buff', description: 'Watch your first movie', icon: 'star', criteria: { type: 'watch_count', threshold: 1 } },
+  { key: 'watch_10', name: 'Movie Marathoner', description: 'Watch 10 movies', icon: 'play_circle', criteria: { type: 'watch_count', threshold: 10 } },
+  { key: 'first_watchlist', name: 'Collector', description: 'Add your first title to watchlist', icon: 'bookmark', criteria: { type: 'watchlist_count', threshold: 1 } },
+  { key: 'watchlist_5', name: 'Trend Setter', description: 'Add 5 titles to your watchlist', icon: 'trending_up', criteria: { type: 'watchlist_count', threshold: 5 } },
+  { key: 'night_owl', name: 'Night Owl', description: 'Watch content after midnight', icon: 'schedule', criteria: { type: 'night_watch', threshold: 1 } },
+  { key: 'genre_explorer', name: 'Explorer', description: 'Explore 5 different genres', icon: 'explore', criteria: { type: 'genre_count', threshold: 5 } },
+  { key: 'social_follower', name: 'Social Butterfly', description: 'Follow 3 creators', icon: 'diversity_3', criteria: { type: 'follow_count', threshold: 3 } },
+]
+
+export async function seedAchievements() {
+  for (const a of ACHIEVEMENT_DEFS) {
+    await pool.query(
+      `INSERT INTO achievements (key, name, description, icon, criteria)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (key) DO NOTHING`,
+      [a.key, a.name, a.description, a.icon, JSON.stringify(a.criteria)]
+    )
+  }
+}
+
+export async function getAllAchievements() {
+  const { rows } = await pool.query('SELECT * FROM achievements ORDER BY key')
+  return rows
+}
+
+export async function getUserAchievements(userId) {
+  const { rows } = await pool.query(
+    `SELECT a.*, ua.earned_at
+     FROM achievements a
+     LEFT JOIN user_achievements ua ON ua.achievement_id = a.id AND ua.user_id = $1
+     ORDER BY a.key`,
+    [userId]
+  )
+  return rows
+}
+
+export async function awardAchievement(userId, achievementKey) {
+  const { rows } = await pool.query(
+    `INSERT INTO user_achievements (user_id, achievement_id)
+     SELECT $1, id FROM achievements WHERE key = $2
+     ON CONFLICT DO NOTHING RETURNING *`,
+    [userId, achievementKey]
+  )
+  return rows[0] || null
+}
+
+export async function checkAndAwardAchievements(userId) {
+  const [{ rows: userAchievements }] = await Promise.all([
+    pool.query('SELECT a.key FROM user_achievements ua JOIN achievements a ON a.id = ua.achievement_id WHERE ua.user_id = $1', [userId]),
+  ])
+  const earned = new Set(userAchievements.map((r) => r.key))
+
+  const [watchRes, watchlistRes, followRes] = await Promise.all([
+    pool.query('SELECT COUNT(*) as count FROM watch_history WHERE user_id = $1', [userId]),
+    pool.query('SELECT COUNT(*) as count FROM watchlist WHERE user_id = $1', [userId]),
+    pool.query('SELECT COUNT(*) as count FROM followers WHERE follower_id = $1', [userId]),
+  ])
+
+  const watchCount = parseInt(watchRes.rows[0].count) || 0
+  const watchlistCount = parseInt(watchlistRes.rows[0].count) || 0
+  const followCount = parseInt(followRes.rows[0].count) || 0
+
+  const awards = []
+  const checks = [
+    { key: 'first_watch', ok: watchCount >= 1 },
+    { key: 'watch_10', ok: watchCount >= 10 },
+    { key: 'first_watchlist', ok: watchlistCount >= 1 },
+    { key: 'watchlist_5', ok: watchlistCount >= 5 },
+    { key: 'social_follower', ok: followCount >= 3 },
+  ]
+
+  for (const c of checks) {
+    if (c.ok && !earned.has(c.key)) {
+      const awarded = await awardAchievement(userId, c.key)
+      if (awarded) awards.push(c.key)
+    }
+  }
+
+  return awards
 }

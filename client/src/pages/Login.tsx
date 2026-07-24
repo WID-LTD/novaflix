@@ -128,12 +128,12 @@ export default function Login() {
       >
         {/* Logo */}
         <div className="flex flex-col items-center mb-10">
-          <h1 className="text-display-lg text-primary-container tracking-tighter mb-2 font-extrabold">NovaFlix</h1>
-          <p className="font-label-md text-label-md text-on-surface-variant opacity-70 tracking-widest uppercase">The Cinematic Experience</p>
+          <img src="/leter-mark-logo.png" alt="" className="mb-2" style={{ height: '400px', width: '800px', objectFit: 'contain' }} />
+          <p className="font-label-md text-label-md text-on-surface-variant opacity-70 tracking-widest uppercase" style={{ position: 'relative', bottom: '120px' }}>The Cinematic Experience</p>
         </div>
 
         {/* Glass card */}
-        <div className="glass-panel rounded-xl p-8 md:p-12 shadow-2xl border border-outline-variant/20">
+        <div className="glass-panel rounded-xl p-8 md:p-12 shadow-2xl border border-outline-variant/20" style={{ position: 'relative', bottom: '120px' }}>
           <div className="mb-8">
             <h2 className="text-headline-lg mb-2">Welcome back</h2>
             <p className="text-body-md text-on-surface-variant">Sign in to your portal to resume discovery.</p>
@@ -246,7 +246,7 @@ export default function Login() {
 
           <div className="mt-8 text-center">
             <p className="text-body-md text-on-surface-variant">
-              {isSignUp ? 'Already have an account?' : "New to NovaFlix?"}{' '}
+              {isSignUp ? 'Already have an account?' : "New to "}<img src="/leter-mark-logo.png" alt="" className="h-4 w-auto inline align-middle" />{"?"}{' '}
               <button
                 type="button"
                 onClick={() => { setIsSignUp(!isSignUp); setError('') }}

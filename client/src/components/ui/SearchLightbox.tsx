@@ -52,7 +52,7 @@ export default function SearchLightbox({ open, onClose, variant = 'fullscreen' }
     if (!query.trim()) return
     addRecentSearch(query.trim())
     onClose()
-    navigate(`/search?q=${encodeURIComponent(query.trim())}&type=${type}`)
+    navigate(`/search/results?q=${encodeURIComponent(query.trim())}&type=${type}`)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -96,12 +96,8 @@ export default function SearchLightbox({ open, onClose, variant = 'fullscreen' }
 
   const handleTypeSelect = (t: 'movie' | 'tv') => {
     setType(t)
+    if (query.trim()) return
     setMenuOpen(false)
-    if (query.trim()) {
-      addRecentSearch(query.trim())
-      onClose()
-      navigate(`/search?q=${encodeURIComponent(query.trim())}&type=${t}`)
-    }
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -112,7 +108,7 @@ export default function SearchLightbox({ open, onClose, variant = 'fullscreen' }
   if (variant === 'navbar') {
     if (!open) return null
     return (
-      <div className="flex items-center flex-1 gap-2">
+      <div className="flex items-center flex-1 w-full gap-2">
         <div className="relative flex-1">
           <input
             ref={inputRef}
@@ -142,7 +138,7 @@ export default function SearchLightbox({ open, onClose, variant = 'fullscreen' }
           {menuOpen && (
             <div
               ref={menuRef}
-              className="absolute top-full left-0 right-0 mt-2 bg-surface-container-high border border-white/10 rounded-xl overflow-hidden shadow-2xl z-50"
+              className="absolute top-full left-0 right-0 mt-2 bg-surface-container-high border border-white/10 rounded-xl shadow-2xl z-50 max-h-80 overflow-y-auto min-w-0"
             >
               <div className="flex gap-2 p-3">
                 <button
@@ -206,7 +202,7 @@ export default function SearchLightbox({ open, onClose, variant = 'fullscreen' }
                           addRecentSearch(s)
                           inputRef.current?.focus()
                         }}
-                        className="px-3 py-1.5 bg-white/10 rounded-full text-xs text-on-surface-variant hover:bg-white/20 transition-colors"
+                        className="px-3 py-1.5 bg-white/10 rounded-full text-xs text-on-surface-variant hover:bg-white/20 transition-colors max-w-full truncate"
                       >
                         {s}
                       </button>

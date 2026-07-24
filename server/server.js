@@ -157,8 +157,10 @@ wss.on('connection', (ws, req) => {
 })
 
 import { deactivateExpiredSubscriptions } from './jobs/subscriptionExpiry.js'
+import { seedAchievements } from './db.js'
 
-initDatabase().then(() => {
+initDatabase().then(async () => {
+  await seedAchievements()
   // Subscription expiry — run every hour
   deactivateExpiredSubscriptions()
   setInterval(deactivateExpiredSubscriptions, 60 * 60 * 1000)

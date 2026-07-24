@@ -105,7 +105,7 @@ export default function Referrals() {
             <Icon name="share" className="w-7 h-7 text-secondary" />
           </div>
           <h1 className="text-headline-md font-bold text-on-surface mb-2">Refer & Earn</h1>
-          <p className="text-on-surface-variant text-sm">Invite friends to NovaFlix and earn rewards</p>
+          <p className="text-on-surface-variant text-sm">Invite friends to <img src="/leter-mark-logo.png" alt="" className="h-3 w-auto inline align-middle" /> and earn rewards</p>
         </div>
 
         {/* Referral Link Card */}

@@ -4,6 +4,7 @@ import {
   createOrder, addOrderItem, getOrderByReference, updateOrder, getUserOrders,
   createTransaction, getTransactionByReference, updateTransactionByReference,
 } from '../db.js'
+import { uploadFile } from '../lib/r2.js'
 
 let _paystack = null
 async function getPaystack() {
@@ -22,8 +23,17 @@ const CALLBACK_URL = process.env.PAYSTACK_CALLBACK_URL || 'http://localhost:3000
 // Product CRUD (creator)
 export async function createProductHandler(req, res) {
   try {
-    const { title, description, price, imageUrl, category, popular } = req.body
+    const { title, description, price, category, popular } = req.body
     if (!title || price === undefined) return res.status(400).json({ error: 'Title and price required' })
+
+    let imageUrl = req.body.imageUrl || ''
+    const imageFile = req.file
+    if (imageFile) {
+      const key = `merch/${req.userId}/${uuidv4()}-${Date.now()}.jpg`
+      const result = await uploadFile({ buffer: imageFile.buffer, key, contentType: imageFile.mimetype })
+      if (result.success) imageUrl = result.url
+    }
+
     const product = await createProduct({
       id: uuidv4(), creatorId: req.userId, title, description, price, imageUrl, category, popular,
     })
@@ -33,7 +43,14 @@ export async function createProductHandler(req, res) {
 
 export async function updateProductHandler(req, res) {
   try {
-    const product = await updateProduct(req.params.id, req.userId, req.body)
+    const updates = { ...req.body }
+    const imageFile = req.file
+    if (imageFile) {
+      const key = `merch/${req.userId}/${uuidv4()}-${Date.now()}.jpg`
+      const result = await uploadFile({ buffer: imageFile.buffer, key, contentType: imageFile.mimetype })
+      if (result.success) updates.imageUrl = result.url
+    }
+    const product = await updateProduct(req.params.id, req.userId, updates)
     if (!product) return res.status(404).json({ error: 'Product not found' })
     res.json({ success: true, product })
   } catch (err) { res.status(500).json({ error: err.message }) }

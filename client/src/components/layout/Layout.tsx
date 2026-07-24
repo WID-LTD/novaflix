@@ -25,6 +25,7 @@ export default function Layout() {
 
       <BottomNav />
       <ToastContainer />
+      <div id="preview-portal-root" />
     </div>
   )
 }

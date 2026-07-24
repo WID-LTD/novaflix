@@ -1,14 +1,12 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import Icon from '../components/ui/Icon'
-import { searchMedia } from '../lib/api'
+import { searchMedia, getNowPlaying, getTrendingFeed, getDiscover } from '../lib/api'
 import { useStore } from '../store/useStore'
-
 import Tabs from '../components/ui/Tabs'
-
 import Badge from '../components/ui/Badge'
 import Skeleton from '../components/ui/Skeleton'
-import MovieCard from '../components/features/MovieCard'
+import HoverCard from '../components/features/HoverCard'
 import type { MediaItem } from '../types'
 
 const searchTabs = [
@@ -16,7 +14,53 @@ const searchTabs = [
   { id: 'tv', label: 'TV Shows' },
 ]
 
+interface CategorySection {
+  title: string
+  key: string
+  link?: string
+}
+
+const categorySections: CategorySection[] = [
+  { title: 'Now Playing', key: 'nowPlaying', link: '/discover?sort=trending' },
+  { title: 'Trending Movies', key: 'trendingMovies', link: '/discover?sort=trending' },
+  { title: 'Trending TV Shows', key: 'trendingTV', link: '/tv-shows' },
+  { title: 'Top Rated Movies', key: 'topRated', link: '/discover?sort=top_rated' },
+  { title: 'Action Movies', key: 'action', link: '/discover?sort=popular' },
+  { title: 'Comedy Movies', key: 'comedy', link: '/discover?sort=popular' },
+  { title: 'Popular TV Shows', key: 'popularTV', link: '/tv-shows' },
+]
+
+function CategoryRow({ title, link, items, loading }: { title: string; link?: string; items: MediaItem[]; loading: boolean }) {
+  return (
+    <section className="mb-8">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-headline-sm text-on-surface flex items-center gap-1.5">
+          {title}
+          <Icon name="chevron_right" className="text-primary" />
+        </h2>
+        {link && (
+          <Link to={link} className="text-label-sm text-primary hover:underline transition-colors">
+            View All
+          </Link>
+        )}
+      </div>
+      <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-2 snap-x">
+        {loading
+          ? Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex-shrink-0 w-[140px] md:w-[160px]">
+                <Skeleton variant="poster" className="w-full" />
+              </div>
+            ))
+          : items.slice(0, 10).map((item, i) => (
+              <HoverCard key={`${item.id}-${item.type}`} item={item} index={i} />
+            ))}
+      </div>
+    </section>
+  )
+}
+
 export default function Search() {
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const typeParam = searchParams.get('type') || 'movie'
   const [query, setQuery] = useState(searchParams.get('q') || '')
@@ -26,11 +70,50 @@ export default function Search() {
   const addRecentSearch = useStore((s) => s.addRecentSearch)
   const recentlySearched = useStore((s) => s.recentlySearched)
 
+  const [nowPlaying, setNowPlaying] = useState<MediaItem[]>([])
+  const [trendingMovies, setTrendingMovies] = useState<MediaItem[]>([])
+  const [trendingTV, setTrendingTV] = useState<MediaItem[]>([])
+  const [topRated, setTopRated] = useState<MediaItem[]>([])
+  const [actionMovies, setActionMovies] = useState<MediaItem[]>([])
+  const [comedyMovies, setComedyMovies] = useState<MediaItem[]>([])
+  const [popularTV, setPopularTV] = useState<MediaItem[]>([])
+  const [catLoading, setCatLoading] = useState(true)
+
   const [mediaType, setMediaType] = useState<'movie' | 'tv'>(typeParam as 'movie' | 'tv')
+  const [suggestions, setSuggestions] = useState<MediaItem[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setMediaType(typeParam as 'movie' | 'tv')
   }, [typeParam])
+
+  useEffect(() => {
+    async function loadCategories() {
+      setCatLoading(true)
+      const [npRes, trendRes, topRes, actionRes, comedyRes] = await Promise.all([
+        getNowPlaying(),
+        getTrendingFeed(),
+        getDiscover({ sort_by: 'vote_average.desc', min_votes: 200, type: 'movie' }),
+        getDiscover({ genre_id: '28', type: 'movie' }),
+        getDiscover({ genre_id: '35', type: 'movie' }),
+      ])
+      if (npRes.success) setNowPlaying(npRes.data)
+      if (trendRes.success) {
+        setTrendingMovies(trendRes.data.movies)
+        setTrendingTV(trendRes.data.tv)
+      }
+      if (topRes.success) setTopRated(topRes.data)
+      if (actionRes.success) setActionMovies(actionRes.data)
+      if (comedyRes.success) setComedyMovies(comedyRes.data)
+
+      const popTVRes = await getDiscover({ type: 'tv', sort_by: 'popularity.desc' })
+      if (popTVRes.success) setPopularTV(popTVRes.data)
+
+      setCatLoading(false)
+    }
+    loadCategories()
+  }, [])
 
   const doSearch = useCallback(async (q: string, type: 'movie' | 'tv') => {
     if (!q.trim()) {
@@ -62,6 +145,27 @@ export default function Search() {
     }
   }, [query, mediaType, doSearch])
 
+  const fetchSuggestions = useCallback(async (q: string) => {
+    if (!q.trim()) { setSuggestions([]); setShowSuggestions(false); return }
+    const res = await searchMedia(q.trim(), mediaType)
+    if (res.success) setSuggestions(res.data.slice(0, 5))
+    else setSuggestions([])
+    setShowSuggestions(true)
+  }, [mediaType])
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value
+    setQuery(val)
+    setSearchParams(val ? { q: val, type: mediaType } : { type: mediaType })
+    if (val.trim()) fetchSuggestions(val)
+    else { setSuggestions([]); setShowSuggestions(false) }
+  }
+
+  const handleSuggestionClick = (item: MediaItem) => {
+    setShowSuggestions(false)
+    navigate(`/${item.type}/${item.id}`)
+  }
+
   const handleTabChange = (id: string) => {
     setMediaType(id as 'movie' | 'tv')
     if (query) {
@@ -76,10 +180,64 @@ export default function Search() {
     setSearchParams({ q, type: mediaType })
   }
 
+  const sections: { title: string; key: string; items: MediaItem[]; link?: string }[] = [
+    { title: 'Now Playing', key: 'nowPlaying', items: nowPlaying, link: '/discover?sort=trending' },
+    { title: 'Trending Movies', key: 'trendingMovies', items: trendingMovies, link: '/discover?sort=trending' },
+    { title: 'Trending TV Shows', key: 'trendingTV', items: trendingTV, link: '/tv-shows' },
+    { title: 'Top Rated Movies', key: 'topRated', items: topRated, link: '/discover?sort=top_rated' },
+    { title: 'Action Movies', key: 'action', items: actionMovies, link: '/category/28' },
+    { title: 'Comedy Movies', key: 'comedy', items: comedyMovies, link: '/category/35' },
+    { title: 'Popular TV Shows', key: 'popularTV', items: popularTV, link: '/tv-shows' },
+  ]
+
   return (
     <div className="min-h-screen px-margin-mobile md:px-margin-desktop pt-6 md:pt-10 pb-nav">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-headline-lg font-bold mb-6">Search Results</h1>
+        <div className="relative mb-6">
+          <div className="flex items-center gap-3 bg-surface-container-high border border-outline/20 rounded-xl px-4 py-3 focus-within:border-primary-container/50 transition-colors">
+            <Icon name="search" className="text-on-surface-variant shrink-0" />
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={handleInputChange}
+              onFocus={() => { if (suggestions.length) setShowSuggestions(true) }}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+              placeholder="Search movies, TV shows..."
+              className="flex-1 bg-transparent text-on-surface placeholder-on-surface-variant/50 outline-none text-body-md"
+              autoFocus
+            />
+            {query && (
+              <button onClick={() => { setQuery(''); setSearchParams({ type: mediaType }); setSuggestions([]); setShowSuggestions(false); inputRef.current?.focus() }} className="text-on-surface-variant hover:text-on-surface">
+                <Icon name="close" />
+              </button>
+            )}
+          </div>
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-surface-container-high border border-outline/20 rounded-xl overflow-hidden z-30 shadow-2xl">
+              {suggestions.map((item) => (
+                <button
+                  key={`${item.id}-${item.type}`}
+                  onMouseDown={() => handleSuggestionClick(item)}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface-container-higher transition-colors text-left"
+                >
+                  {item.poster ? (
+                    <img src={item.poster} alt="" className="w-8 h-12 rounded object-cover" />
+                  ) : (
+                    <div className="w-8 h-12 rounded bg-surface-variant flex items-center justify-center">
+                      <Icon name="movie" className="text-on-surface-variant/40" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-body-md text-on-surface truncate">{item.title}</p>
+                    <p className="text-label-sm text-on-surface-variant">{item.type === 'movie' ? 'Movie' : 'TV Show'}</p>
+                  </div>
+                  <Icon name="chevron_right" className="text-on-surface-variant/40 shrink-0" />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="mb-6">
           <Tabs tabs={searchTabs} activeTab={mediaType} onChange={handleTabChange} />
@@ -115,7 +273,7 @@ export default function Search() {
         )}
 
         {!loading && searched && results.length === 0 && (
-          <div className="text-center py-20">
+          <div className="text-center py-16">
             <Icon name="search" className="w-16 h-16 text-on-surface-variant/40 mx-auto mb-4" />
             <h3 className="font-label-md text-label-md text-on-surface-variant mb-2">No results found</h3>
             <p className="text-on-surface-variant/60">Try a different search term</p>
@@ -134,11 +292,25 @@ export default function Search() {
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-gutter">
               {results.map((item, i) => (
-                <MovieCard key={`${item.id}-${item.type}`} item={item} index={i} />
+                <HoverCard key={`${item.id}-${item.type}`} item={item} index={i} />
               ))}
             </div>
           </>
         )}
+      </div>
+
+      <div className="mt-10 space-y-6 max-w-container-max mx-auto">
+        <div className="h-px bg-white/5 mb-6" />
+        <h2 className="text-headline-md text-on-surface font-bold">Discover</h2>
+        {sections.map((section) => (
+          <CategoryRow
+            key={section.key}
+            title={section.title}
+            link={section.link}
+            items={section.items}
+            loading={catLoading}
+          />
+        ))}
       </div>
     </div>
   )

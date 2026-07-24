@@ -85,7 +85,7 @@ export default function CreatorCampaigns() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-headline-md font-bold text-on-surface">Promotions</h1>
-            <p className="text-on-surface-variant text-sm mt-1">Promote your content to NovaFlix viewers</p>
+            <p className="text-on-surface-variant text-sm mt-1">Promote your content to <img src="/leter-mark-logo.png" alt="" className="h-3 w-auto inline align-middle" /> viewers</p>
           </div>
           <Button onClick={() => setShowForm(!showForm)}>
             <Icon name="add" /> New Campaign

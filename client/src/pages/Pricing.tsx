@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
-import { initializePayment } from '../lib/auth'
+import { initializePayment, getGatewayInfo } from '../lib/auth'
 import Button from '../components/ui/Button'
 import { useToast } from '../components/ui/Toast'
 import Icon from '../components/ui/Icon'
@@ -78,6 +78,14 @@ export default function Pricing() {
   const toast = useToast()
   const [loading, setLoading] = useState<string | null>(null)
   const [selectedPlan, setSelectedPlan] = useState('standard')
+  const [gateway, setGateway] = useState<'paystack' | 'flutterwave'>('paystack')
+  const [gateways, setGateways] = useState<{ paystack: { configured: boolean; publicKey: string }; flutterwave: { configured: boolean; publicKey: string } } | null>(null)
+
+  useEffect(() => {
+    if (user) {
+      getGatewayInfo(localStorage.getItem('novaflix-token') || '').then(setGateways)
+    }
+  }, [user])
 
   const handleSelectPlan = async (planId: string) => {
     setSelectedPlan(planId)
@@ -88,7 +96,7 @@ export default function Pricing() {
     if (planId === 'free') return
     setLoading(planId)
     const token = localStorage.getItem('novaflix-token') || ''
-    const res = await initializePayment(token, planId)
+    const res = await initializePayment(token, planId, gateway)
     setLoading(null)
     if (res.success) {
       if (res.authorization_url) {
@@ -112,7 +120,7 @@ export default function Pricing() {
         <div className="relative z-10 text-center mb-16">
           <span className="inline-block px-4 py-1.5 rounded-full bg-surface-container-highest text-secondary font-label-md text-label-md mb-6 uppercase tracking-widest">Pricing Tiers</span>
           <h1 className="text-headline-lg md:text-display-lg mb-4 text-balance">Choose the plan that's right for you</h1>
-          <p className="text-body-lg text-on-surface-variant max-w-2xl mx-auto">From students to cinephiles — every tier unlocks a premium NovaFlix experience.</p>
+          <p className="text-body-lg text-on-surface-variant max-w-2xl mx-auto">From students to cinephiles — every tier unlocks a premium <img src="/leter-mark-logo.png" alt="" className="h-5 w-auto inline align-middle" /> experience.</p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-20" id="plan-selector">
@@ -186,6 +194,42 @@ export default function Pricing() {
               </div>
             )
           })}
+        </div>
+
+        <div className="flex items-center justify-center gap-4 mb-12">
+          <span className="text-on-surface-variant text-body-md">Pay with</span>
+          <button
+            onClick={() => setGateway('paystack')}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-lg border transition-all ${
+              gateway === 'paystack'
+                ? 'bg-surface-container-high border-primary-container/50 scale-105 z-10'
+                : 'bg-surface-container border-outline-variant/30 hover:brightness-110'
+            }`}
+          >
+            <img src="/paystack-logo.svg" alt="Paystack" className="h-6" />
+            <span className="font-label-md text-label-sm">Paystack</span>
+            {gateways && !gateways.paystack.configured && (
+              <span className="tooltip" data-tip="Keys not set — unavailable">
+                <Icon name="warning" className="text-warning text-sm" />
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setGateway('flutterwave')}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-lg border transition-all ${
+              gateway === 'flutterwave'
+                ? 'bg-surface-container-high border-primary-container/50 scale-105 z-10'
+                : 'bg-surface-container border-outline-variant/30 hover:brightness-110'
+            }`}
+          >
+            <img src="/flutterwave-logo.svg" alt="Flutterwave" className="h-6" />
+            <span className="font-label-md text-label-sm">Flutterwave</span>
+            {gateways && !gateways.flutterwave.configured && (
+              <span className="tooltip" data-tip="Keys not set — unavailable">
+                <Icon name="warning" className="text-warning text-sm" />
+              </span>
+            )}
+          </button>
         </div>
 
         <div className="text-center">

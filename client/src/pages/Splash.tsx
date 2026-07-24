@@ -6,45 +6,55 @@ export default function Splash() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      navigate('/login')
-    }, 3500)
+    const timer = setTimeout(() => navigate('/home'), 5000)
     return () => clearTimeout(timer)
   }, [navigate])
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background flex flex-col items-center justify-center">
-      {/* Background gradient animation */}
       <div className="absolute inset-0 z-0">
         <div className="absolute inset-0 bg-gradient-radial from-primary-container/5 via-background to-background animate-pulse" />
       </div>
 
-      {/* Vignette */}
       <div className="absolute inset-0 z-10 bg-[radial-gradient(circle_at_center,transparent_0%,#131313_100%)] opacity-80 pointer-events-none" />
 
-      {/* Main content */}
       <main className="relative z-20 flex flex-col items-center justify-center">
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 1.5, ease: 'easeOut' }}
-          className="breathe-animation flex flex-col items-center"
         >
-          <div className="w-24 h-24 md:w-32 lg:w-40 mb-6 rounded-full bg-primary-container flex items-center justify-center shadow-2xl shadow-primary-container/30">
-            <span className="text-6xl md:text-7xl lg:text-8xl font-extrabold text-on-primary-container tracking-tight">N</span>
-          </div>
-          <h1 className="text-display-md md:text-display-lg text-primary-container font-extrabold tracking-tight drop-shadow-2xl">
-            NovaFlix
-          </h1>
+          <motion.img
+            src="/combination-mark-logo.png"
+            alt="NovaFlix"
+            className="w-48 md:w-56 lg:w-64 h-auto drop-shadow-2xl"
+            animate={{
+              scale: [1, 1.05, 1],
+              filter: [
+                'drop-shadow(0 0 0px rgba(229,9,20,0))',
+                'drop-shadow(0 0 20px rgba(229,9,20,0.4))',
+                'drop-shadow(0 0 0px rgba(229,9,20,0))',
+              ],
+            }}
+            transition={{
+              duration: 4,
+              ease: 'easeInOut',
+              repeat: Infinity,
+              delay: 1.5,
+            }}
+          />
         </motion.div>
       </main>
 
-      {/* Loading bar */}
-      <div className="absolute bottom-16 w-48 md:w-64 h-1 bg-surface-variant/30 rounded-full overflow-hidden z-20 fade-in backdrop-blur-md">
-        <div className="loading-bar rounded-full" />
+      <div className="absolute bottom-16 w-48 md:w-64 h-1 bg-surface-variant/30 rounded-full overflow-hidden z-20 backdrop-blur-md">
+        <motion.div
+          initial={{ width: '0%' }}
+          animate={{ width: '100%' }}
+          transition={{ duration: 5, ease: 'easeInOut' }}
+          className="h-full bg-primary rounded-full"
+        />
       </div>
 
-      {/* Subtle text */}
       <motion.p
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}

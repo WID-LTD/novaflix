@@ -8,5 +8,6 @@ router.post('/initialize', authMiddleware, paymentController.initialize)
 router.get('/verify', authMiddleware, paymentController.verify)
 router.post('/webhook', paymentController.webhook)
 router.get('/status', authMiddleware, paymentController.status)
+router.get('/gateway-info', authMiddleware, paymentController.gatewayInfo)
 
 export default router

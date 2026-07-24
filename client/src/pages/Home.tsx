@@ -4,7 +4,7 @@ import { getTrendingFeed, getNowPlaying, getDetails } from '../lib/api'
 import { useStore } from '../store/useStore'
 import HeroBanner from '../components/features/HeroBanner'
 import ContentRow from '../components/features/ContentRow'
-import MovieCard from '../components/features/MovieCard'
+import HoverCard from '../components/features/HoverCard'
 import Icon from '../components/ui/Icon'
 import type { MediaItem, MediaDetails } from '../types'
 
@@ -122,7 +122,7 @@ export default function Home() {
                 className="flex gap-4 overflow-x-auto hide-scrollbar pb-4 snap-x"
               >
                 {continueWatching.map((cw, i) => (
-                  <MovieCard
+                  <HoverCard
                     key={`${cw.id}-${cw.type}`}
                     item={{
                       id: cw.id,

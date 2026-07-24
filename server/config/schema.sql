@@ -36,7 +36,8 @@ CREATE TABLE IF NOT EXISTS uploads (
   title VARCHAR(255) NOT NULL,
   description TEXT DEFAULT '',
   genre VARCHAR(100),
-  filename VARCHAR(255),
+  filename VARCHAR(500),
+  thumbnail_url VARCHAR(500) DEFAULT '',
   filesize BIGINT DEFAULT 0,
   status VARCHAR(20) DEFAULT 'pending',
   views BIGINT DEFAULT 0,
@@ -104,6 +105,43 @@ CREATE TABLE IF NOT EXISTS likes (
   creator_id UUID REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMP DEFAULT NOW(),
   UNIQUE(user_id, content_id, content_type)
+);
+
+CREATE TABLE IF NOT EXISTS followers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  follower_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  following_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(follower_id, following_id)
+);
+
+CREATE TABLE IF NOT EXISTS achievements (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  key VARCHAR(100) UNIQUE NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  icon VARCHAR(100),
+  criteria JSONB
+);
+
+CREATE TABLE IF NOT EXISTS user_achievements (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  achievement_id UUID REFERENCES achievements(id) ON DELETE CASCADE,
+  earned_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(user_id, achievement_id)
+);
+
+CREATE TABLE IF NOT EXISTS watchlist (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  content_id VARCHAR(255) NOT NULL,
+  content_type VARCHAR(20) NOT NULL,
+  title VARCHAR(255),
+  poster VARCHAR(500),
+  year VARCHAR(10),
+  added_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(user_id, content_id)
 );
 
 CREATE TABLE IF NOT EXISTS comments (

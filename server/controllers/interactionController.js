@@ -1,4 +1,4 @@
-import { addLike, removeLike, getContentLikes, hasUserLiked, addComment, getContentComments, deleteComment, getCommentsForCreator } from '../db.js'
+import { addLike, removeLike, getContentLikes, hasUserLiked, addComment, getContentComments, deleteComment, getCommentsForCreator, addFollower, removeFollower, isFollowing, getFollowerCount, getFollowingCount, checkAndAwardAchievements } from '../db.js'
 
 export async function toggleLike(req, res) {
   try {
@@ -60,6 +60,40 @@ export async function removeComment(req, res) {
     const deleted = await deleteComment(id, req.userId)
     if (!deleted) return res.status(404).json({ error: 'Comment not found' })
     res.json({ success: true, message: 'Comment deleted' })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+export async function toggleFollow(req, res) {
+  try {
+    const { followingId } = req.body
+    if (!followingId) return res.status(400).json({ error: 'followingId required' })
+    if (req.userId === followingId) return res.status(400).json({ error: 'Cannot follow yourself' })
+
+    const following = await isFollowing(req.userId, followingId)
+    if (following) {
+      await removeFollower(req.userId, followingId)
+    } else {
+      await addFollower(req.userId, followingId)
+    }
+
+    const count = await getFollowerCount(followingId)
+    checkAndAwardAchievements(req.userId).catch(() => {})
+    res.json({ success: true, following: !following, count })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+export async function checkFollow(req, res) {
+  try {
+    const { followingId } = req.query
+    if (!followingId) return res.status(400).json({ error: 'followingId required' })
+
+    const following = await isFollowing(req.userId, followingId)
+    const count = await getFollowerCount(followingId)
+    res.json({ success: true, following, count })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

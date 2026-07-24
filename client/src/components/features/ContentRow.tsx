@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { MediaItem } from '../../types'
-import MovieCard from './MovieCard'
+import HoverCard from './HoverCard'
 import Skeleton from '../ui/Skeleton'
 import Icon from '../ui/Icon'
 
@@ -75,7 +75,7 @@ export default function ContentRow({ title, items, loading, link }: ContentRowPr
                 </div>
               ))
             : items.map((item, i) => (
-                <MovieCard key={`${item.id}-${item.type}`} item={item} index={i} />
+                <HoverCard key={`${item.id}-${item.type}`} item={item} index={i} />
               ))}
         </div>
 

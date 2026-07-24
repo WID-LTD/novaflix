@@ -115,37 +115,6 @@
     100% { background-position: -200% 0; }
   }
 
-  .breathe-animation {
-    animation: breathe 4s infinite ease-in-out;
-  }
-
-  @keyframes breathe {
-    0%, 100% { transform: scale(1); opacity: 0.9; }
-    50% { transform: scale(1.05); opacity: 1; filter: drop-shadow(0 0 20px rgba(229, 9, 20, 0.4)); }
-  }
-
-  .loading-bar {
-    width: 0%;
-    height: 4px;
-    background-color: #e50914;
-    animation: loadProgress 3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  }
-
-  @keyframes loadProgress {
-    0% { width: 0%; transform: translateX(0); }
-    50% { width: 100%; transform: translateX(0); }
-    100% { width: 100%; transform: translateX(100%); opacity: 0; }
-  }
-
-  .fade-in {
-    animation: fadeIn 1.5s ease-out forwards;
-  }
-
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
   .line-clamp-2 {
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -207,4 +176,13 @@
     white-space: nowrap;
     border: 0;
   }
+}
+
+@keyframes beam {
+  0% { transform: translateX(-100%) translateY(-100%) rotate(-12deg); }
+  100% { transform: translateX(200%) translateY(200%) rotate(-12deg); }
+}
+
+.animate-beam {
+  animation: beam 2.5s ease-in-out infinite;
 }

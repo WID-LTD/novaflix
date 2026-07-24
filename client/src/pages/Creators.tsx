@@ -102,7 +102,7 @@ export default function Creators() {
             Meet Our <span className="text-primary-container">Creators</span>
           </h2>
           <p className="text-on-surface-variant max-w-xl mx-auto">
-            From indie filmmakers to award-winning directors — discover the talent that makes NovaFlix extraordinary.
+            From indie filmmakers to award-winning directors — discover the talent that makes <img src="/leter-mark-logo.png" alt="" className="h-4 w-auto inline align-middle" /> extraordinary.
           </p>
         </motion.div>
 
@@ -223,7 +223,7 @@ export default function Creators() {
 
           <div className="grid md:grid-cols-3 gap-gutter">
             {[
-              { quote: 'NovaFlix gave me the freedom to distribute my short film globally. The analytics dashboard is a game-changer.', name: 'Scarlett Johansson', role: 'Actress & Producer' },
+              { quote: '<img src="/leter-mark-logo.png" alt="" className="h-4 w-auto inline align-middle" /> gave me the freedom to distribute my short film globally. The analytics dashboard is a game-changer.', name: 'Scarlett Johansson', role: 'Actress & Producer' },
               { quote: 'I was able to monetize my content immediately. The platform\'s recommendation engine brought me thousands of new viewers.', name: 'Nicolas Cage', role: 'Academy Award Winner' },
               { quote: 'The creative control is unmatched. I set my own prices, keep my rights, and connect directly with my audience.', name: 'Tom Hanks', role: 'Filmmaker & Actor' },
             ].map((t, i) => (
@@ -261,7 +261,7 @@ export default function Creators() {
               Ready to Share Your <span className="text-primary-container">Story</span>?
             </h2>
             <p className="text-on-surface-variant text-body-md mb-8 max-w-lg mx-auto">
-              Join hundreds of creators already making an impact on NovaFlix.
+              Join hundreds of creators already making an impact on <img src="/leter-mark-logo.png" alt="" className="h-4 w-auto inline align-middle" />.
             </p>
             <motion.button
               whileHover={{ scale: 1.03 }}

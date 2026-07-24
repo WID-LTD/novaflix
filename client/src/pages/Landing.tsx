@@ -43,7 +43,7 @@ export default function Landing() {
       {/* Nav */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-surface/80 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <span className="text-xl font-bold text-primary-container">NovaFlix</span>
+          <img src="/leter-mark-logo.png" alt="" className="h-7 w-auto" />
           <div className="flex items-center gap-4">
             <Link to="/login" className="text-sm text-on-surface-variant hover:text-on-surface transition-colors">Sign In</Link>
             <Link to="/login" className="text-sm bg-primary-container text-on-primary-container px-5 py-2 rounded-lg font-medium hover:brightness-110 transition-colors">Get Started</Link>
@@ -124,7 +124,7 @@ export default function Landing() {
       <section className="py-24 px-6">
         <div className="max-w-7xl mx-auto">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-4">Loved by viewers and creators</h2>
-          <p className="text-gray-400 text-center mb-16 max-w-xl mx-auto">Hear from the NovaFlix community.</p>
+          <p className="text-gray-400 text-center mb-16 max-w-xl mx-auto">Hear from the <img src="/leter-mark-logo.png" alt="" className="h-4 w-auto inline align-middle" /> community.</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
             {testimonials.map((t, i) => (
               <div key={i} className="bg-surface-secondary border border-white/5 rounded-2xl p-6">
@@ -157,8 +157,8 @@ export default function Landing() {
       {/* Footer */}
       <footer className="py-12 px-6 border-t border-white/5">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <span className="text-accent font-bold">NovaFlix</span>
-          <p className="text-gray-500 text-xs">&copy; 2026 NovaFlix. All rights reserved.</p>
+          <img src="/leter-mark-logo.png" alt="" className="h-6 w-auto" />
+          <p className="text-gray-500 text-xs">&copy; 2026 <img src="/leter-mark-logo.png" alt="" className="h-3 w-auto inline align-middle" />. All rights reserved.</p>
           <div className="flex gap-6 text-xs text-gray-500">
             <Link to="/login" className="hover:text-white transition-colors">Sign In</Link>
             <Link to="/creators" className="hover:text-white transition-colors">Creators</Link>

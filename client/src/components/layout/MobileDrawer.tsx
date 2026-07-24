@@ -91,9 +91,7 @@ export default function MobileDrawer() {
             className="fixed left-0 top-0 bottom-0 z-50 w-[280px] bg-surface-container-lowest border-r border-white/5 flex flex-col lg:hidden"
           >
             <div className="flex items-center justify-between px-4 h-16 border-b border-white/5">
-              <span className="text-headline-md font-extrabold text-primary-container tracking-tight">
-                NovaFlix
-              </span>
+              <img src="/leter-mark-logo.png" alt="" className="w-auto" style={{ height: '167px' }} />
               <button
                 type="button"
                 onClick={(e) => {

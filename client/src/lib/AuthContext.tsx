@@ -146,7 +146,7 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
   return (
     <AuthContext.Provider value={{
       user, loading, pendingUserId,
-      login, register, verifyEmail, resendVerification, logout,
+      login, register, verifyEmail, resendVerification, logout, refresh: loadUser,
       isPremium: currentPlan !== 'free',
       isCreator: user?.role === 'creator' || user?.role === 'admin',
       isAdmin: user?.role === 'admin',

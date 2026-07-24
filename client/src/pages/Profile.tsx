@@ -1,22 +1,28 @@
 import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useState, useRef } from 'react'
 import Icon from '../components/ui/Icon'
 import { useStore } from '../store/useStore'
 import { useAuth } from '../lib/AuthContext'
+import { getMyAchievements, checkAchievements, uploadAvatar } from '../lib/auth'
 import Button from '../components/ui/Button'
 import PremiumBadge from '../components/ui/PremiumBadge'
 
-const badges = [
-  { icon: 'star' as const, label: 'Film Buff', desc: 'Watch 10+ films', earned: false },
-  { icon: 'trending_up' as const, label: 'Trend Setter', desc: 'Add 5 to watchlist', earned: false },
-  { icon: 'schedule' as const, label: 'Night Owl', desc: 'Watch after midnight', earned: false },
-  { icon: 'emoji_events' as const, label: 'Explorer', desc: 'Visit 5 genres', earned: false },
-]
-
 export default function Profile() {
   const navigate = useNavigate()
-  const { user, logout, isPremium } = useAuth()
+  const { user, logout, isPremium, refresh } = useAuth()
   const watchlist = useStore((s) => s.watchlist)
   const continueWatching = useStore((s) => s.continueWatching)
+  const [achievements, setAchievements] = useState<any[]>([])
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    (async () => {
+      await checkAchievements()
+      const res = await getMyAchievements()
+      if (res.success) setAchievements(res.data)
+    })()
+  }, [])
 
   const movieCount = watchlist.filter((w) => w.type === 'movie').length
   const tvCount = watchlist.filter((w) => w.type === 'tv').length
@@ -28,6 +34,22 @@ export default function Profile() {
   const handleLogout = () => {
     logout()
     navigate('/login')
+  }
+
+  const handleAvatarClick = () => {
+    fileRef.current?.click()
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    const token = localStorage.getItem('novaflix-token') || ''
+    const res = await uploadAvatar(token, file)
+    setUploading(false)
+    if (res.success) {
+      refresh()
+    }
   }
 
   return (
@@ -53,9 +75,19 @@ export default function Profile() {
         )}
 
         <div className="flex items-center gap-6 mb-10">
-          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary-container to-secondary flex items-center justify-center">
-            <Icon name="person" className="w-10 h-10" />
-          </div>
+          <button onClick={handleAvatarClick} disabled={uploading} className="relative w-20 h-20 rounded-full overflow-hidden bg-gradient-to-br from-primary-container to-secondary flex items-center justify-center shrink-0 hover:opacity-80 transition-opacity">
+            {user?.avatar ? (
+              <img src={user.avatar} alt={user.name || ''} className="w-full h-full object-cover" />
+            ) : (
+              <Icon name="person" className="w-10 h-10" />
+            )}
+            {uploading && (
+              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+          </button>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
           <div className="flex-1">
             <h1 className="text-headline-lg">{user?.name || 'Guest'}</h1>
             <p className="text-on-surface-variant/60 text-sm mt-1">{user?.email || 'Sign in to sync across devices'}</p>
@@ -153,19 +185,22 @@ export default function Profile() {
           <h2 className="font-label-md text-label-md text-on-surface uppercase tracking-widest mb-4 flex items-center gap-2">
             <Icon name="emoji_events" className="text-primary-container" /> Achievements
           </h2>
-          <div className="grid grid-cols-4 gap-3">
-            {badges.map((b) => (
-              <div
-                key={b.label}
-                className={`bg-surface-container-high border rounded-xl p-4 text-center ${
-                  b.earned ? 'border-primary-container/30' : 'border-white/5 opacity-40'
-                }`}
-              >
-                <Icon name={b.icon} className="mx-auto mb-2 text-on-surface-variant" />
-                <p className="font-label-sm text-label-sm text-on-surface-variant">{b.label}</p>
-                <p className="text-on-surface-variant/40 text-sm">{b.desc}</p>
-              </div>
-            ))}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {achievements.map((a) => {
+              const earned = !!a.earned_at
+              return (
+                <div
+                  key={a.key}
+                  className={`bg-surface-container-high border rounded-xl p-4 text-center ${
+                    earned ? 'border-primary-container/30' : 'border-white/5 opacity-40'
+                  }`}
+                >
+                  <Icon name={a.icon || 'emoji_events'} className="mx-auto mb-2 text-on-surface-variant" />
+                  <p className="font-label-sm text-label-sm text-on-surface-variant">{a.name}</p>
+                  <p className="text-on-surface-variant/40 text-sm">{a.description}</p>
+                </div>
+              )
+            })}
           </div>
         </div>
 
@@ -176,13 +211,6 @@ export default function Profile() {
               <div className="flex items-center gap-3">
                 <Icon name="settings" className="text-on-surface-variant" />
                 <span className="font-label-md text-label-md text-on-surface">Settings</span>
-              </div>
-              <Icon name="chevron_right" className="text-on-surface-variant/40" />
-            </Link>
-            <Link to="/creator" className="w-full flex items-center justify-between px-4 py-3 rounded-xl hover:bg-white/5 transition-colors">
-              <div className="flex items-center gap-3">
-                <Icon name="bar_chart" className="text-primary-container" />
-                <span className="font-label-md text-label-md text-on-surface">Creator Dashboard</span>
               </div>
               <Icon name="chevron_right" className="text-on-surface-variant/40" />
             </Link>

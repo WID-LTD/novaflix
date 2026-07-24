@@ -16,5 +16,7 @@ router.get('/trending', tmdbController.getTrending)
 router.get('/now-playing', tmdbController.getNowPlaying)
 router.get('/genres', tmdbController.getGenres)
 router.get('/category', tmdbController.getCategoryMovies)
+router.get('/discover', tmdbController.getDiscover)
+router.get('/search/all', tmdbController.searchAll)
 
 export default router

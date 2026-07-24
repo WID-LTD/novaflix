@@ -1,21 +1,43 @@
 import { v4 as uuidv4 } from 'uuid'
 import pool from '../config/database.js'
 import { addUpload, getUploadsByUserId, getTipsForCreator, getCommentsForCreator, getTotalLikesForCreator, getCreatorDashboardStats } from '../db.js'
+import { uploadFile } from '../lib/r2.js'
 
 export async function addUploadHandler(req, res) {
   try {
-    const { title, description, genre, filename, filesize } = req.body
+    const { title, description, genre } = req.body
     if (!title || !genre) return res.status(400).json({ error: 'Title and genre required' })
 
+    const videoFile = req.files?.video?.[0]
+    const thumbFile = req.files?.thumbnail?.[0]
+    const ext = videoFile ? videoFile.originalname.split('.').pop() || 'mp4' : 'mp4'
+    const id = uuidv4()
+    const videoKey = `movies/${req.userId}/${id}.${ext}`
+    let videoUrl = ''
+
+    if (videoFile) {
+      const result = await uploadFile({ buffer: videoFile.buffer, key: videoKey, contentType: videoFile.mimetype })
+      if (!result.success) return res.status(500).json({ error: 'Video upload failed' })
+      videoUrl = result.url
+    }
+
+    let thumbnailUrl = ''
+    if (thumbFile) {
+      const thumbKey = `movies/${req.userId}/${id}-thumb.jpg`
+      const result = await uploadFile({ buffer: thumbFile.buffer, key: thumbKey, contentType: thumbFile.mimetype })
+      if (result.success) thumbnailUrl = result.url
+    }
+
     const upload = {
-      id: uuidv4(),
+      id,
       userId: req.userId,
       title,
       description: description || '',
       genre,
-      filename: filename || `${uuidv4()}.mp4`,
-      filesize: filesize || 0,
-      status: 'pending',
+      filename: videoUrl,
+      thumbnailUrl,
+      filesize: videoFile?.size || 0,
+      status: 'active',
       views: 0,
       minutesWatched: 0,
       revenue: 0,

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import Icon from '../components/ui/Icon'
-import MovieCard from '../components/features/MovieCard'
+import HoverCard from '../components/features/HoverCard'
 import Skeleton from '../components/ui/Skeleton'
 import { getGenres, getCategoryMovies } from '../lib/api'
 import type { MediaItem } from '../types'
@@ -141,7 +141,7 @@ export default function CategoryPage() {
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-gutter">
               {movies.map((item, i) => (
-                <MovieCard key={`${item.id}-${item.type}-${i}`} item={item} index={i} />
+                <HoverCard key={`${item.id}-${item.type}-${i}`} item={item} index={i} />
               ))}
             </div>
             {page < totalPages && (

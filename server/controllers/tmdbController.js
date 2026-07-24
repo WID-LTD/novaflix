@@ -1,3 +1,5 @@
+import pool from '../config/database.js'
+
 export function search(req, res) {
   const { query, type } = req.query
   if (!query) return res.status(400).json({ error: 'Query param is required' })
@@ -207,6 +209,36 @@ export function getCategoryMovies(req, res) {
     .catch((err) => res.status(500).json({ error: err.message }))
 }
 
+export function getDiscover(req, res) {
+  const tmdb = req.app.locals.tmdb
+  const { genre_id, type, sort_by, page, min_votes } = req.query
+  const mediaType = type === 'tv' ? 'tv' : 'movie'
+  const pageNum = Math.min(Math.max(parseInt(page, 10) || 1, 1), 500)
+  const params = {
+    language: 'en-US',
+    sort_by: sort_by || 'popularity.desc',
+    page: pageNum,
+  }
+  if (genre_id) params.with_genres = genre_id
+  if (min_votes) params['vote_count.gte'] = parseInt(min_votes, 10)
+
+  tmdb.get(`/discover/${mediaType}`, { params })
+    .then(({ data }) => {
+      const results = (data.results || []).map((m) => ({
+        id: m.id,
+        title: m.title || m.name,
+        year: (m.release_date || m.first_air_date || '').split('-')[0] || 'N/A',
+        poster: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : null,
+        backdrop: m.backdrop_path ? `https://image.tmdb.org/t/p/w1280${m.backdrop_path}` : null,
+        overview: m.overview || '',
+        type: mediaType,
+        premium: (m.vote_average || 0) >= 8,
+      }))
+      res.json({ success: true, data: results, total_pages: data.total_pages || 1, page: pageNum })
+    })
+    .catch((err) => res.status(500).json({ error: err.message }))
+}
+
 export async function seedActors(req, res) {
   const tmdb = req.app.locals.tmdb
   const { upsertActor } = await import('../db.js')
@@ -262,4 +294,92 @@ export function tvSeason(req, res) {
       console.error(err.message)
       res.json({ success: false, error: 'Failed to fetch season data' })
     })
+}
+
+function normalizeResult(m, type) {
+  return {
+    id: m.id,
+    title: m.title || m.name || 'Untitled',
+    year: (m.release_date || m.first_air_date || '').split('-')[0] || '',
+    poster: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : m.poster || null,
+    type,
+    rating: m.vote_average || 0,
+    overview: m.overview || '',
+    source: 'tmdb',
+  }
+}
+
+export async function searchAll(req, res) {
+  try {
+    const { q } = req.query
+    if (!q) return res.status(400).json({ error: 'Query param required' })
+
+    const tmdb = req.app.locals.tmdb
+    const results = []
+
+    // 1. TMDB movies
+    try {
+      const { data } = await tmdb.get('/search/movie', { params: { query: q, language: 'en-US' } })
+      for (const m of (data.results || []).slice(0, 10)) {
+        results.push(normalizeResult(m, 'movie'))
+      }
+    } catch {}
+
+    // 2. TMDB TV
+    try {
+      const { data } = await tmdb.get('/search/tv', { params: { query: q, language: 'en-US' } })
+      for (const m of (data.results || []).slice(0, 10)) {
+        results.push(normalizeResult(m, 'tv'))
+      }
+    } catch {}
+
+    // 3. Creator uploads
+    try {
+      const { rows } = await pool.query(
+        `SELECT id, title, description, genre, filename, thumbnail_url, views, created_at
+         FROM uploads WHERE status = 'active' AND title ILIKE $1
+         ORDER BY views DESC LIMIT 10`,
+        [`%${q}%`]
+      )
+      for (const r of rows) {
+        results.push({
+          id: r.id,
+          title: r.title,
+          year: r.created_at ? new Date(r.created_at).getFullYear().toString() : '',
+          poster: r.thumbnail_url || null,
+          type: 'movie',
+          rating: 0,
+          overview: r.description || '',
+          source: 'creator',
+          url: r.filename,
+        })
+      }
+    } catch {}
+
+    // 4. Archive items
+    try {
+      const { rows } = await pool.query(
+        `SELECT id, title, description, image_url, created_at
+         FROM archive_items WHERE title ILIKE $1
+         ORDER BY created_at DESC LIMIT 5`,
+        [`%${q}%`]
+      )
+      for (const r of rows) {
+        results.push({
+          id: r.id,
+          title: r.title,
+          year: r.created_at ? new Date(r.created_at).getFullYear().toString() : '',
+          poster: r.image_url || null,
+          type: 'movie',
+          rating: 0,
+          overview: r.description || '',
+          source: 'archive',
+        })
+      }
+    } catch {}
+
+    res.json({ success: true, data: results })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
 }

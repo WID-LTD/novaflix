@@ -97,6 +97,21 @@ export async function getUserStats(token: string): Promise<any> {
   }
 }
 
+export async function uploadAvatar(token: string, file: File): Promise<any> {
+  try {
+    const formData = new FormData()
+    formData.append('avatar', file)
+    const res = await fetch(`${BASE}/user/avatar`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
 export async function changePassword(token: string, currentPassword: string, newPassword: string): Promise<AuthResponse> {
   try {
     const res = await fetch(`${BASE}/user/change-password`, {
@@ -133,12 +148,18 @@ export async function getPaymentStatus(token: string): Promise<any> {
   }
 }
 
-export async function uploadFilm(token: string, data: any): Promise<any> {
+export async function uploadFilm(token: string, data: { title: string; description: string; genre: string; videoFile?: File; posterFile?: File }): Promise<any> {
   try {
+    const formData = new FormData()
+    formData.append('title', data.title)
+    formData.append('description', data.description)
+    formData.append('genre', data.genre)
+    if (data.videoFile) formData.append('video', data.videoFile)
+    if (data.posterFile) formData.append('thumbnail', data.posterFile)
     const res = await fetch(`${BASE}/creator/upload`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify(data),
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
     })
     return res.json()
   } catch {
@@ -510,6 +531,29 @@ export async function checkLike(contentId: string, contentType: string): Promise
   } catch { return { success: false, error: 'Network error' } }
 }
 
+// Follows
+export async function toggleFollow(followingId: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/interactions/follow`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ followingId }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function checkFollow(followingId: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/interactions/follow?followingId=${followingId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
 // Comments
 export async function getComments(contentId: string, contentType: string): Promise<any> {
   try {
@@ -592,16 +636,25 @@ export async function getCreatorComments(token: string): Promise<any> {
   } catch { return { success: false, comments: [], error: 'Network error' } }
 }
 
-// Payment (Paystack)
-export async function initializePayment(token: string, plan: string): Promise<any> {
+// Payment
+export async function initializePayment(token: string, plan: string, gateway?: string): Promise<any> {
   try {
     const res = await fetch(`${BASE}/payment/initialize`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ plan }),
+      body: JSON.stringify({ plan, gateway }),
     })
     return res.json()
   } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getGatewayInfo(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/payment/gateway-info`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { paystack: { configured: false }, flutterwave: { configured: false } } }
 }
 
 export async function verifyPayment(token: string, reference: string, plan: string): Promise<any> {
@@ -975,4 +1028,36 @@ export function setToken(token: string) {
 
 export function removeToken() {
   localStorage.removeItem('novaflix-token')
+}
+
+// Achievements
+export async function getAchievements(): Promise<any> {
+  try {
+    const token = getToken()
+    const headers: Record<string, string> = {}
+    if (token) headers.Authorization = `Bearer ${token}`
+    const res = await fetch(`${BASE}/achievements`, { headers })
+    return res.json()
+  } catch { return { success: false, data: [], error: 'Network error' } }
+}
+
+export async function getMyAchievements(): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/achievements/mine`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, data: [], error: 'Network error' } }
+}
+
+export async function checkAchievements(): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/achievements/check`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, awarded: [], error: 'Network error' } }
 }

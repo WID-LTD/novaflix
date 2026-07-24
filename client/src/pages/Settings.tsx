@@ -308,12 +308,11 @@ export default function Settings() {
                 <Icon name="bar_chart" className="text-primary-container" /> Creator Tools
               </h2>
               <div className="bg-surface-container-high border border-white/5 rounded-xl divide-y divide-outline/10">
-                {[
-                  { to: '/creator', icon: 'bar_chart' as const, label: 'Dashboard' },
-                  { to: '/upload', icon: 'cloud_upload' as const, label: 'Upload Film' },
-                  { to: '/learn', icon: 'school' as const, label: 'E-Learning' },
-                  { to: '/store', icon: 'storefront' as const, label: 'Merch Store' },
-                ].map(item => (
+                  {[
+                    { to: '/upload', icon: 'cloud_upload' as const, label: 'Upload Film' },
+                    { to: '/learn', icon: 'school' as const, label: 'E-Learning' },
+                    { to: '/store', icon: 'storefront' as const, label: 'Merch Store' },
+                  ].map(item => (
                   <Link key={item.to} to={item.to} className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/5 transition-colors">
                     <div className="flex items-center gap-3">
                       <Icon name={item.icon} className="text-on-surface-variant" />

@@ -90,8 +90,8 @@ export default function Register() {
 
       <div className="relative z-10 w-full max-w-lg px-margin-mobile">
         <div className="text-center mb-8">
-          <h1 className="text-headline-lg-mobile md:text-headline-lg text-primary tracking-tighter font-extrabold">NovaFlix</h1>
-          <p className="text-on-surface-variant mt-2 font-body-md">Join the Cinematic Experience</p>
+          <img src="/leter-mark-logo.png" alt="" className="mb-2 mx-auto" style={{ height: '400px', width: '800px', objectFit: 'contain' }} />
+          <p className="text-on-surface-variant mt-2 font-body-md" style={{ position: 'relative', bottom: '120px' }}>Join the Cinematic Experience</p>
           {refCode && (
             <p className="text-secondary text-xs mt-2 flex items-center justify-center gap-1">
               <Icon name="group_add" className="w-3.5 h-3.5" />
@@ -106,7 +106,7 @@ export default function Register() {
         </div>
 
         {/* Form Card */}
-        <div className="glass-panel rounded-xl shadow-2xl p-6 md:p-8 relative min-h-[400px] border border-outline-variant/20">
+        <div className="glass-panel rounded-xl shadow-2xl p-6 md:p-8 min-h-[400px] border border-outline-variant/20" style={{ position: 'relative', bottom: '120px' }}>
           {/* Step 1: Credentials */}
           <div className={`transition-all duration-400 ${step === 1 ? 'opacity-100 relative' : 'opacity-0 absolute pointer-events-none scale-95'}`}>
             <h2 className="text-headline-md mb-6">Create Account</h2>

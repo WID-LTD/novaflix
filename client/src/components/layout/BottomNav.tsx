@@ -13,7 +13,7 @@ interface NavItem {
 function GuestBottomNav(): NavItem[] {
   return [
     { to: '/home', icon: 'home', label: 'Home', match: (p) => p === '/' || p.startsWith('/home') },
-    { to: '/search?type=movie', icon: 'search', label: 'Search', match: (p) => p.startsWith('/search') },
+    { to: '/search', icon: 'search', label: 'Search', match: (p) => p.startsWith('/search') },
     { to: '/discover', icon: 'explore', label: 'Discover', match: (p) => p.startsWith('/discover') },
     { to: '/category', icon: 'category', label: 'Categories', match: (p) => p.startsWith('/category') },
     { to: '/login', icon: 'login', label: 'Sign In', match: (p) => p.startsWith('/login') || p.startsWith('/register') },
@@ -23,7 +23,7 @@ function GuestBottomNav(): NavItem[] {
 function UserBottomNav(): NavItem[] {
   return [
     { to: '/home', icon: 'home', label: 'Home', match: (p) => p === '/' || p.startsWith('/home') },
-    { to: '/search?type=movie', icon: 'search', label: 'Search', match: (p) => p.startsWith('/search') },
+    { to: '/search', icon: 'search', label: 'Search', match: (p) => p.startsWith('/search') },
     { to: '/discover', icon: 'explore', label: 'Discover', match: (p) => p.startsWith('/discover') },
     { to: '/category', icon: 'category', label: 'Categories', match: (p) => p.startsWith('/category') },
     { to: '/profile', icon: 'person', label: 'Profile', match: (p) => p.startsWith('/profile') },
@@ -34,7 +34,7 @@ function CreatorBottomNav(): NavItem[] {
   return [
     { to: '/home', icon: 'home', label: 'Home', match: (p) => p === '/' || p.startsWith('/home') },
     { to: '/creator', icon: 'bar_chart', label: 'Dashboard', match: (p) => p.startsWith('/creator') || p.startsWith('/upload') },
-    { to: '/search?type=movie', icon: 'search', label: 'Search', match: (p) => p.startsWith('/search') },
+    { to: '/search', icon: 'search', label: 'Search', match: (p) => p.startsWith('/search') },
     { to: '/discover', icon: 'explore', label: 'Discover', match: (p) => p.startsWith('/discover') },
     { to: '/profile', icon: 'person', label: 'Profile', match: (p) => p.startsWith('/profile') },
   ]

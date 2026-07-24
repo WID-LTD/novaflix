@@ -1,7 +1,8 @@
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { getDetails } from '../lib/api'
+import { getSimilarRecommendations, checkAchievements } from '../lib/auth'
 import { useStore } from '../store/useStore'
 import { useAuth } from '../lib/AuthContext'
 import Button from '../components/ui/Button'
@@ -13,6 +14,7 @@ import Icon from '../components/ui/Icon'
 import SeasonEpisodeSelector from '../components/features/SeasonEpisodeSelector'
 import TipButton from '../components/ui/TipButton'
 import LikeButton from '../components/features/LikeButton'
+import HoverCard from '../components/features/HoverCard'
 import CommentSection from '../components/features/CommentSection'
 import CreatorCard from '../components/ui/CreatorCard'
 import type { MediaDetails } from '../types'
@@ -35,6 +37,13 @@ export default function MovieDetail() {
 
   const details = data?.success ? data.data : null
   const inWatchlist = details ? watchlist.some((w) => w.id === details.id) : false
+
+  const { data: similarData } = useQuery({
+    queryKey: ['similar', id, details?.type],
+    queryFn: () => getSimilarRecommendations(id!, details?.type),
+    enabled: !!id && !!details?.type,
+  })
+  const similarItems = similarData?.data || []
 
   const handleWatch = (season?: number, episode?: number) => {
     if (!user) {
@@ -60,6 +69,7 @@ export default function MovieDetail() {
         type: details.type,
         year: details.year,
       })
+      checkAchievements()
     }
   }
 
@@ -236,7 +246,8 @@ export default function MovieDetail() {
                 </div>
               </div>
             </div>
-            <div className="mt-8">
+            <div className="mt-8 space-y-3">
+              <LikeButton contentId={details.id} contentType={details.type} className="w-full justify-center" />
               <button className="w-full py-3 rounded-lg border border-primary/30 text-primary font-label-md hover:bg-primary/10 transition-colors">
                 Rate this Movie
               </button>
@@ -272,19 +283,24 @@ export default function MovieDetail() {
         )}
 
         {/* More Like This */}
-        <div className="space-y-8">
-          <div className="flex items-center justify-between">
-            <h2 className="text-headline-md">More Like This</h2>
-            <a className="text-primary font-label-md hover:underline" href="#">View All</a>
+        {similarItems.length > 0 && (
+          <div className="space-y-8">
+            <div className="flex items-center justify-between">
+              <h2 className="text-headline-md">More Like This</h2>
+              <Link
+                to={`/discover?similar_to=${id}&type=${details.type}`}
+                className="text-primary font-label-md hover:underline"
+              >
+                View All
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-gutter">
+              {similarItems.slice(0, 12).map((item: any, i: number) => (
+                <HoverCard key={`${item.id}-${item.type}`} item={item} index={i} />
+              ))}
+            </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-gutter">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="movie-card-hover group cursor-pointer relative aspect-[2/3] rounded-xl overflow-hidden shadow-lg bg-surface-container">
-                <div className="w-full h-full shimmer" />
-              </div>
-            ))}
-          </div>
-        </div>
+        )}
       </section>
     </div>
   )

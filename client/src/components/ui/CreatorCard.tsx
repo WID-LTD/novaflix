@@ -1,6 +1,7 @@
 import type { FC } from 'react'
 import { motion } from 'framer-motion'
 import Icon from './Icon'
+import FollowButton from './FollowButton'
 
 interface CreatorCardProps {
   name: string
@@ -9,6 +10,7 @@ interface CreatorCardProps {
   filmCount?: number
   followers?: number
   location?: string
+  creatorId?: string
   className?: string
 }
 
@@ -19,6 +21,7 @@ const CreatorCard: FC<CreatorCardProps> = ({
   filmCount = 0,
   followers = 0,
   location,
+  creatorId,
   className = '',
 }) => {
   return (
@@ -56,6 +59,12 @@ const CreatorCard: FC<CreatorCardProps> = ({
           </div>
         )}
       </div>
+
+      {creatorId && (
+        <div className="mt-3">
+          <FollowButton creatorId={creatorId} />
+        </div>
+      )}
     </motion.div>
   )
 }

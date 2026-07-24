@@ -5,11 +5,14 @@ import {
   createProductHandler, updateProductHandler, listProducts, getProduct, myProducts,
   checkout, verifyOrder, getOrders,
 } from '../controllers/storeController.js'
+import multer from 'multer'
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } })
 
 const router = Router()
 
-router.post('/', authMiddleware, creatorOrAdminMiddleware, createProductHandler)
-router.patch('/:id', authMiddleware, creatorOrAdminMiddleware, updateProductHandler)
+router.post('/', authMiddleware, creatorOrAdminMiddleware, upload.single('image'), createProductHandler)
+router.patch('/:id', authMiddleware, creatorOrAdminMiddleware, upload.single('image'), updateProductHandler)
 router.get('/', listProducts)
 router.get('/mine', authMiddleware, creatorOrAdminMiddleware, myProducts)
 router.get('/:id', getProduct)

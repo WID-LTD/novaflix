@@ -15,8 +15,6 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { to: '/home', icon: 'home', label: 'Home' },
-  { to: '/search?type=movie', icon: 'movie', label: 'Movies' },
   { to: '/tv-shows', icon: 'live_tv', label: 'TV Shows' },
   { to: '/discover?sort=trending', icon: 'trending_up', label: 'Trending' },
   { to: '/discover?sort=top_rated', icon: 'star', label: 'Top Rated' },
@@ -61,13 +59,15 @@ export default function Sidebar() {
       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
       className="hidden lg:flex fixed left-0 top-0 h-screen bg-surface-container-lowest border-r border-white/5 z-30 flex-col py-4 overflow-hidden pt-16"
     >
-      <div className="flex items-center gap-3 px-4 mb-6 h-10">
-        <span className={`text-headline-md font-extrabold text-primary-container tracking-tight ${collapsed ? 'text-center w-full' : ''}`}>
-          {collapsed ? 'N' : 'NovaFlix'}
-        </span>
-      </div>
+        <div className="flex items-center gap-3 px-4 mb-6 h-10">
+          {collapsed ? (
+            <span className="text-headline-md font-extrabold text-primary-container tracking-tight text-center w-full">N</span>
+          ) : (
+            <img src="/leter-mark-logo.png" alt="" className="w-auto" style={{ height: '167px' }} />
+          )}
+        </div>
 
-      <div className="flex-1 flex flex-col gap-1 px-2 overflow-y-auto">
+      <div className="flex-1 flex flex-col gap-1 px-2 overflow-y-auto pb-6">
         {visibleNav.map((item) => (
           <NavLink
             key={item.to}

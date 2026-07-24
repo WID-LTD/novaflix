@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore'
 import SearchInput from '../components/ui/SearchInput'
 import Button from '../components/ui/Button'
 import Tabs from '../components/ui/Tabs'
-import MovieCard from '../components/features/MovieCard'
+import HoverCard from '../components/features/HoverCard'
 import type { MediaItem } from '../types'
 
 const filterTabs = [
@@ -63,7 +63,7 @@ export default function Watchlist() {
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-gutter">
                 {mediaItems.map((item, i) => (
                   <div key={`${item.id}-${item.type}`} className="relative group">
-                    <MovieCard item={item} index={i} />
+                    <HoverCard item={item} index={i} />
                     <button
                       onClick={() => removeFromWatchlist(item.id)}
                       className="absolute top-2 right-2 p-3 rounded-lg bg-black/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary-container/80"

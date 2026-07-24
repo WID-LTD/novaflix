@@ -24,6 +24,7 @@ import courseRoutes from './courseRoutes.js'
 import archiveRoutes from './archiveRoutes.js'
 import communityRoutes from './communityRoutes.js'
 import downloadRoutes from './downloadRoutes.js'
+import achievementRoutes from './achievementRoutes.js'
 
 const router = Router()
 
@@ -52,5 +53,6 @@ router.use('/', tmdbRoutes)
 router.use('/', streamRoutes)
 router.use('/community', communityRoutes)
 router.use('/downloads', downloadRoutes)
+router.use('/achievements', achievementRoutes)
 
 export default router

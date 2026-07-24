@@ -26,7 +26,7 @@ export default function ProfileGateway() {
     <div className="min-h-screen flex flex-col bg-background">
       <header className="fixed top-0 w-full z-50 flex justify-center items-center px-6 h-20 bg-gradient-to-b from-black/80 to-transparent">
         <h1 className="text-headline-lg-mobile md:text-headline-lg font-extrabold text-primary-container tracking-tighter">
-          NovaFlix
+          <img src="/leter-mark-logo.png" alt="" className="h-10 md:h-12 w-auto mx-auto" />
         </h1>
       </header>
 
@@ -76,7 +76,7 @@ export default function ProfileGateway() {
       </main>
 
       <footer className="py-8 text-center opacity-40">
-        <p className="font-label-sm text-label-sm">NovaFlix Original Entertainment</p>
+        <p className="font-label-sm text-label-sm"><img src="/leter-mark-logo.png" alt="" className="h-3 w-auto inline align-middle" /> Original Entertainment</p>
       </footer>
     </div>
   )

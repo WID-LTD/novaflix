@@ -10,6 +10,7 @@ const Landing = lazy(() => import('./pages/Landing'))
 const Splash = lazy(() => import('./pages/Splash'))
 const Home = lazy(() => import('./pages/Home'))
 const Search = lazy(() => import('./pages/Search'))
+const SearchResults = lazy(() => import('./pages/SearchResults'))
 const MovieDetail = lazy(() => import('./pages/MovieDetail'))
 const Watch = lazy(() => import('./pages/Watch'))
 const TVShows = lazy(() => import('./pages/TVShows'))
@@ -51,6 +52,7 @@ const CreatorProducts = lazy(() => import('./pages/CreatorProducts'))
 const CreatorCourses = lazy(() => import('./pages/CreatorCourses'))
 const Archive = lazy(() => import('./pages/Archive'))
 const ArchiveDetail = lazy(() => import('./pages/ArchiveDetail'))
+const PaymentSuccess = lazy(() => import('./pages/PaymentSuccess'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 
 function PageLoading() {
@@ -72,19 +74,20 @@ export default function App() {
   return (
     <Suspense fallback={<PageLoading />}>
       <Routes>
-        <Route path="/landing" element={<Landing />} />
+        <Route path="/" element={<Splash />} />
         <Route path="/splash" element={<Splash />} />
+        <Route path="/landing" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/profiles" element={<ProfileGateway />} />
         <Route path="/creator/login" element={<CreatorLogin />} />
         <Route element={<Layout />}>
-          <Route path="/" element={<Home />} />
           <Route path="/home" element={<Home />} />
           <Route path="/community" element={<AuthGuard><Community /></AuthGuard>} />
           <Route path="/community/:id" element={<AuthGuard><Community /></AuthGuard>} />
           <Route path="/downloads" element={<AuthGuard><Downloads /></AuthGuard>} />
           <Route path="/search" element={<Search />} />
+          <Route path="/search/results" element={<SearchResults />} />
           <Route path="/movie/:id" element={<MovieDetail />} />
           <Route path="/tv/:id" element={<MovieDetail />} />
           <Route path="/watch" element={<AuthGuard><Watch /></AuthGuard>} />
@@ -94,6 +97,7 @@ export default function App() {
           <Route path="/profile" element={<AuthGuard><Profile /></AuthGuard>} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/pricing" element={<Pricing />} />
+          <Route path="/payment/success" element={<AuthGuard><PaymentSuccess /></AuthGuard>} />
           <Route path="/hooks" element={<AuthGuard><HooksFeed /></AuthGuard>} />
           <Route path="/category" element={<CategoryPage />} />
           <Route path="/category/:slug" element={<CategoryPage />} />

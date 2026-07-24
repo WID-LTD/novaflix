@@ -10,11 +10,13 @@ export default function TopNav() {
   const navigate = useNavigate()
   const toggleSidebar = useStore((s) => s.toggleSidebar)
   const toggleMobileDrawer = useStore((s) => s.toggleMobileDrawer)
+  const sidebarCollapsed = useStore((s) => s.sidebarCollapsed)
+  const mobileDrawerOpen = useStore((s) => s.mobileDrawerOpen)
   const [searchOpen, setSearchOpen] = useState(false)
 
   return (
     <header className="fixed top-0 left-0 right-0 z-40 glass-panel h-16 flex justify-between items-center px-margin-mobile md:px-margin-desktop">
-      <div className="flex items-center gap-3 min-w-0">
+      <div className={`flex items-center gap-3 min-w-0 ${searchOpen ? 'hidden md:flex' : ''}`}>
         <button
           onClick={toggleMobileDrawer}
           className="lg:hidden p-3 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-colors shrink-0"
@@ -29,18 +31,19 @@ export default function TopNav() {
         >
           <Icon name="menu" />
         </button>
-        <Link to="/" className="flex items-center gap-2 shrink-0">
-          <span className="text-headline-md md:text-headline-lg text-primary-container tracking-tight font-extrabold">
-            NovaFlix
-          </span>
+        <Link to="/home" className={`flex items-center gap-2 shrink-0 ${!sidebarCollapsed ? 'lg:hidden' : ''} ${mobileDrawerOpen ? 'hidden' : ''}`}>
+          <img src="/leter-mark-logo.png" alt="" className="w-auto" style={{ height: '167px' }} />
         </Link>
-        <nav className={`hidden lg:flex items-center gap-6 ml-8 ${searchOpen ? 'lg:hidden' : ''}`}>
+        <nav className="hidden lg:flex items-center gap-6 ml-8">
           <Link to="/home" className="font-label-md text-label-md text-primary transition-colors">Home</Link>
           <Link to="/search?type=movie" className="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors">Movies</Link>
           <Link to="/tv-shows" className="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors">TV Shows</Link>
           <Link to="/discover?sort=trending" className="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors">New & Popular</Link>
         </nav>
       </div>
+      {searchOpen && (
+        <span className="md:hidden text-headline-md font-extrabold text-primary-container tracking-tight shrink-0">N</span>
+      )}
       {searchOpen ? (
         <SearchLightbox open variant="navbar" onClose={() => setSearchOpen(false)} />
       ) : (
