@@ -8,7 +8,6 @@ import SearchLightbox from '../ui/SearchLightbox'
 export default function TopNav() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const toggleSidebar = useStore((s) => s.toggleSidebar)
   const toggleMobileDrawer = useStore((s) => s.toggleMobileDrawer)
   const sidebarCollapsed = useStore((s) => s.sidebarCollapsed)
   const mobileDrawerOpen = useStore((s) => s.mobileDrawerOpen)
@@ -21,13 +20,6 @@ export default function TopNav() {
           onClick={toggleMobileDrawer}
           className="lg:hidden p-3 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-colors shrink-0"
           aria-label="Open navigation menu"
-        >
-          <Icon name="menu" />
-        </button>
-        <button
-          onClick={toggleSidebar}
-          className="hidden lg:flex p-3 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-colors shrink-0"
-          aria-label="Toggle sidebar"
         >
           <Icon name="menu" />
         </button>

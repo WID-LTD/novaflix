@@ -44,6 +44,7 @@ const businessItems: NavItem[] = [
 
 export default function Sidebar() {
   const collapsed = useStore((s) => s.sidebarCollapsed)
+  const toggleSidebar = useStore((s) => s.toggleSidebar)
   const { user, isCreator, isAdmin } = useAuth()
 
   const visibleNav = navItems.filter(i => !i.auth || user)
@@ -60,6 +61,13 @@ export default function Sidebar() {
       className="hidden lg:flex fixed left-0 top-0 h-screen bg-surface-container-lowest border-r border-white/5 z-30 flex-col py-4 overflow-hidden pt-16"
     >
         <div className="flex items-center gap-3 px-4 mb-6 h-10">
+          <button
+            onClick={toggleSidebar}
+            className="shrink-0 p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-colors"
+            aria-label="Toggle sidebar"
+          >
+            <Icon name="menu" />
+          </button>
           {collapsed ? (
             <span className="text-headline-md font-extrabold text-primary-container tracking-tight text-center w-full">N</span>
           ) : (
