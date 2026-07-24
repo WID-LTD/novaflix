@@ -1,115 +1,224 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
 import '../services/api_service.dart';
 import '../models/media_item.dart';
-import '../theme/app_theme.dart';
+import '../providers/auth_provider.dart';
+import '../providers/watchlist_provider.dart';
+import '../widgets/ui/index.dart';
+import '../widgets/features/index.dart';
 
-final _movieDetailProvider = FutureProvider.family<MediaItem, int>((ref, id) async {
+final _movieDetailProvider = FutureProvider.family<MediaItem?, int>((ref, id) async {
   final api = ref.read(apiServiceProvider);
-  final res = await api.getDetails(id, 'movie');
-  return MediaItem.fromJson(res.data as Map<String, dynamic>);
+  try {
+    final res = await api.getDetails(id, 'movie');
+    final data = res.data['data'] as Map<String, dynamic>? ?? res.data as Map<String, dynamic>;
+    return MediaItem.fromJson(data);
+  } catch (_) {
+    return null;
+  }
+});
+
+final _similarProvider = FutureProvider.family<List<MediaItem>, int>((ref, id) async {
+  final api = ref.read(apiServiceProvider);
+  try {
+    final res = await api.getSimilarRecommendations(id);
+    final data = res.data['data'] as List? ?? [];
+    return data.map((e) => MediaItem.fromJson(e as Map<String, dynamic>)).toList();
+  } catch (_) {
+    return [];
+  }
 });
 
 class MovieDetailScreen extends ConsumerWidget {
   final int movieId;
+
   const MovieDetailScreen({super.key, required this.movieId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final movieAsync = ref.watch(_movieDetailProvider(movieId));
+    final detail = ref.watch(_movieDetailProvider(movieId));
+    final similar = ref.watch(_similarProvider(movieId));
 
     return Scaffold(
-      backgroundColor: AppTheme.black,
-      body: movieAsync.when(
+      backgroundColor: AppColors.background,
+      body: detail.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: AppTheme.gray))),
-        data: (movie) => CustomScrollView(
-          slivers: [
-            SliverAppBar(
-              expandedHeight: 300,
-              pinned: true,
-              flexibleSpace: FlexibleSpaceBar(
-                background: movie.backdropUrl != null
-                    ? CachedNetworkImage(imageUrl: movie.backdropUrl!, fit: BoxFit.cover)
-                    : Container(color: AppTheme.dark),
-              ),
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back, color: AppTheme.white),
-                onPressed: () => context.pop(),
-              ),
-              backgroundColor: AppTheme.dark,
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(movie.title, style: const TextStyle(
-                      fontSize: 26, fontWeight: FontWeight.w700, color: AppTheme.white,
-                    )),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        if (movie.voteAverage != null) ...[
-                          const Icon(Icons.star, color: AppTheme.red, size: 18),
-                          const SizedBox(width: 4),
-                          Text('${movie.voteAverage!.toStringAsFixed(1)}/10', style: const TextStyle(color: AppTheme.gray)),
-                          const SizedBox(width: 16),
-                        ],
-                        if (movie.releaseDate != null)
-                          Text(movie.releaseDate!.substring(0, 4), style: const TextStyle(color: AppTheme.gray)),
-                        if (movie.runtime != null) ...[
-                          const SizedBox(width: 16),
-                          Text('${movie.runtime! ~/ 60}h ${movie.runtime! % 60}m', style: const TextStyle(color: AppTheme.gray)),
-                        ],
-                      ],
-                    ),
-                    if (movie.genres != null && movie.genres!.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 4,
-                        children: movie.genres!.map((g) => Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppTheme.card,
-                            borderRadius: BorderRadius.circular(16),
+        error: (err, _) => Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, size: 48, color: AppColors.error),
+              const SizedBox(height: 16),
+              Text('Error loading details', style: AppTypography.bodyMd),
+              const SizedBox(height: 16),
+              AppButton(label: 'Go Back', onPressed: () => context.pop(), fullWidth: false),
+            ],
+          ),
+        ),
+        data: (item) {
+          if (item == null) {
+            return const Center(child: Text('Item not found'));
+          }
+          return CustomScrollView(
+            slivers: [
+              SliverAppBar(
+                expandedHeight: 400,
+                pinned: true,
+                backgroundColor: AppColors.background,
+                flexibleSpace: FlexibleSpaceBar(
+                  background: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (item.backdropUrl != null)
+                        CachedNetworkImage(imageUrl: item.backdropUrl!, fit: BoxFit.cover)
+                      else
+                        Container(color: AppColors.surfaceContainerHigh),
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Colors.transparent, AppColors.background],
                           ),
-                          child: Text(g.name, style: const TextStyle(color: AppTheme.gray, fontSize: 12)),
-                        )).toList(),
+                        ),
+                      ),
+                      Positioned(
+                        left: 16,
+                        right: 16,
+                        bottom: 24,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(item.title, style: AppTypography.headlineMd.copyWith(color: Colors.white)),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      RatingBadge(rating: item.voteAverage ?? 0),
+                                      const SizedBox(width: 12),
+                                      Text('${item.year}', style: const TextStyle(color: Colors.white70)),
+                                      if (item.runtime != null) ...[
+                                        const SizedBox(width: 12),
+                                        Text('${item.runtime! ~/ 60}h ${item.runtime! % 60}m', style: const TextStyle(color: Colors.white70)),
+                                      ],
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
-                    const SizedBox(height: 24),
-                    if (movie.overview != null && movie.overview!.isNotEmpty) ...[
-                      Text('Overview', style: TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.w600,
-                        color: AppTheme.white.withValues(alpha: 0.9),
-                      )),
-                      const SizedBox(height: 8),
-                      Text(movie.overview!, style: const TextStyle(
-                        color: AppTheme.gray, fontSize: 14, height: 1.5,
-                      )),
-                    ],
-                    const SizedBox(height: 32),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton.icon(
-                        onPressed: () {},
-                        icon: const Icon(Icons.play_arrow),
-                        label: const Text('Watch Now'),
-                      ),
-                    ),
-                    const SizedBox(height: 100),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: AppButton(
+                              label: 'Watch Now',
+                              onPressed: () => context.push('/watch?id=${item.id}&type=${item.mediaType ?? 'movie'}'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Consumer(
+                            builder: (_, ref2, __) {
+                              final watchlist = ref2.watch(watchlistProvider);
+                              final inWatchlist = watchlist.isInWatchlist(item.id, item.isTV ? 'tv' : 'movie');
+                              return Container(
+                                width: 48,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceContainerHigh,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: IconButton(
+                                  icon: Icon(
+                                    inWatchlist ? Icons.bookmark : Icons.bookmark_border,
+                                    color: inWatchlist ? AppColors.primary : AppColors.onSurfaceVariant,
+                                  ),
+                                  onPressed: () => ref2.read(watchlistProvider.notifier).toggle(item.id, item.isTV ? 'tv' : 'movie'),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      if (item.overview != null && item.overview!.isNotEmpty) ...[
+                        Text('Synopsis', style: AppTypography.headlineSm),
+                        const SizedBox(height: 8),
+                        Text(item.overview!, style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant)),
+                      ],
+                      const SizedBox(height: 24),
+                      if (item.genres != null && item.genres!.isNotEmpty) ...[
+                        Text('Genres', style: AppTypography.headlineSm),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: item.genres!.map((g) => Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceContainerHigh,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: AppColors.outlineVariant),
+                            ),
+                            child: Text(g.name, style: AppTypography.bodySm),
+                          )).toList(),
+                        ),
+                      ],
+                      const SizedBox(height: 24),
+                      if (item.voteAverage != null) ...[
+                        Row(
+                          children: [
+                            const Text('Rating: ', style: TextStyle(fontWeight: FontWeight.w600)),
+                            Text('${item.voteAverage!.toStringAsFixed(1)}/10', style: AppTypography.bodyMd),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: 24),
+                      if (item.seasons != null && item.seasons!.isNotEmpty) ...[
+                        Text('Seasons', style: AppTypography.headlineSm),
+                        const SizedBox(height: 8),
+                        SeasonEpisodeSelector(
+                          showId: item.id,
+                          seasons: item.seasons!,
+                        ),
+                      ],
+                      const SizedBox(height: 24),
+                      CommentSection(
+                        contentId: item.id,
+                        contentType: item.isTV ? 'tv' : 'movie',
+                      ),
+                      const SizedBox(height: 24),
+                      similar.when(
+                        data: (items) => items.isNotEmpty
+                            ? ContentRow(title: 'More Like This', items: items)
+                            : const SizedBox.shrink(),
+                        loading: () => const SizedBox(height: 200, child: Center(child: CircularProgressIndicator())),
+                        error: (_, __) => const SizedBox.shrink(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

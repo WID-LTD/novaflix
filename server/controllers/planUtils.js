@@ -1,9 +1,9 @@
 const PLAN_RANK = {
   free: 0,
   student: 1,
-  basic: 1,
-  standard: 2,
-  premium: 3,
+  basic: 2,
+  standard: 3,
+  premium: 4,
 }
 
 export function getPlanRank(plan) {

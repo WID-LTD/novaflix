@@ -11,8 +11,8 @@ class AuthService {
 
   AuthService(this._api);
 
-  Future<Map<String, dynamic>> register(String email, String username, String password) async {
-    final res = await _api.register(email, username, password);
+  Future<Map<String, dynamic>> register(String email, String password, String? name) async {
+    final res = await _api.register(email, password, name);
     return res.data as Map<String, dynamic>;
   }
 
@@ -31,12 +31,21 @@ class AuthService {
     return User.fromJson(userData, token: token);
   }
 
-  Future<void> verifyEmail(String email, String code) async {
-    await _api.verifyEmail(email, code);
+  Future<User> verifyEmail(int userId, String code) async {
+    final res = await _api.verifyEmail(userId, code);
+    final data = res.data as Map<String, dynamic>;
+
+    final token = data['token'] as String?;
+    if (token != null) {
+      await _api.saveToken(token);
+      final userData = data['user'] as Map<String, dynamic>;
+      return User.fromJson(userData, token: token);
+    }
+    throw AuthException('verify_failed', 'Verification failed');
   }
 
-  Future<void> resendVerification(String email) async {
-    await _api.resendVerification(email);
+  Future<void> resendVerification(int userId) async {
+    await _api.resendVerification(userId);
   }
 
   Future<User?> getCurrentUser() async {
@@ -46,7 +55,8 @@ class AuthService {
     try {
       final res = await _api.getMe();
       final data = res.data as Map<String, dynamic>;
-      return User.fromJson(data, token: token);
+      final userData = data['user'] as Map<String, dynamic>? ?? data;
+      return User.fromJson(userData, token: token);
     } catch (_) {
       await _api.deleteToken();
       return null;

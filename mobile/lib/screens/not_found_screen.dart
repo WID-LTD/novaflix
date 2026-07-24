@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import '../theme/app_theme.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
 
 class NotFoundScreen extends StatelessWidget {
   const NotFoundScreen({super.key});
@@ -8,23 +8,25 @@ class NotFoundScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.black,
+      backgroundColor: AppColors.background,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('404', style: TextStyle(
-              fontSize: 96, fontWeight: FontWeight.w900,
-              color: AppTheme.red.withValues(alpha: 0.3),
-            )),
+            const Text('404', style: TextStyle(fontSize: 72, fontWeight: FontWeight.w900, color: AppColors.primary)),
             const SizedBox(height: 16),
-            const Text('Page not found', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600, color: AppTheme.white)),
+            Text('Page Not Found', style: AppTypography.headlineMd),
             const SizedBox(height: 8),
-            Text('The page you\'re looking for doesn\'t exist', style: TextStyle(color: AppTheme.gray.withValues(alpha: 0.7))),
+            Text('The page you\'re looking for doesn\'t exist.',
+              style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant)),
             const SizedBox(height: 32),
             ElevatedButton(
-              onPressed: () => context.go('/'),
-              style: ElevatedButton.styleFrom(minimumSize: const Size(200, 48)),
+              onPressed: () => Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+              ),
               child: const Text('Go Home'),
             ),
           ],

@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import '../models/media_item.dart';
-import '../theme/app_theme.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
 
 class MovieCard extends StatelessWidget {
   final MediaItem item;
@@ -29,13 +30,13 @@ class MovieCard extends StatelessWidget {
                 width: width,
                 child: item.posterUrl != null
                     ? CachedNetworkImage(imageUrl: item.posterUrl!, fit: BoxFit.cover)
-                    : Container(color: AppTheme.card, child: const Icon(Icons.movie, color: AppTheme.gray)),
+                    : Container(color: AppColors.surfaceContainerHighest, child: const Icon(Icons.movie, color: AppColors.onSurfaceVariant)),
               ),
             ),
             const SizedBox(height: 6),
-            Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppTheme.white, fontSize: 12, fontWeight: FontWeight.w500)),
+            Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppColors.onSurface, fontSize: 12, fontWeight: FontWeight.w500)),
             if (item.releaseDate != null)
-              Text(item.releaseDate!.substring(0, 4), style: TextStyle(color: AppTheme.gray.withValues(alpha: 0.7), fontSize: 11)),
+              Text(item.releaseDate!.substring(0, 4), style: TextStyle(color: AppColors.onSurfaceVariant.withValues(alpha: 0.7), fontSize: 11)),
           ],
         ),
       ),

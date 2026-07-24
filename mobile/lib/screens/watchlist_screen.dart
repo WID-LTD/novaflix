@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
 import '../providers/watchlist_provider.dart';
-import '../theme/app_theme.dart';
+import '../widgets/ui/index.dart';
 
 class WatchlistScreen extends ConsumerWidget {
   const WatchlistScreen({super.key});
@@ -10,21 +12,20 @@ class WatchlistScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final watchlist = ref.watch(watchlistProvider);
-    final total = watchlist.movieIds.length + watchlist.tvIds.length;
 
     return Scaffold(
-      backgroundColor: AppTheme.black,
-      appBar: AppBar(title: const Text('My Watchlist')),
-      body: total == 0
+      backgroundColor: AppColors.background,
+      appBar: AppBar(title: Text('Watchlist (${watchlist.movieIds.length + watchlist.tvIds.length})')),
+      body: watchlist.movieIds.isEmpty && watchlist.tvIds.isEmpty
           ? Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.bookmark_border, size: 64, color: AppTheme.gray.withValues(alpha: 0.5)),
+                  Icon(Icons.bookmark_border, size: 64, color: AppColors.onSurfaceVariant),
                   const SizedBox(height: 16),
-                  const Text('Your watchlist is empty', style: TextStyle(color: AppTheme.gray, fontSize: 16)),
-                  const SizedBox(height: 8),
-                  Text('Add movies & TV shows to keep track', style: TextStyle(color: AppTheme.gray.withValues(alpha: 0.6), fontSize: 13)),
+                  Text('Your watchlist is empty', style: AppTypography.bodyLg.copyWith(color: AppColors.onSurfaceVariant)),
+                  const SizedBox(height: 16),
+                  AppButton(label: 'Browse Content', onPressed: () => context.push('/discover'), fullWidth: false),
                 ],
               ),
             )
@@ -32,36 +33,69 @@ class WatchlistScreen extends ConsumerWidget {
               padding: const EdgeInsets.all(16),
               children: [
                 if (watchlist.movieIds.isNotEmpty) ...[
-                  Text('Movies (${watchlist.movieIds.length})', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppTheme.white)),
+                  Text('Movies (${watchlist.movieIds.length})', style: AppTypography.headlineSm),
                   const SizedBox(height: 8),
-                  ...watchlist.movieIds.map((id) => _WatchlistTile(id: id, type: 'movie')),
-                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: watchlist.movieIds.map((id) => _watchlistItem(context, id, 'movie', ref)).toList(),
+                  ),
+                  const SizedBox(height: 24),
                 ],
                 if (watchlist.tvIds.isNotEmpty) ...[
-                  Text('TV Shows (${watchlist.tvIds.length})', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppTheme.white)),
+                  Text('TV Shows (${watchlist.tvIds.length})', style: AppTypography.headlineSm),
                   const SizedBox(height: 8),
-                  ...watchlist.tvIds.map((id) => _WatchlistTile(id: id, type: 'tv')),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: watchlist.tvIds.map((id) => _watchlistItem(context, id, 'tv', ref)).toList(),
+                  ),
                 ],
               ],
             ),
     );
   }
-}
 
-class _WatchlistTile extends StatelessWidget {
-  final int id;
-  final String type;
-
-  const _WatchlistTile({required this.id, required this.type});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        title: Text('$type #$id', style: const TextStyle(color: AppTheme.white)),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: AppTheme.gray),
-        onTap: () => context.go('/$type/$id'),
+  Widget _watchlistItem(BuildContext context, int id, String type, WidgetRef ref) {
+    return GestureDetector(
+      onTap: () => context.push(type == 'movie' ? '/movie/$id' : '/tv/$id'),
+      child: Container(
+        width: 150,
+        height: 220,
+        decoration: BoxDecoration(
+          color: AppColors.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Stack(
+          children: [
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(type == 'movie' ? Icons.movie : Icons.tv, size: 32, color: AppColors.onSurfaceVariant),
+                  const SizedBox(height: 8),
+                  Text('#$id', style: AppTypography.bodySm),
+                  Text(type == 'movie' ? 'Movie' : 'TV Show', style: const TextStyle(color: AppColors.onSurfaceVariant, fontSize: 12)),
+                ],
+              ),
+            ),
+            Positioned(
+              top: 4,
+              right: 4,
+              child: GestureDetector(
+                onTap: () => ref.read(watchlistProvider.notifier).toggle(id, type),
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Icon(Icons.close, size: 16, color: Colors.white),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

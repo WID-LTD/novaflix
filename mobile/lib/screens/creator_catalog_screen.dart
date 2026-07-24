@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../theme/app_theme.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
 
 class CreatorCatalogScreen extends StatelessWidget {
   const CreatorCatalogScreen({super.key});
@@ -7,9 +8,9 @@ class CreatorCatalogScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.black,
+      backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Content Catalog')),
-      body: const Center(child: Text('Catalog management coming soon', style: TextStyle(color: AppTheme.gray))),
+      body: Center(child: Text('Catalog management coming soon', style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant))),
     );
   }
 }

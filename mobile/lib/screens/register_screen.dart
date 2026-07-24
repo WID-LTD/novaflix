@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
 import '../providers/auth_provider.dart';
-import '../theme/app_theme.dart';
+import '../widgets/ui/index.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -12,144 +14,176 @@ class RegisterScreen extends ConsumerStatefulWidget {
 }
 
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
-  int _step = 0;
+  int _step = 1;
+  final _emailCtl = TextEditingController();
+  final _passwordCtl = TextEditingController();
+  final _nameCtl = TextEditingController();
+  int? _age;
+  final List<String> _selectedGenres = [];
 
-  // Step 1
-  final _emailCtrl = TextEditingController();
-  final _passwordCtrl = TextEditingController();
-  bool _obscure = true;
-
-  // Step 2
-  final _displayNameCtrl = TextEditingController();
-  final _ageCtrl = TextEditingController();
-
-  // Step 3
-  final List<String> _allGenres = ['Action', 'Comedy', 'Sci-Fi', 'Drama', 'Horror', 'Documentary'];
-  final Set<String> _selectedGenres = {};
+  final _genres = [
+    'Action', 'Comedy', 'Drama', 'Horror', 'Sci-Fi', 'Romance',
+  ];
 
   @override
   void dispose() {
-    _emailCtrl.dispose();
-    _passwordCtrl.dispose();
-    _displayNameCtrl.dispose();
-    _ageCtrl.dispose();
+    _emailCtl.dispose();
+    _passwordCtl.dispose();
+    _nameCtl.dispose();
     super.dispose();
   }
 
-  void _nextStep() {
-    if (_step == 0 && (_emailCtrl.text.isEmpty || _passwordCtrl.text.isEmpty)) return;
-    if (_step == 1 && _displayNameCtrl.text.isEmpty) return;
-    if (_step == 2 && _selectedGenres.length != 3) return;
-    setState(() => _step++);
-  }
-
-  void _prevStep() => setState(() => _step--);
-
   void _submit() {
-    final email = _emailCtrl.text.trim();
-    final password = _passwordCtrl.text.trim();
-    if (email.isEmpty || password.isEmpty) return;
-    ref.read(authProvider.notifier).register(email, _displayNameCtrl.text.trim(), password);
+    if (_step < 3) {
+      setState(() => _step++);
+    } else {
+      ref.read(authProvider.notifier).register(
+        _emailCtl.text.trim(), _passwordCtl.text, _nameCtl.text.trim(),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(authProvider);
+    final authState = ref.watch(authProvider);
 
-    ref.listen<AuthState>(authProvider, (prev, next) {
-      if (next.status == AuthStatus.needsVerification) {
-        context.go('/verify-email');
-      }
-    });
+    if (authState.status == AuthStatus.authenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => context.go('/profiles'));
+    }
+
+    if (authState.status == AuthStatus.needsVerification) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => context.go('/verify-email'));
+    }
 
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [AppTheme.black, AppTheme.dark, AppTheme.black],
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Column(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              const SizedBox(height: 20),
+              Icon(Icons.play_circle_fill, size: 50, color: AppColors.primary),
+              const SizedBox(height: 8),
+              Text('NOVAFLIX', style: AppTypography.headlineMd.copyWith(letterSpacing: 3, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 24),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: _step / 3,
+                  backgroundColor: AppColors.surfaceContainerHighest,
+                  valueColor: AlwaysStoppedAnimation(AppColors.primary),
+                  minHeight: 4,
+                ),
+              ),
+              const SizedBox(height: 32),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: _step == 1 ? _step1() : (_step == 2 ? _step2() : _step3()),
+              ),
+              const SizedBox(height: 32),
+              Row(
                 children: [
-                  const Text('NOVAFLIX', style: TextStyle(fontSize: 36, fontWeight: FontWeight.w900, color: AppTheme.red, letterSpacing: 6)),
-                  const SizedBox(height: 8),
-                  Text(_step == 0 ? 'Create Account' : _step == 1 ? 'About You' : 'Your Taste', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600, color: AppTheme.white.withValues(alpha: 0.9))),
-                  const SizedBox(height: 8),
-                  Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(3, (i) => Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    width: 40, height: 4,
-                    decoration: BoxDecoration(color: i <= _step ? AppTheme.red : AppTheme.darkGray, borderRadius: BorderRadius.circular(2)),
-                  ))),
-                  const SizedBox(height: 32),
-                  if (_step == 0) ...[
-                    TextField(controller: _emailCtrl, decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email_outlined, color: AppTheme.gray)), keyboardType: TextInputType.emailAddress, textInputAction: TextInputAction.next),
-                    const SizedBox(height: 16),
-                    TextField(controller: _passwordCtrl, decoration: InputDecoration(labelText: 'Password', prefixIcon: const Icon(Icons.lock_outline, color: AppTheme.gray), suffixIcon: IconButton(icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility, color: AppTheme.gray), onPressed: () => setState(() => _obscure = !_obscure))), obscureText: _obscure, textInputAction: TextInputAction.done, onSubmitted: (_) => _nextStep()),
-                  ],
-                  if (_step == 1) ...[
-                    TextField(controller: _displayNameCtrl, decoration: const InputDecoration(labelText: 'Display Name', prefixIcon: Icon(Icons.person_outline, color: AppTheme.gray)), textInputAction: TextInputAction.next),
-                    const SizedBox(height: 16),
-                    TextField(controller: _ageCtrl, decoration: const InputDecoration(labelText: 'Age', prefixIcon: Icon(Icons.cake_outlined, color: AppTheme.gray)), keyboardType: TextInputType.number, textInputAction: TextInputAction.done, onSubmitted: (_) => _nextStep()),
-                  ],
-                  if (_step == 2) ...[
-                    Text('Pick 3 genres you love', style: TextStyle(color: AppTheme.gray.withValues(alpha: 0.7))),
-                    const SizedBox(height: 16),
-                    Wrap(spacing: 12, runSpacing: 12, children: _allGenres.map((g) => GestureDetector(
-                      onTap: () => setState(() => _selectedGenres.contains(g) ? _selectedGenres.remove(g) : (_selectedGenres.length < 3 ? _selectedGenres.add(g) : null)),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                        decoration: BoxDecoration(
-                          color: _selectedGenres.contains(g) ? AppTheme.red.withValues(alpha: 0.2) : AppTheme.card,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: _selectedGenres.contains(g) ? AppTheme.red : AppTheme.darkGray),
-                        ),
-                        child: Text(g, style: TextStyle(color: _selectedGenres.contains(g) ? AppTheme.red : AppTheme.white, fontWeight: FontWeight.w600)),
-                      ),
-                    )).toList()),
-                    const SizedBox(height: 12),
-                    Text('${_selectedGenres.length}/3 selected', style: TextStyle(color: AppTheme.gray.withValues(alpha: 0.6), fontSize: 13)),
-                  ],
-                  const SizedBox(height: 32),
-                  if (state.error != null) Padding(padding: const EdgeInsets.only(bottom: 16), child: Text(state.error!, style: const TextStyle(color: AppTheme.red, fontSize: 13))),
-                  Row(
-                    children: [
-                      if (_step > 0) Expanded(
-                        child: SizedBox(height: 48, child: OutlinedButton(
-                          onPressed: _prevStep,
-                          style: OutlinedButton.styleFrom(foregroundColor: AppTheme.white, side: const BorderSide(color: AppTheme.gray), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                          child: const Text('Back'),
-                        )),
-                      ),
-                      if (_step > 0) const SizedBox(width: 12),
-                      Expanded(
-                        child: SizedBox(height: 48, child: ElevatedButton(
-                          onPressed: _step < 2 ? _nextStep : (state.status == AuthStatus.loading ? null : _submit),
-                          child: state.status == AuthStatus.loading
-                              ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.white))
-                              : Text(_step < 2 ? 'Continue' : 'Complete Setup'),
-                        )),
-                      ),
-                    ],
+                  if (_step > 1)
+                    Expanded(
+                      child: AppButton(label: 'Back', onPressed: () => setState(() => _step--), outlined: true, fullWidth: true),
+                    ),
+                  if (_step > 1) const SizedBox(width: 12),
+                  Expanded(
+                    child: AppButton(
+                      label: _step == 3 ? 'Complete' : 'Continue',
+                      onPressed: _submit,
+                      loading: authState.status == AuthStatus.loading,
+                    ),
                   ),
-                  if (_step == 0) ...[
-                    const SizedBox(height: 24),
-                    Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      Text("Already have an account?", style: TextStyle(color: AppTheme.gray)),
-                      TextButton(onPressed: () => context.go('/login'), child: const Text('Sign In')),
-                    ]),
-                  ],
                 ],
               ),
-            ),
+              if (authState.error != null) ...[
+                const SizedBox(height: 12),
+                Text(authState.error!, style: const TextStyle(color: AppColors.error, fontSize: 13)),
+              ],
+            ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _step1() {
+    return Column(
+      key: const ValueKey(1),
+      children: [
+        Text('Create Account', style: AppTypography.headlineMd),
+        const SizedBox(height: 8),
+        Text('Step 1 of 3 - Credentials', style: TextStyle(color: AppColors.onSurfaceVariant)),
+        const SizedBox(height: 24),
+        AppInput(controller: _emailCtl, label: 'Email', hint: 'your@email.com', keyboardType: TextInputType.emailAddress),
+        const SizedBox(height: 16),
+        AppInput(controller: _passwordCtl, label: 'Password', hint: 'Min 6 characters', obscureText: true),
+      ],
+    );
+  }
+
+  Widget _step2() {
+    return Column(
+      key: const ValueKey(2),
+      children: [
+        Text('About You', style: AppTypography.headlineMd),
+        const SizedBox(height: 8),
+        Text('Step 2 of 3', style: TextStyle(color: AppColors.onSurfaceVariant)),
+        const SizedBox(height: 24),
+        AppInput(controller: _nameCtl, label: 'Display Name', hint: 'How others see you'),
+        const SizedBox(height: 16),
+        AppInput(
+          label: 'Age', hint: 'Your age',
+          keyboardType: TextInputType.number,
+          onChanged: (v) => _age = int.tryParse(v),
+        ),
+      ],
+    );
+  }
+
+  Widget _step3() {
+    return Column(
+      key: const ValueKey(3),
+      children: [
+        Text('Taste Profile', style: AppTypography.headlineMd),
+        const SizedBox(height: 8),
+        Text('Step 3 of 3 - Pick 3 genres', style: TextStyle(color: AppColors.onSurfaceVariant)),
+        const SizedBox(height: 24),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: _genres.map((g) {
+            final selected = _selectedGenres.contains(g);
+            return GestureDetector(
+              onTap: () {
+                setState(() {
+                  if (selected) {
+                    _selectedGenres.remove(g);
+                  } else if (_selectedGenres.length < 3) {
+                    _selectedGenres.add(g);
+                  }
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                decoration: BoxDecoration(
+                  color: selected ? AppColors.primary.withValues(alpha: 0.2) : AppColors.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: selected ? AppColors.primary : AppColors.outlineVariant),
+                ),
+                child: Text(g,
+                  style: TextStyle(
+                    color: selected ? AppColors.primary : AppColors.onSurface,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 }

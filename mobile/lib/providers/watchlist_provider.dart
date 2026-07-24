@@ -29,32 +29,28 @@ class WatchlistState {
 }
 
 class WatchlistNotifier extends StateNotifier<WatchlistState> {
-  WatchlistNotifier() : super(const WatchlistState()) {
-    _load();
-  }
+  WatchlistNotifier() : super(const WatchlistState()) { _load(); }
 
   Future<void> _load() async {
     final raw = await _storage.read(key: _watchlistKey);
     if (raw != null) {
-      final data = jsonDecode(raw) as Map<String, dynamic>;
-      state = WatchlistState(
-        movieIds: (data['movies'] as List?)?.cast<int>() ?? [],
-        tvIds: (data['tv'] as List?)?.cast<int>() ?? [],
-      );
+      try {
+        final data = jsonDecode(raw) as Map<String, dynamic>;
+        state = WatchlistState(
+          movieIds: (data['movies'] as List?)?.cast<int>() ?? [],
+          tvIds: (data['tv'] as List?)?.cast<int>() ?? [],
+        );
+      } catch (_) {}
     }
   }
 
   Future<void> _save() async {
     await _storage.write(key: _watchlistKey, value: jsonEncode({
-      'movies': state.movieIds,
-      'tv': state.tvIds,
+      'movies': state.movieIds, 'tv': state.tvIds,
     }));
   }
 
-  void toggle(int id, String type) {
-    state = state.toggle(id, type);
-    _save();
-  }
+  void toggle(int id, String type) { state = state.toggle(id, type); _save(); }
 }
 
 final watchlistProvider = StateNotifierProvider<WatchlistNotifier, WatchlistState>((ref) {

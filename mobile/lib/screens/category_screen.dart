@@ -1,110 +1,91 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
 import '../services/api_service.dart';
 import '../models/media_item.dart';
-import '../theme/app_theme.dart';
+import '../widgets/ui/index.dart';
+import '../widgets/features/index.dart';
 
 final _genresProvider = FutureProvider<List<Genre>>((ref) async {
   final api = ref.read(apiServiceProvider);
   final res = await api.getGenres();
-  final data = res.data as Map<String, dynamic>;
-  final list = (data['genres'] as List?) ?? [];
-  return list.map((e) => Genre.fromJson(e as Map<String, dynamic>)).toList();
+  final data = res.data['data'] as List? ?? [];
+  return data.map((e) => Genre.fromJson(e as Map<String, dynamic>)).toList();
+});
+
+final _categoryMoviesProvider = FutureProvider.family<List<MediaItem>, int>((ref, genreId) async {
+  final api = ref.read(apiServiceProvider);
+  final res = await api.getCategoryMovies(genreId);
+  final data = res.data['data'] as List? ?? [];
+  return data.map((e) => MediaItem.fromJson(e as Map<String, dynamic>)).toList();
 });
 
 class CategoryScreen extends ConsumerWidget {
-  const CategoryScreen({super.key});
+  final String? slug;
+
+  const CategoryScreen({super.key, this.slug});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final genres = ref.watch(_genresProvider);
 
     return Scaffold(
-      backgroundColor: AppTheme.black,
+      backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Categories')),
       body: genres.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: AppTheme.gray))),
-        data: (list) => GridView.builder(
+        data: (items) => GridView.builder(
           padding: const EdgeInsets.all(16),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-            childAspectRatio: 1.5,
+            crossAxisCount: 2, childAspectRatio: 1.5,
+            crossAxisSpacing: 12, mainAxisSpacing: 12,
           ),
-          itemCount: list.length,
-          itemBuilder: (context, i) {
-            final genre = list[i];
+          itemCount: items.length,
+          itemBuilder: (_, i) {
+            final genre = items[i];
             return GestureDetector(
-              onTap: () => context.go('/category/${genre.id}'),
+              onTap: () => _showCategoryDetail(context, ref, genre),
               child: Container(
                 decoration: BoxDecoration(
-                  color: AppTheme.card,
+                  color: AppColors.surfaceContainerHigh,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.darkGray),
+                  border: Border.all(color: AppColors.outlineVariant),
                 ),
                 child: Center(
-                  child: Text(genre.name, textAlign: TextAlign.center, style: const TextStyle(
-                    color: AppTheme.white, fontWeight: FontWeight.w600, fontSize: 16,
-                  )),
+                  child: Text(genre.name, style: AppTypography.bodyLg.copyWith(fontWeight: FontWeight.w600),
+                    textAlign: TextAlign.center),
                 ),
               ),
             );
           },
         ),
-      ),
-    );
-  }
-}
-
-class CategoryDetailScreen extends ConsumerWidget {
-  final int genreId;
-  final String genreName;
-  const CategoryDetailScreen({super.key, required this.genreId, required this.genreName});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final movies = ref.watch(_categoryMoviesProvider(genreId));
-
-    return Scaffold(
-      backgroundColor: AppTheme.black,
-      appBar: AppBar(title: Text(genreName)),
-      body: movies.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: AppTheme.gray))),
-        data: (list) => list.isEmpty
-            ? const Center(child: Text('No movies found', style: TextStyle(color: AppTheme.gray)))
-            : GridView.builder(
-                padding: const EdgeInsets.all(16),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 0.65,
-                ),
-                itemCount: list.length,
-                itemBuilder: (context, i) {
-                  final item = list[i];
-                  return GestureDetector(
-                    onTap: () => context.go('/movie/${item.id}'),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: item.posterUrl != null
-                          ? CachedNetworkImage(imageUrl: item.posterUrl!, fit: BoxFit.cover)
-                          : Container(color: AppTheme.card, child: const Icon(Icons.movie, color: AppTheme.gray)),
-                    ),
-                  );
-                },
-              ),
+        error: (_, __) => const Center(child: Text('Failed to load categories')),
       ),
     );
   }
-}
 
-final _categoryMoviesProvider = FutureProvider.family<List<MediaItem>, int>((ref, genreId) async {
-  final api = ref.read(apiServiceProvider);
-  final res = await api.getCategoryMovies(genreId);
-  final data = res.data as Map<String, dynamic>;
-  final list = (data['results'] as List?) ?? [];
-  return list.map((e) => MediaItem.fromJson(e as Map<String, dynamic>)).toList();
-});
+  void _showCategoryDetail(BuildContext context, WidgetRef ref, Genre genre) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(title: Text(genre.name)),
+        body: ref.watch(_categoryMoviesProvider(genre.id)).when(
+          data: (items) => GridView.builder(
+            padding: const EdgeInsets.all(12),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3, childAspectRatio: 0.65,
+              crossAxisSpacing: 8, mainAxisSpacing: 8,
+            ),
+            itemCount: items.length,
+            itemBuilder: (_, i) => MovieCard(item: items[i]),
+          ),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (_, __) => const Center(child: Text('No results')),
+        ),
+      ),
+    ));
+  }
+}

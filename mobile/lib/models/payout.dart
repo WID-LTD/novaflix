@@ -34,6 +34,7 @@ class DashboardStats {
   final int totalComments;
   final int totalFilms;
   final List<Map<String, dynamic>> recentUploads;
+  final double? revenue;
   final List<Map<String, dynamic>> recentComments;
 
   DashboardStats({
@@ -41,6 +42,7 @@ class DashboardStats {
     this.totalLikes = 0,
     this.totalComments = 0,
     this.totalFilms = 0,
+    this.revenue,
     this.recentUploads = const [],
     this.recentComments = const [],
   });
@@ -50,6 +52,7 @@ class DashboardStats {
     totalLikes: (json['total_likes'] ?? 0) as int,
     totalComments: (json['total_comments'] ?? 0) as int,
     totalFilms: (json['total_films'] ?? 0) as int,
+    revenue: (json['revenue'] as num?)?.toDouble(),
     recentUploads: (json['recent_uploads'] as List?)?.cast<Map<String, dynamic>>() ?? [],
     recentComments: (json['recent_comments'] as List?)?.cast<Map<String, dynamic>>() ?? [],
   );

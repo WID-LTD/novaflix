@@ -8,12 +8,14 @@ class AuthState {
   final AuthStatus status;
   final User? user;
   final String? error;
+  final int? pendingUserId;
   final String? pendingEmail;
 
   const AuthState({
     this.status = AuthStatus.unknown,
     this.user,
     this.error,
+    this.pendingUserId,
     this.pendingEmail,
   });
 
@@ -21,6 +23,7 @@ class AuthState {
     AuthStatus? status,
     User? user,
     String? error,
+    int? pendingUserId,
     String? pendingEmail,
     bool clearError = false,
   }) {
@@ -28,6 +31,7 @@ class AuthState {
       status: status ?? this.status,
       user: user ?? this.user,
       error: clearError ? null : (error ?? this.error),
+      pendingUserId: pendingUserId ?? this.pendingUserId,
       pendingEmail: pendingEmail ?? this.pendingEmail,
     );
   }
@@ -49,14 +53,25 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> register(String email, String username, String password) async {
+  Future<void> register(String email, String password, String? name) async {
     state = state.copyWith(status: AuthStatus.loading, clearError: true);
     try {
-      await _authService.register(email, username, password);
-      state = state.copyWith(
-        status: AuthStatus.needsVerification,
-        pendingEmail: email,
-      );
+      final res = await _authService.register(email, password, name);
+      final userId = res['userId'] as int?;
+      if (userId != null) {
+        state = state.copyWith(
+          status: AuthStatus.needsVerification,
+          pendingUserId: userId,
+          pendingEmail: email,
+        );
+      } else {
+        final token = res['token'] as String?;
+        if (token != null) {
+          final userData = res['user'] as Map<String, dynamic>;
+          final user = User.fromJson(userData, token: token);
+          state = AuthState(status: AuthStatus.authenticated, user: user);
+        }
+      }
     } catch (e) {
       state = state.copyWith(
         status: AuthStatus.unauthenticated,
@@ -91,13 +106,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> verifyEmail(String code) async {
-    final email = state.pendingEmail;
-    if (email == null) return;
+    final userId = state.pendingUserId;
+    if (userId == null) return;
 
     state = state.copyWith(status: AuthStatus.loading, clearError: true);
     try {
-      await _authService.verifyEmail(email, code);
-      state = state.copyWith(status: AuthStatus.unauthenticated);
+      final user = await _authService.verifyEmail(userId, code);
+      state = AuthState(status: AuthStatus.authenticated, user: user);
     } catch (e) {
       state = state.copyWith(
         status: AuthStatus.needsVerification,
@@ -107,11 +122,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> resendVerification() async {
-    final email = state.pendingEmail;
-    if (email == null) return;
-
+    final userId = state.pendingUserId;
+    if (userId == null) return;
     try {
-      await _authService.resendVerification(email);
+      await _authService.resendVerification(userId);
     } catch (e) {
       state = state.copyWith(error: e.toString());
     }
@@ -124,6 +138,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   void clearError() {
     state = state.copyWith(clearError: true);
+  }
+
+  Future<void> refreshUser() async {
+    final user = await _authService.getCurrentUser();
+    if (user != null) {
+      state = AuthState(status: AuthStatus.authenticated, user: user);
+    }
   }
 }
 

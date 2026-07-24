@@ -101,7 +101,7 @@ wss.on('connection', (ws, req) => {
       switch (type) {
         case 'join': {
           const roomUserId = userId || user?.id || uuidv4()
-          if (getPlanRank(userPlan) < 3) {
+          if (getPlanRank(userPlan) < 4) {
             ws.send(JSON.stringify({ type: 'error', message: 'Watch Parties require a Premium plan. Please upgrade to join.' }))
             return
           }

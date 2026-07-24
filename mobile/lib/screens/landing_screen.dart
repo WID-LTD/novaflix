@@ -1,63 +1,82 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../theme/app_theme.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
+import '../providers/auth_provider.dart';
+import '../services/api_service.dart';
 
-class LandingScreen extends StatelessWidget {
+class LandingScreen extends ConsumerWidget {
   const LandingScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [AppTheme.black, AppTheme.dark, AppTheme.black],
-          ),
-        ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('NOVAFLIX', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: AppTheme.red, letterSpacing: 4)),
-                      Row(
+      backgroundColor: AppColors.background,
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            Container(
+              height: MediaQuery.of(context).size.height,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppColors.primary.withValues(alpha: 0.1),
+                    AppColors.background,
+                  ],
+                ),
+              ),
+              child: SafeArea(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.play_circle_fill, size: 100, color: AppColors.primary),
+                    const SizedBox(height: 24),
+                    ShaderMask(
+                      shaderCallback: (bounds) => LinearGradient(
+                        colors: [AppColors.primary, AppColors.secondary],
+                      ).createShader(bounds),
+                      child: Text('NOVAFLIX', style: AppTypography.displayMd.copyWith(color: Colors.white, letterSpacing: 8, fontWeight: FontWeight.w900)),
+                    ),
+                    const SizedBox(height: 16),
+                    Text('Stream. Create. Connect.',
+                      style: AppTypography.bodyLg.copyWith(color: AppColors.onSurfaceVariant)),
+                    const SizedBox(height: 48),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 40),
+                      child: Column(
                         children: [
-                          TextButton(onPressed: () => context.go('/login'), child: const Text('Sign In')),
-                          const SizedBox(width: 8),
                           ElevatedButton(
-                            onPressed: () => context.go('/register'),
-                            style: ElevatedButton.styleFrom(minimumSize: const Size(100, 40)),
-                            child: const Text('Get Started'),
+                            onPressed: () => context.push('/login'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              minimumSize: const Size(double.infinity, 52),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: const Text('Get Started', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                          ),
+                          const SizedBox(height: 16),
+                          OutlinedButton(
+                            onPressed: () => context.push('/login'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              minimumSize: const Size(double.infinity, 52),
+                              side: const BorderSide(color: Colors.white30),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: const Text('Sign In', style: TextStyle(fontSize: 18)),
                           ),
                         ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
-                  child: Column(
-                    children: [
-                      const Text('Unlimited movies, TV shows & creator content', textAlign: TextAlign.center, style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: AppTheme.white, height: 1.2)),
-                      const SizedBox(height: 16),
-                      Text('Watch anywhere. Cancel anytime.', style: TextStyle(fontSize: 16, color: AppTheme.gray.withValues(alpha: 0.8))),
-                      const SizedBox(height: 32),
-                      SizedBox(width: double.infinity, height: 52, child: ElevatedButton(
-                        onPressed: () => context.go('/register'),
-                        child: const Text('Get Started', style: TextStyle(fontSize: 18)),
-                      )),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
