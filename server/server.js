@@ -111,12 +111,23 @@ wss.on('connection', (ws, req) => {
           const roomUsers = rooms.get(room)
           roomUsers.set(userId, { ws, name: user?.name || 'Anonymous', id: userId })
           ws.send(JSON.stringify({ type: 'joined', userId, room, users: [...roomUsers.keys()] }))
+          // Send current room metadata to the new joiner
+          if (roomUsers.metadata) {
+            ws.send(JSON.stringify({ type: 'content-selected', payload: roomUsers.metadata }))
+          }
           broadcast(room, { type: 'user-joined', userId, name: user?.name || 'Anonymous' }, userId)
           break
         }
         case 'chat': {
           if (currentRoom) {
             broadcast(currentRoom, { type: 'chat', userId, message: payload?.message, name: payload?.name, timestamp: Date.now() })
+          }
+          break
+        }
+        case 'content-select': {
+          if (currentRoom && rooms.has(currentRoom)) {
+            rooms.get(currentRoom).metadata = payload
+            broadcast(currentRoom, { type: 'content-selected', payload: { ...payload, userId }, userId })
           }
           break
         }
@@ -159,19 +170,22 @@ wss.on('connection', (ws, req) => {
 import { deactivateExpiredSubscriptions } from './jobs/subscriptionExpiry.js'
 import { seedAchievements } from './db.js'
 
-initDatabase().then(async () => {
-  await seedAchievements()
-  // Subscription expiry — run every hour
-  deactivateExpiredSubscriptions()
-  setInterval(deactivateExpiredSubscriptions, 60 * 60 * 1000)
+server.listen(PORT, () => {
+  console.log(`NovaFlix engine alive on http://localhost:${PORT}`);
+  console.log(`WebSocket available at ws://localhost:${PORT}/ws`);
 
-  server.listen(PORT, () => {
-    console.log(`NovaFlix engine alive on http://localhost:${PORT}`);
-    console.log(`WebSocket available at ws://localhost:${PORT}/ws`);
-  });
-}).catch((err) => {
-  console.error('[server] Failed to initialize database:', err.message);
-  process.exit(1);
+  if (process.env.DATABASE_URL) {
+    initDatabase().then(async () => {
+      await seedAchievements()
+      deactivateExpiredSubscriptions()
+      setInterval(deactivateExpiredSubscriptions, 60 * 60 * 1000)
+      console.log('[db] Database features active');
+    }).catch((err) => {
+      console.warn('[server] Database unavailable, running without DB features:', err.message);
+    });
+  } else {
+    console.warn('[server] No DATABASE_URL set, running without database features (auth, payments, etc.)');
+  }
 });
 
 process.on('SIGINT', async () => {

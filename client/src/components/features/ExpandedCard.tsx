@@ -107,6 +107,12 @@ export default function ExpandedCard({ details, cardRect, onClose, onMouseEnter,
     }
   }
 
+  const handleWatchParty = () => {
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase()
+    navigate(`/watch-party?room=${code}&id=${details.id}&type=${details.type}`)
+    onClose()
+  }
+
   return createPortal(
     <div
       style={{
@@ -148,6 +154,7 @@ export default function ExpandedCard({ details, cardRect, onClose, onMouseEnter,
             <ActionBtn icon="play_arrow" label={`Play ${details.title}`} onClick={handlePlay} />
             <ActionBtn icon="add" label="Add to My List" />
             <ActionBtn icon="thumb_up" label={liked ? 'Unlike' : 'Like'} onClick={handleLike} fill={liked} />
+            <ActionBtn icon="diversity_3" label="Watch Party" onClick={handleWatchParty} />
           </div>
           <ActionBtn icon="expand_more" label="More info" />
         </div>

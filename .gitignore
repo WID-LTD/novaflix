@@ -6,3 +6,6 @@ Thumbs.db
 *.env
 data.json
 *.tsbuildinfo
+dist/
+client/dist/
+data/
