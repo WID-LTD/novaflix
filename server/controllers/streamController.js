@@ -12,6 +12,27 @@ const DOWNLOADS_DIR = path.join(__dirname, '..', 'download')
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 
+// LRU segment cache
+const segmentCache = new Map()
+const SEGMENT_CACHE_MAX = 500
+const SEGMENT_CACHE_TTL = 60_000
+function cacheSegment(key, data, contentType) {
+  if (segmentCache.size >= SEGMENT_CACHE_MAX) {
+    const oldest = segmentCache.keys().next().value
+    segmentCache.delete(oldest)
+  }
+  segmentCache.set(key, { data, contentType, time: Date.now() })
+}
+function getCachedSegment(key) {
+  const entry = segmentCache.get(key)
+  if (!entry) return null
+  if (Date.now() - entry.time > SEGMENT_CACHE_TTL) {
+    segmentCache.delete(key)
+    return null
+  }
+  return entry
+}
+
 async function parseMasterManifest(masterUrl) {
   const response = await axios.get(masterUrl, {
     headers: { 'User-Agent': UA, Referer: 'https://nextgencloudfabric.com/' },
@@ -73,19 +94,28 @@ export async function source(req, res) {
   const { id, type, season, episode } = req.query
   if (!id) return res.status(400).json({ error: 'TMDB ID is required' })
 
-  // Concurrent screen enforcement
-  const plan = req.user?.plan || 'free'
-  const maxScreens = PLAN_FEATURES[plan]?.concurrentScreens || 1
-  const activeSessions = await getActiveSessionCount(req.userId)
-  if (activeSessions >= maxScreens) {
-    return res.status(429).json({
-      success: false,
-      error: `Your ${plan} plan allows ${maxScreens} concurrent screen${maxScreens > 1 ? 's' : ''}. You've reached this limit.`,
-    })
+  // Concurrent screen enforcement (skip for anonymous/unauthed)
+  if (req.userId && req.userId !== 'anonymous') {
+    const plan = req.user?.plan || 'free'
+    const maxScreens = PLAN_FEATURES[plan]?.concurrentScreens || 1
+    try {
+      const activeSessions = await getActiveSessionCount(req.userId)
+      if (activeSessions >= maxScreens) {
+        return res.status(429).json({
+          success: false,
+          error: `Your ${plan} plan allows ${maxScreens} concurrent screen${maxScreens > 1 ? 's' : ''}. You've reached this limit.`,
+        })
+      }
+    } catch (e) {
+      console.warn('[source] screen check failed:', e.message)
+    }
   }
 
   try {
-    const result = await getStreamUrl(id, type || 'movie', season || null, episode || null)
+    const result = await Promise.race([
+      getStreamUrl(id, type || 'movie', season || null, episode || null),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout of 18000ms exceeded')), 18000)),
+    ])
     const proxyUrl = `/api/proxy/${result.streamUrl.replace('https://', '')}`
     const subtitles = (result.subtitles || []).map((s) => ({
       label: s.label,
@@ -346,44 +376,143 @@ export async function serveDownloadedFile(req, res) {
   stream.pipe(res)
 }
 
+function isValidVideoContentType(ct) {
+  if (!ct) return false
+  const t = ct.toLowerCase()
+  return t.startsWith('video/') || t.startsWith('audio/') ||
+    t.includes('octet-stream') || t.includes('binary') ||
+    t.includes('mpegurl') || t.includes('mp4') ||
+    t.includes('m2ts') || t.includes('m3u8')
+}
+
+function isSegmentUrl(url) {
+  return !url.endsWith('.m3u8') && !url.endsWith('.m3u')
+}
+
+async function tryFfmpegFetch(url, ffmpegPath) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(ffmpegPath, [
+      '-i', url, '-c', 'copy', '-f', 'mpegts', '-loglevel', 'error', 'pipe:1'
+    ], { windowsHide: true, timeout: 30000 })
+    const chunks = []
+    let timedOut = false
+    const timer = setTimeout(() => { timedOut = true; proc.kill(); reject(new Error('ffmpeg timeout')) }, 25000)
+    proc.stdout.on('data', (c) => { if (!timedOut) chunks.push(c) })
+    proc.on('close', (code) => {
+      clearTimeout(timer)
+      if (timedOut) return
+      if (code === 0 && chunks.length > 0) resolve(Buffer.concat(chunks))
+      else reject(new Error('ffmpeg failed'))
+    })
+    proc.on('error', reject)
+  })
+}
+
 export async function proxy(req, res) {
   const fullPath = req.params[0]
   if (!fullPath) return res.status(400).send('path required')
 
   const url = 'https://' + fullPath
-  const hostname = new URL(url).hostname
+  let hostname = ''
+  try { hostname = new URL(url).hostname } catch { return res.status(502).send('Invalid URL') }
+
+  // Check segment cache for non-m3u8 URLs
+  const isM3u8 = url.endsWith('.m3u8') || url.endsWith('.m3u')
+  if (!isM3u8) {
+    const cached = getCachedSegment(url)
+    if (cached) {
+      res.setHeader('Content-Type', cached.contentType)
+      res.setHeader('Access-Control-Allow-Origin', '*')
+      res.setHeader('Access-Control-Allow-Headers', '*')
+      return res.send(cached.data)
+    }
+  }
 
   const referers = [
-    'https://tik.1x2.space/',
     'https://nextgencloudfabric.com/',
     'https://play.xpass.top/',
+    'https://tik.1x2.space/',
     'https://p16-sg.tiktokcdn.com/',
   ]
 
   const tryFetch = async (ref) => {
+    console.log(`[proxy] FETCH ${url.substring(0,120)}... ref=${ref || 'none'}`)
     return axios({
       url,
       method: 'GET',
       responseType: 'stream',
-      timeout: 15000,
+      timeout: url.endsWith('.m3u8') ? 15000 : 10000,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': UA,
         Referer: ref,
-        Origin: ref.replace(/\/$/, ''),
       },
     })
   }
 
   let response = null
-  for (const ref of referers) {
+  let usedReferer = ''
+
+  // Retry loop: up to 2 attempts for segment requests
+  const MAX_ATTEMPTS = isM3u8 ? 1 : 2
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    if (attempt > 1) console.log(`[proxy] retry ${attempt} for ${hostname}`)
+
     try {
-      response = await tryFetch(ref)
-      if (response.status === 200) break
+      const bareResp = await axios({ url, method: 'GET', responseType: 'stream', timeout: 5000 })
+      const bct = bareResp.headers['content-type'] || ''
+      if (bareResp.status === 200 && (isValidVideoContentType(bct) || bct.includes('text/plain') || (isSegmentUrl(url) && !bct.includes('text/html')))) {
+        response = bareResp
+        usedReferer = 'bare'
+        console.log('[proxy] bare curl-style fetch succeeded for', hostname)
+        break
+      } else { if (bareResp.data) bareResp.data.destroy() }
     } catch {}
+
+    if (!response) for (const ref of referers) {
+      try {
+        const resp = await tryFetch(ref)
+        console.log(`[proxy] RESP ${resp.status} ${resp.headers['content-type']} ref=${ref || 'none'}`)
+        if (resp.status === 200) {
+          const ct = resp.headers['content-type'] || ''
+          if (isValidVideoContentType(ct) || ct.includes('text/plain') || (isSegmentUrl(url) && !ct.includes('text/html'))) {
+            response = resp
+            usedReferer = ref
+            break
+          }
+          if (ct.includes('text/html')) {
+            let snippet = ''
+            resp.data.on('data', (c) => { snippet += c.toString().substring(0, 200); resp.data.destroy() })
+            resp.data.on('end', () => console.log(`[proxy] ${hostname} returned HTML from ${ref}: ${snippet.substring(0, 100)}...`))
+            resp.data.resume()
+          } else {
+            console.log(`[proxy] bad content-type ${ct} from ${ref} for ${hostname}`)
+            resp.data.destroy()
+          }
+        }
+      } catch (e) {
+        console.log(`[proxy] fetch error from ${ref}: ${e.message}`)
+      }
+    }
+
+    if (response) break
+    if (attempt < MAX_ATTEMPTS) await new Promise(r => setTimeout(r, 1000))
   }
 
-  if (!response || response.status !== 200) {
-    console.error('[proxy] failed all referers for', hostname)
+  if (!response) {
+    console.log('[proxy] trying ffmpeg fallback for', hostname)
+    try {
+      const ffmpegData = await tryFfmpegFetch(url, req.app.locals.ffmpegPath)
+      res.setHeader('Content-Type', 'video/mp2t')
+      res.setHeader('Access-Control-Allow-Origin', '*')
+      res.setHeader('Access-Control-Allow-Headers', '*')
+      return res.send(ffmpegData)
+    } catch (ffErr) {
+      console.error('[proxy] ffmpeg fallback also failed for', hostname)
+    }
+  }
+
+  if (!response) {
+    console.error(`[proxy] All proxy strategies failed for ${hostname} url=${url.substring(0,100)}`)
     return res.status(502).send('Proxy failed')
   }
 
@@ -410,7 +539,18 @@ export async function proxy(req, res) {
         res.send(rewritten)
       })
     } else {
-      response.data.pipe(res)
+      // Buffer segment for caching
+      const chunks = []
+      response.data.on('data', (c) => chunks.push(c))
+      response.data.on('end', () => {
+        const buf = Buffer.concat(chunks)
+        cacheSegment(url, buf, contentType)
+        res.send(buf)
+      })
+      response.data.on('error', (err) => {
+        console.error('[proxy] segment stream error:', err.message)
+        if (!res.headersSent) res.status(502).send('Segment fetch failed')
+      })
     }
   } catch (err) {
     console.error('[proxy] stream error:', err.message)

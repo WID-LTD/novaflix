@@ -12,6 +12,7 @@ import Button from '../components/ui/Button'
 import Badge from '../components/ui/Badge'
 import Skeleton from '../components/ui/Skeleton'
 import Modal from '../components/ui/Modal'
+import OnboardingTour from '../components/ui/OnboardingTour'
 import type { Variant, Episode } from '../types'
 
 export default function Watch() {
@@ -258,6 +259,36 @@ export default function Watch() {
           }}
         />
       </div>
+
+      <OnboardingTour
+        storageKey="novaflix-onboarding-watch"
+        steps={[
+          {
+            targetSelector: '#tour-player',
+            title: 'Play & Pause',
+            description: 'Press Space or click the video to toggle play and pause.',
+            placement: 'top',
+          },
+          {
+            targetSelector: '#tour-player',
+            title: 'Seek Anywhere',
+            description: 'Click anywhere on the timeline bar to skip ahead or go back.',
+            placement: 'bottom',
+          },
+          {
+            targetSelector: '#tour-player',
+            title: 'Volume & Mute',
+            description: 'Drag the volume slider or press M to mute instantly.',
+            placement: 'bottom',
+          },
+          {
+            targetSelector: '#tour-player',
+            title: 'Fullscreen',
+            description: 'Press F or click the fullscreen button for an immersive experience.',
+            placement: 'bottom',
+          },
+        ]}
+      />
 
       <Modal
         isOpen={showQuality}

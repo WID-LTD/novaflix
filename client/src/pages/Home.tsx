@@ -6,6 +6,7 @@ import HeroBanner from '../components/features/HeroBanner'
 import ContentRow from '../components/features/ContentRow'
 import HoverCard from '../components/features/HoverCard'
 import Icon from '../components/ui/Icon'
+import OnboardingTour from '../components/ui/OnboardingTour'
 import type { MediaItem, MediaDetails } from '../types'
 
 function shuffleArray<T>(arr: T[]): T[] {
@@ -193,6 +194,18 @@ export default function Home() {
           />
         )}
       </main>
+
+      <OnboardingTour
+        storageKey="novaflix-onboarding-home"
+        steps={[
+          {
+            targetSelector: '.flex.gap-4.overflow-x-auto',
+            title: 'Browse & Discover',
+            description: 'Click any movie or TV show card to explore details, ratings, trailers, and similar recommendations.',
+            placement: 'top',
+          },
+        ]}
+      />
     </div>
   )
 }

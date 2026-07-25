@@ -32,10 +32,20 @@ interface ChatMsg {
   timestamp: number
 }
 
-function ContentCard({ item, selected, onSelect, compact }: {
+interface SuggestionItem {
+  id: number
+  type: string
+  title: string
+  poster: string | null
+  suggesterName?: string
+  suggesterId?: string
+}
+
+function ContentCard({ item, selected, onSelect, onSuggest, compact }: {
   item: MediaItem
   selected: boolean
   onSelect: () => void
+  onSuggest?: (item: MediaItem) => void
   compact?: boolean
 }) {
   const posterSrc = item.poster
@@ -62,23 +72,42 @@ function ContentCard({ item, selected, onSelect, compact }: {
   }
 
   return (
-    <button
-      onClick={onSelect}
-      className={`rounded-xl overflow-hidden border-2 transition-all ${
-        selected ? 'border-primary ring-2 ring-primary/30' : 'border-white/5 hover:border-white/20'
-      }`}
-    >
-      <div className="aspect-[2/3] bg-surface-container relative">
-        <img src={posterSrc} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
-        {item.type === 'tv' && (
-          <span className="absolute top-2 left-2 px-1.5 py-0.5 bg-black/60 text-[9px] font-bold text-white rounded">TV</span>
+    <div className={`group rounded-xl overflow-hidden border-2 transition-all ${
+      selected ? 'border-primary ring-2 ring-primary/30' : 'border-white/5 hover:border-white/20'
+    }`}>
+      <button onClick={onSelect} className="w-full block">
+        <div className="aspect-[2/3] bg-surface-container relative">
+          <img src={posterSrc} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+          {item.type === 'tv' && (
+            <span className="absolute top-2 left-2 px-1.5 py-0.5 bg-black/60 text-[9px] font-bold text-white rounded">TV</span>
+          )}
+          {onSuggest && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onSuggest(item) }}
+              className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-full bg-black/60 hover:bg-primary/80 text-white/70 hover:text-white transition-all opacity-0 group-hover:opacity-100"
+              title="Suggest to host"
+            >
+              <Icon name="add" size="sm" />
+            </button>
+          )}
+        </div>
+      </button>
+      <div className="p-2 bg-surface-card flex items-center justify-between">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold text-on-surface truncate">{item.title}</p>
+          <p className="text-[10px] text-on-surface-variant/60">{item.year}</p>
+        </div>
+        {onSuggest && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onSuggest(item) }}
+            className="shrink-0 ml-1 w-6 h-6 flex items-center justify-center rounded-full bg-white/10 hover:bg-primary/40 text-on-surface-variant hover:text-primary transition-all"
+            title="Suggest to host"
+          >
+            <Icon name="add" size="sm" />
+          </button>
         )}
       </div>
-      <div className="p-2 bg-surface-card">
-        <p className="text-xs font-semibold text-on-surface truncate">{item.title}</p>
-        <p className="text-[10px] text-on-surface-variant/60">{item.year}</p>
-      </div>
-    </button>
+    </div>
   )
 }
 
@@ -117,10 +146,15 @@ export default function WatchParty() {
   const wsRef = useRef<WebSocket | null>(null)
   const [roomCode, setRoomCode] = useState(searchParams.get('room') || '')
   const [joined, setJoined] = useState(!!searchParams.get('room'))
+  const [isHost, setIsHost] = useState(false)
   const [connectedUsers, setConnectedUsers] = useState<string[]>([])
   const [watching, setWatching] = useState(false)
   const [streamUrl, setStreamUrl] = useState('')
   const [streamLoading, setStreamLoading] = useState(false)
+
+  // Suggestions
+  const [suggestions, setSuggestions] = useState<any[]>([])
+  const [pendingSuggestion, setPendingSuggestion] = useState<any | null>(null)
 
   // Content browsing
   const [query, setQuery] = useState('')
@@ -193,6 +227,8 @@ export default function WatchParty() {
         switch (msg.type) {
           case 'joined':
             setConnectedUsers(msg.users || [])
+            setIsHost(msg.isHost || false)
+            if (msg.suggestions) setSuggestions(msg.suggestions)
             break
           case 'user-joined':
             setConnectedUsers((prev) => [...prev, msg.userId])
@@ -207,6 +243,24 @@ export default function WatchParty() {
               message: msg.message,
               timestamp: msg.timestamp,
             }])
+            break
+          case 'suggestion':
+            setPendingSuggestion(msg.payload)
+            break
+          case 'suggest-accepted':
+            toast.success(`${msg.payload.title || 'Movie'} accepted by host!`)
+            break
+          case 'suggest-declined':
+            toast.info('Your suggestion was declined')
+            break
+          case 'suggest-accepted-broadcast':
+            if (msg.payload?.id) {
+              handleContentSelect({ id: msg.payload.id, type: msg.payload.type, title: msg.payload.title || '', year: '', poster: null, backdrop: null, overview: '' })
+            }
+            break
+          case 'host-changed':
+            setIsHost(msg.hostId === user?.id)
+            toast.info('You are now the host!')
             break
           case 'content-selected':
             if (watching && msg.payload?.streamUrl && msg.payload.userId !== user?.id) {
@@ -439,7 +493,15 @@ export default function WatchParty() {
 
     if (Hls.isSupported()) {
       if (hlsRef.current) hlsRef.current.destroy()
-      const hls = new Hls()
+      const hls = new Hls({
+        maxBufferLength: 60,
+        maxMaxBufferLength: 120,
+        maxBufferSize: 60 * 1000 * 1000,
+        startLevel: -1,
+        manifestLoadingTimeOut: 15000,
+        levelLoadingTimeOut: 20000,
+        fragLoadingTimeOut: 20000,
+      })
       hlsRef.current = hls
       hls.loadSource(streamUrl)
       hls.attachMedia(video)
@@ -450,8 +512,19 @@ export default function WatchParty() {
       })
       hls.on(Hls.Events.ERROR, (_, data) => {
         if (data.fatal) {
-          setLoading(false)
-          toast.error('Failed to load video stream')
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              console.warn('[hls] network error, trying to recover...')
+              hls.startLoad()
+              break
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              console.warn('[hls] media error, trying to recover...')
+              hls.recoverMediaError()
+              break
+            default:
+              setLoading(false)
+              toast.error('Failed to load video stream')
+          }
         }
       })
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -706,7 +779,7 @@ export default function WatchParty() {
 
         {/* Top bar */}
         <div
-          className={`absolute top-0 left-0 right-0 bg-gradient-to-b from-black/80 to-transparent pt-4 px-6 pb-12 transition-opacity duration-300 ${
+          className={`absolute top-0 left-0 right-0 bg-gradient-to-b from-black/60 via-black/20 to-transparent pt-4 px-6 pb-12 transition-opacity duration-300 ${
             showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
           }`}
         >
@@ -714,14 +787,14 @@ export default function WatchParty() {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => { setWatching(false); if (hlsRef.current) hlsRef.current.destroy() }}
-                className="w-10 h-10 flex items-center justify-center rounded-xl bg-black/50 text-white backdrop-blur-sm hover:bg-black/70 transition-colors"
+                className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/10 backdrop-blur-lg text-white hover:bg-white/20 transition-colors"
               >
                 <Icon name="arrow_back" />
               </button>
               <div>
                 <span className="text-white/90 text-sm font-medium">{selectedContent?.title}</span>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-label-xs text-white/60 bg-white/10 px-2 py-0.5 rounded">{roomCode}</span>
+                  <span className="text-label-xs text-white/60 bg-white/10 backdrop-blur-sm px-2 py-0.5 rounded">{roomCode}</span>
                   <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
                   <span className="text-xs text-white/50">{connectedUsers.length} watching</span>
                 </div>
@@ -729,8 +802,8 @@ export default function WatchParty() {
             </div>
             <button
               onClick={() => setChatOpen(v => !v)}
-              className={`w-10 h-10 flex items-center justify-center rounded-xl backdrop-blur-sm transition-colors ${
-                chatOpen ? 'bg-primary/30 text-primary' : 'bg-black/50 text-white/70 hover:bg-black/70'
+              className={`w-10 h-10 flex items-center justify-center rounded-xl backdrop-blur-lg transition-colors ${
+                chatOpen ? 'bg-primary/40 text-primary border border-primary/30' : 'bg-white/10 text-white/70 hover:bg-white/20'
               }`}
               title="Toggle chat (C)"
             >
@@ -741,7 +814,7 @@ export default function WatchParty() {
 
         {/* Bottom controls */}
         <div
-          className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent pt-16 pb-6 px-6 transition-opacity duration-300 ${
+          className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent pt-16 pb-6 px-6 transition-opacity duration-300 ${
             showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
           }`}
         >
@@ -815,15 +888,15 @@ export default function WatchParty() {
 
         {/* Keyboard shortcuts hint */}
         <div
-          className={`absolute bottom-20 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm rounded-lg px-4 py-2 transition-opacity duration-300 ${
+          className={`absolute bottom-20 left-1/2 -translate-x-1/2 bg-white/5 backdrop-blur-2xl border border-white/10 rounded-xl px-4 py-2 shadow-2xl transition-opacity duration-300 ${
             showControls && !chatOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
           }`}
         >
           <div className="flex items-center gap-3 text-[10px] text-white/50">
-            <span><kbd className="bg-white/10 px-1 rounded text-white/70">Space</kbd> Play/Pause</span>
-            <span><kbd className="bg-white/10 px-1 rounded text-white/70">F</kbd> Fullscreen</span>
-            <span><kbd className="bg-white/10 px-1 rounded text-white/70">C</kbd> Chat</span>
-            <span><kbd className="bg-white/10 px-1 rounded text-white/70">←→</kbd> Seek</span>
+            <span><kbd className="bg-white/10 backdrop-blur-sm px-1.5 rounded text-white/70">Space</kbd> Play/Pause</span>
+            <span><kbd className="bg-white/10 backdrop-blur-sm px-1.5 rounded text-white/70">F</kbd> Fullscreen</span>
+            <span><kbd className="bg-white/10 backdrop-blur-sm px-1.5 rounded text-white/70">C</kbd> Chat</span>
+            <span><kbd className="bg-white/10 backdrop-blur-sm px-1.5 rounded text-white/70">←→</kbd> Seek</span>
           </div>
         </div>
       </div>
@@ -918,20 +991,20 @@ export default function WatchParty() {
           {/* Content area */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
             {activeView === 'search' && searchResults.map((item) => (
-              <ContentCard key={`${item.id}-${item.type}`} item={item} selected={selectedContent?.id === item.id && selectedContent?.type === item.type} onSelect={() => handleContentSelect(item)} />
+              <ContentCard key={`${item.id}-${item.type}`} item={item} selected={selectedContent?.id === item.id && selectedContent?.type === item.type} onSelect={() => handleContentSelect(item)} onSuggest={!isHost ? (i) => { broadcast('suggest', { id: i.id, type: i.type, title: i.title, poster: i.poster }) } : undefined} />
             ))}
 
             {activeView === 'genre' && genreResults.map((item) => (
-              <ContentCard key={`${item.id}-${item.type}`} item={item} selected={selectedContent?.id === item.id && selectedContent?.type === item.type} onSelect={() => handleContentSelect(item)} />
+              <ContentCard key={`${item.id}-${item.type}`} item={item} selected={selectedContent?.id === item.id && selectedContent?.type === item.type} onSelect={() => handleContentSelect(item)} onSuggest={!isHost ? (i) => { broadcast('suggest', { id: i.id, type: i.type, title: i.title, poster: i.poster }) } : undefined} />
             ))}
 
             {activeView === 'trending' && !query && (
               <>
                 {trending.movies.map((item) => (
-                  <ContentCard key={`movie-${item.id}`} item={item} selected={selectedContent?.id === item.id && selectedContent?.type === 'movie'} onSelect={() => handleContentSelect(item)} />
+                  <ContentCard key={`movie-${item.id}`} item={item} selected={selectedContent?.id === item.id && selectedContent?.type === 'movie'} onSelect={() => handleContentSelect(item)} onSuggest={!isHost ? (i) => { broadcast('suggest', { id: i.id, type: i.type, title: i.title, poster: i.poster }) } : undefined} />
                 ))}
                 {trending.tv.map((item) => (
-                  <ContentCard key={`tv-${item.id}`} item={item} selected={selectedContent?.id === item.id && selectedContent?.type === 'tv'} onSelect={() => handleContentSelect(item)} />
+                  <ContentCard key={`tv-${item.id}`} item={item} selected={selectedContent?.id === item.id && selectedContent?.type === 'tv'} onSelect={() => handleContentSelect(item)} onSuggest={!isHost ? (i) => { broadcast('suggest', { id: i.id, type: i.type, title: i.title, poster: i.poster }) } : undefined} />
                 ))}
               </>
             )}
@@ -1019,6 +1092,9 @@ export default function WatchParty() {
             <div className="flex items-center gap-3 mb-2">
               <Icon name="chat" className="text-on-surface-variant/40" size="sm" />
               <span className="text-xs text-on-surface-variant/60">Party Chat ({messages.length})</span>
+              {suggestions.length > 0 && (
+                <span className="text-xs text-accent ml-auto">{suggestions.length} suggestion{suggestions.length > 1 ? 's' : ''}</span>
+              )}
             </div>
             <div className="max-h-24 overflow-y-auto mb-2 space-y-1">
               {messages.slice(-5).map((msg, i) => (
@@ -1038,6 +1114,55 @@ export default function WatchParty() {
             </form>
           </div>
         </div>
+
+        {/* Host: suggestion popup */}
+        <AnimatePresence>
+          {isHost && pendingSuggestion && (
+            <motion.div
+              initial={{ opacity: 0, y: 50, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 50, scale: 0.95 }}
+              className="fixed bottom-24 left-1/2 -translate-x-1/2 z-30 w-full max-w-sm mx-4"
+            >
+              <div className="bg-white/10 backdrop-blur-2xl border border-white/20 rounded-2xl shadow-2xl p-4">
+                <div className="flex items-start gap-3">
+                  {pendingSuggestion.poster ? (
+                    <img src={`https://image.tmdb.org/t/p/w92${pendingSuggestion.poster}`} alt="" className="w-12 h-18 rounded-lg object-cover shrink-0" />
+                  ) : (
+                    <div className="w-12 h-18 rounded-lg bg-surface-container flex items-center justify-center shrink-0">
+                      <Icon name="movie" className="text-on-surface-variant/40" size="sm" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-white">{pendingSuggestion.title}</p>
+                    <p className="text-xs text-white/50">Suggested by {pendingSuggestion.suggesterName || 'Someone'}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={() => {
+                      broadcast('suggest-accept', { id: pendingSuggestion.id, type: pendingSuggestion.type, title: pendingSuggestion.title, suggesterId: pendingSuggestion.suggesterId })
+                      handleContentSelect({ id: pendingSuggestion.id, type: pendingSuggestion.type, title: pendingSuggestion.title, year: '', poster: pendingSuggestion.poster, backdrop: null, overview: '' })
+                      setPendingSuggestion(null)
+                    }}
+                    className="flex-1 px-4 py-2 bg-primary text-on-primary rounded-lg text-xs font-semibold hover:brightness-110 transition-all"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    onClick={() => {
+                      broadcast('suggest-decline', { id: pendingSuggestion.id, type: pendingSuggestion.type, suggesterId: pendingSuggestion.suggesterId })
+                      setPendingSuggestion(null)
+                    }}
+                    className="flex-1 px-4 py-2 bg-white/10 text-white/70 rounded-lg text-xs hover:bg-white/20 transition-all"
+                  >
+                    Decline
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     )
   }
