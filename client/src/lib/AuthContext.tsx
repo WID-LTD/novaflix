@@ -62,6 +62,7 @@ interface AuthContextType {
   isAdmin: boolean
   planFeatures: PlanFeatures
   planRank: number
+  refresh: () => Promise<void>
   meetsPlan: (minPlan: string) => boolean
 }
 

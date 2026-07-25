@@ -259,7 +259,7 @@ export default function Pricing() {
             <Button
               onClick={handlePayNow}
               loading={modalLoading}
-              disabled={modalGateway === 'paystack' && gateways && !gateways.paystack.configured}
+              disabled={!!(modalGateway === 'paystack' && gateways && !gateways.paystack.configured)}
               className="w-full justify-center"
             >
               {modalGateway === 'paystack' && gateways && !gateways.paystack.configured
