@@ -24,6 +24,13 @@ export default function Watch() {
   const season = seasonParam || undefined
   const episode = episodeParam || undefined
 
+  // Defensive: TV shows need season/episode
+  useEffect(() => {
+    if (type === 'tv' && id && (!seasonParam || !episodeParam)) {
+      navigate(`/watch?id=${id}&type=tv&season=1&episode=1`, { replace: true })
+    }
+  }, [])
+
   const [showEpisodes, setShowEpisodes] = useState(false)
   const [showQuality, setShowQuality] = useState(false)
   const [selectedVariant, setSelectedVariant] = useState<Variant | null>(null)
@@ -57,7 +64,8 @@ export default function Watch() {
     queryKey: ['source', id, type, season, episode],
     queryFn: () => getStreamSource(id, type, season, episode),
     enabled: !!id,
-    retry: 2,
+    retry: 1,
+    retryDelay: 1000,
   })
 
   useEffect(() => {

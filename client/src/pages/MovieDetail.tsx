@@ -25,6 +25,8 @@ export default function MovieDetail() {
   const [searchParams] = useSearchParams()
   const pathType = window.location.pathname.startsWith('/tv/') ? 'tv' : 'movie'
   const type = (searchParams.get('type') || pathType) as 'movie' | 'tv'
+  const seasonParam = searchParams.get('season')
+  const episodeParam = searchParams.get('episode')
   const { user, planFeatures } = useAuth()
   const addToWatchlist = useStore((s) => s.addToWatchlist)
   const watchlist = useStore((s) => s.watchlist)
@@ -53,6 +55,8 @@ export default function MovieDetail() {
     let url = `/watch?id=${id}&type=${type}`
     if (season) url += `&season=${season}`
     if (episode) url += `&episode=${episode}`
+    if (type === 'tv' && !season) url += '&season=1'
+    if (type === 'tv' && !episode) url += '&episode=1'
     navigate(url)
   }
 
@@ -181,6 +185,16 @@ export default function MovieDetail() {
               className="flex items-center justify-center w-14 h-14 bg-surface-variant/40 backdrop-blur-md text-on-surface rounded-full border border-white/10 hover:bg-surface-variant/60 active:scale-90 transition-all"
             >
               <Icon name={inWatchlist ? 'check' : 'add'} />
+            </button>
+            <button
+              onClick={() => {
+                const code = Math.random().toString(36).substring(2, 8).toUpperCase()
+                navigate(`/watch-party?room=${code}&id=${id}&type=${type}${seasonParam ? `&season=${seasonParam}` : ''}${episodeParam ? `&episode=${episodeParam}` : ''}`)
+              }}
+              className="flex items-center justify-center gap-2 px-6 py-4 rounded-lg font-bold text-lg border border-primary/30 text-primary hover:bg-primary/10 active:scale-95 transition-all shadow-md"
+              title="Create Watch Party"
+            >
+              <Icon name="diversity_3" /> Watch Party
             </button>
           </div>
         </div>
