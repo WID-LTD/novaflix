@@ -7,6 +7,7 @@ import { useStore } from '../store/useStore'
 import { useAuth } from '../lib/AuthContext'
 import { recordWatch } from '../lib/auth'
 import VideoPlayer from '../components/features/VideoPlayer'
+import EmbedPlayer from '../components/features/EmbedPlayer'
 import BingePassModal from '../components/features/BingePassModal'
 import Button from '../components/ui/Button'
 import Badge from '../components/ui/Badge'
@@ -36,6 +37,8 @@ export default function Watch() {
   const [showQuality, setShowQuality] = useState(false)
   const [selectedVariant, setSelectedVariant] = useState<Variant | null>(null)
   const [currentStreamUrl, setCurrentStreamUrl] = useState<string>('')
+  const [currentEmbedUrl, setCurrentEmbedUrl] = useState<string>('')
+  const [isEmbedMode, setIsEmbedMode] = useState(false)
   const [manifestVariants, setManifestVariants] = useState<Variant[]>([])
   const [showBingePass, setShowBingePass] = useState(false)
   const [bingePassActive, setBingePassActive] = useState(false)
@@ -70,10 +73,13 @@ export default function Watch() {
   })
 
   useEffect(() => {
-    if (sourceData?.success && sourceData.streamUrl) {
-      setCurrentStreamUrl(sourceData.streamUrl)
+    if (!sourceData?.success) return
 
-      // Show binge pass offer for free tier (once per session)
+    if (sourceData.streamUrl) {
+      setCurrentStreamUrl(sourceData.streamUrl)
+      setIsEmbedMode(false)
+      setCurrentEmbedUrl('')
+
       if (planRank < 2 && !bingePassActive) {
         setShowBingePass(true)
       }
@@ -86,6 +92,10 @@ export default function Watch() {
           }
         })
         .catch(() => {})
+    } else if (sourceData.embedUrl) {
+      setCurrentEmbedUrl(sourceData.embedUrl)
+      setIsEmbedMode(true)
+      setCurrentStreamUrl('')
     }
   }, [sourceData, id, type, season, episode])
 
@@ -111,7 +121,7 @@ export default function Watch() {
   }
 
   const handleDownload = async () => {
-    if (!currentStreamUrl || !id || !details) return
+    if (!currentStreamUrl || !id || !details || isEmbedMode) return
     setDownloading(true)
     setDownloadDone(false)
     try {
@@ -182,7 +192,7 @@ export default function Watch() {
         </div>
 
         <div className="flex items-center gap-2">
-          {manifestVariants.length > 0 && (
+          {!isEmbedMode && manifestVariants.length > 0 && (
             <Button
               variant="ghost"
               size="sm"
@@ -203,15 +213,17 @@ export default function Watch() {
             </Button>
           )}
 
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleDownload}
-            disabled={!currentStreamUrl || downloading}
-          >
-            <Icon name="download" size="sm" />
-            {downloading ? 'Saving...' : downloadDone ? 'Downloaded!' : 'Download'}
-          </Button>
+          {!isEmbedMode && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleDownload}
+              disabled={!currentStreamUrl || downloading}
+            >
+              <Icon name="download" size="sm" />
+              {downloading ? 'Saving...' : downloadDone ? 'Downloaded!' : 'Download'}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -239,6 +251,11 @@ export default function Watch() {
               </div>
             )
           })()
+        ) : isEmbedMode && currentEmbedUrl ? (
+          <EmbedPlayer
+            embedUrl={currentEmbedUrl}
+            title={episodeInfo ? `${title} - ${episodeInfo}` : title}
+          />
         ) : currentStreamUrl ? (
           <VideoPlayer
             streamUrl={currentStreamUrl}

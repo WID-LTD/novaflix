@@ -4,6 +4,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { spawn } from 'child_process'
 import { getStreamUrl } from '../scraper.mjs'
+import { cacheClear, cacheStats } from '../providers/cache.js'
 import { getActiveSessionCount } from '../db.js'
 import { PLAN_FEATURES } from './planUtils.js'
 
@@ -112,16 +113,75 @@ export async function source(req, res) {
   }
 
   try {
-    const result = await Promise.race([
-      getStreamUrl(id, type || 'movie', season || null, episode || null),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout of 18000ms exceeded')), 18000)),
-    ])
-    const proxyUrl = `/api/proxy/${result.streamUrl.replace('https://', '')}`
+    let result
+    try {
+      result = await Promise.race([
+        getStreamUrl(id, type || 'movie', season || null, episode || null),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout of 18000ms exceeded')), 18000)),
+      ])
+    } catch (e) {
+      return res.json({ success: false, error: e.message })
+    }
+
+    if (result.streamUrl) {
+      try {
+        const headCheck = await axios({
+          url: result.streamUrl,
+          method: 'HEAD',
+          timeout: 5000,
+          validateStatus: () => true,
+          headers: { 'User-Agent': UA, Referer: 'https://play.xpass.top/' },
+        })
+        const ct = (headCheck.headers['content-type'] || '').toLowerCase()
+        if (ct.includes('text/html')) {
+          console.log(`[source] HLS blocked by CDN (HTML), falling back to embed for ${id}`)
+          result.streamUrl = null
+          result.providerMode = 'embed'
+        }
+      } catch {
+        // HEAD failed — proceed anyway
+      }
+    }
+
+    const toProxy = (url) => {
+      if (!url) return url
+      if (url.startsWith('http://') || url.startsWith('https://')) return url.replace('https://', '/api/proxy/')
+      return url
+    }
+
+    const streamProxy = result.streamUrl ? `/api/proxy/${result.streamUrl.replace('https://', '')}` : null
+    const embedProxy = result.embedUrl ? `/api/proxy-embed?url=${encodeURIComponent(result.embedUrl)}` : null
     const subtitles = (result.subtitles || []).map((s) => ({
       label: s.label,
-      file: s.file.replace('https://', '/api/proxy/'),
+      file: toProxy(s.file),
     }))
-    res.json({ success: true, streamUrl: proxyUrl, directUrl: result.streamUrl, subtitles })
+
+    const backups = (result.backups || []).slice(0, 5).map((b) => ({
+      streamUrl: b.streamUrl,
+      embedUrl: b.embedUrl,
+      provider: b.provider,
+      subtitles: (b.subtitles || []).map((s) => ({
+        label: s.label,
+        file: toProxy(s.file),
+      })),
+    }))
+
+    const response = {
+      success: true,
+      streamUrl: streamProxy,
+      embedUrl: embedProxy,
+      directUrl: result.streamUrl,
+      subtitles,
+      provider: result.provider,
+      providerMode: result.providerMode || (result.streamUrl ? 'hls' : 'embed'),
+      backups,
+      fromCache: result.fromCache || false,
+      elapsed: result.elapsed || 0,
+      attempted: result.attempted || 0,
+      totalProviders: result.totalProviders || 0,
+    }
+
+    res.json(response)
   } catch (err) {
     console.error(`[api/source] id=${id} type=${type || 'movie'} season=${season || '-'} episode=${episode || '-'}: ${err.message}`)
     let releaseDate = null
@@ -445,6 +505,7 @@ export async function proxy(req, res) {
       headers: {
         'User-Agent': UA,
         Referer: ref,
+        Origin: ref.replace(/\/$/, ''),
       },
     })
   }
@@ -555,5 +616,82 @@ export async function proxy(req, res) {
   } catch (err) {
     console.error('[proxy] stream error:', err.message)
     if (!res.headersSent) res.status(500).send('Proxy stream failed')
+  }
+}
+
+const AD_PATTERNS = [
+  'doubleclick.net', 'googleadservices.com', 'googlesyndication.com',
+  'popads.net', 'propellerads.com', 'adsterra.com', 'exoclick.com',
+  'adf.ly', 'adfly', 'adserver', 'adnxs.com', 'rubiconproject.com',
+  'criteo.com', 'outbrain.com', 'taboola.com', 'revcontent.com',
+  'popcash.net', 'pushcrew.com', 'onesignal.com',
+  'advertising', 'ad-plus', 'ad_', '-ad.', '/ads/',
+  'pagead2.googlesyndication',
+]
+
+function stripAds(html) {
+  let cleaned = html
+
+  cleaned = cleaned.replace(/<script[^>]*>[\s\S]*?<\/script\s*>/gi, (match) => {
+    const lower = match.toLowerCase()
+    for (const ad of AD_PATTERNS) {
+      if (lower.includes(ad)) return ''
+    }
+    if (lower.includes('window.open') || lower.includes('popup') || lower.includes('open.new')) return ''
+    return match
+  })
+
+  cleaned = cleaned.replace(/<iframe[^>]*>[\s\S]*?<\/iframe\s*>/gi, (match) => {
+    const lower = match.toLowerCase()
+    for (const ad of AD_PATTERNS) {
+      if (lower.includes(ad)) return ''
+    }
+    if (lower.includes('window.open') || lower.match(/src\s*=\s*["'][^"']*about:/i)) return ''
+    return match
+  })
+
+  cleaned = cleaned.replace(/\s+onclick\s*=\s*["'][^"']*["']/gi, '')
+  cleaned = cleaned.replace(/\s+onload\s*=\s*["'][^"']*["']/gi, '')
+  cleaned = cleaned.replace(/\s+onerror\s*=\s*["'][^"']*["']/gi, '')
+  cleaned = cleaned.replace(/\s+onmouseover\s*=\s*["'][^"']*["']/gi, '')
+  cleaned = cleaned.replace(/\s+onmousedown\s*=\s*["'][^"']*["']/gi, '')
+
+  cleaned = cleaned.replace(/<div[^>]*id="[^"]*"?[^>]*style="[^"]*display:\s*none[^"]*"[^>]*>[\s\S]*?<\/div\s*>/gi, '')
+  cleaned = cleaned.replace(/<ins\s+class="adsbygoogle"[\s\S]*?<\/ins\s*>/gi, '')
+  cleaned = cleaned.replace(/<script[^>]*data-ad-[\s\S]*?<\/script\s*>/gi, '')
+
+  return cleaned
+}
+
+export async function proxyEmbed(req, res) {
+  const { url: embedUrl } = req.query
+  if (!embedUrl) return res.status(400).json({ error: 'embedUrl required' })
+
+  try {
+    const pageRes = await axios.get(embedUrl, {
+      headers: {
+        'User-Agent': UA,
+        Referer: embedUrl,
+        Accept: 'text/html,application/xhtml+xml',
+      },
+      timeout: 10000,
+      validateStatus: () => true,
+      responseType: 'text',
+    })
+
+    if (pageRes.status !== 200) {
+      return res.status(502).json({ error: `Embed returned ${pageRes.status}` })
+    }
+
+    const cleaned = stripAds(pageRes.data)
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8')
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow')
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN')
+    res.send(cleaned)
+  } catch (err) {
+    console.error('[proxy-embed] error:', err.message)
+    res.status(502).json({ error: 'Failed to fetch embed' })
   }
 }

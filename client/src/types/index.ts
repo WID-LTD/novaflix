@@ -73,9 +73,17 @@ export interface Subtitle {
 
 export interface StreamSource {
   success: boolean
-  streamUrl: string
-  directUrl: string
+  streamUrl: string | null
+  embedUrl: string | null
+  directUrl: string | null
   subtitles: Subtitle[]
+  provider?: string
+  providerMode?: 'hls' | 'embed'
+  backups?: any[]
+  fromCache?: boolean
+  elapsed?: number
+  attempted?: number
+  totalProviders?: number
   error?: string
   releaseDate?: string | null
 }

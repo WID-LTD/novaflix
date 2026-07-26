@@ -1,24 +1,20 @@
 {
   "name": "NovaFlix",
   "short_name": "NovaFlix",
-  "description": "Stream movies, TV shows, and creator content on NovaFlix",
+  "description": "Stream movies, TV shows, and creator content",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#090909",
-  "theme_color": "#090909",
+  "background_color": "#131313",
+  "theme_color": "#131313",
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icons/icon-512.png",
+      "src": "/pictoral-mark-logo.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     }
+  ]
+}
   ]
 }

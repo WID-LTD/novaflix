@@ -58,26 +58,85 @@ import '../widgets/layout/index.dart';
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
 
-GoRouter appRouter(WidgetRef ref) {
-  final authState = ref.watch(authProvider);
+class AuthNotifier extends ChangeNotifier {
+  AuthStatus status = AuthStatus.unknown;
+  void update(AuthStatus s) {
+    if (status != s) {
+      status = s;
+      notifyListeners();
+    }
+  }
+}
 
-  return GoRouter(
+final routerRefreshNotifier = AuthNotifier();
+
+final _publicRoutes = <String>{
+  '/', '/home', '/splash', '/landing', '/login', '/register', '/verify-email',
+  '/profiles', '/creator/login',
+  '/search', '/search-results', '/tv-shows', '/discover',
+  '/category', '/category/:slug',
+  '/movie/:id', '/tv/:id',
+  '/settings', '/pricing', '/store', '/learn',
+  '/creators',
+  '/events', '/event/:id', '/red-carpet',
+};
+
+bool _isPublicRoute(String location) {
+  if (_publicRoutes.contains(location)) return true;
+  if (location.startsWith('/category/') || location.startsWith('/movie/') ||
+      location.startsWith('/tv/') || location.startsWith('/event/') ||
+      location.startsWith('/archive/')) return true;
+  return false;
+}
+
+final _protectedRoutes = <String>{
+  '/profile', '/watchlist', '/watch', '/upload', '/downloads', '/community',
+  '/hooks', '/archive', '/referrals', '/payment-success', '/watch-party',
+  '/creator', '/creator/analytics', '/creator/catalog', '/creator/products',
+  '/creator/courses', '/creator/events', '/creator/memberships',
+  '/creator/plan-picker', '/creator/campaigns', '/creator/profile',
+  '/admin', '/admin/asset-qc', '/admin/filters', '/admin/localization',
+  '/admin/campaigns',
+};
+
+bool _isProtectedRoute(String location) {
+  if (_protectedRoutes.contains(location)) return true;
+  if (location.startsWith('/creator') || location.startsWith('/admin') ||
+      location.startsWith('/archive/') || location.startsWith('/community')) {
+    return true;
+  }
+  return false;
+}
+
+GoRouter? _router;
+GoRouter appRouter(WidgetRef ref) {
+  if (_router != null) return _router!;
+
+  _router = GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/splash',
+    refreshListenable: routerRefreshNotifier,
     redirect: (context, state) {
-      final isAuth = authState.status == AuthStatus.authenticated;
-      final isAuthRoute = state.matchedLocation == '/login' ||
-          state.matchedLocation == '/register' ||
-          state.matchedLocation == '/verify-email' ||
-          state.matchedLocation == '/splash' ||
-          state.matchedLocation == '/landing';
+      final isAuth = routerRefreshNotifier.status == AuthStatus.authenticated;
+      final location = state.matchedLocation;
 
-      if (isAuth && isAuthRoute && state.matchedLocation != '/landing' && state.matchedLocation != '/splash') return '/home';
-      if (!isAuth && !isAuthRoute) {
-        if (state.matchedLocation == '/landing' || state.matchedLocation == '/creators' ||
-            state.matchedLocation == '/creator/login') return null;
-        return '/login';
+      if (location == '/splash') return null;
+
+      if (location.startsWith('/creator') && location != '/creator/login') {
+        if (!isAuth) return '/login?redirect=${Uri.encodeComponent(location)}';
+        return null;
       }
+
+      if (location.startsWith('/admin')) {
+        if (!isAuth) return '/login?redirect=${Uri.encodeComponent(location)}';
+        return null;
+      }
+
+      if (_isPublicRoute(location)) return null;
+      if (!isAuth) {
+        return '/login?redirect=${Uri.encodeComponent(location)}';
+      }
+
       return null;
     },
     routes: [
@@ -149,4 +208,5 @@ GoRouter appRouter(WidgetRef ref) {
       GoRoute(path: '/:path(.*)', builder: (_, __) => const NotFoundScreen()),
     ],
   );
+  return _router!;
 }
