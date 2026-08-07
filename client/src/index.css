@@ -1,3 +1,11 @@
+:root {
+  --app-background: #131313;
+  --app-primary-text: #e5e2e1;
+  --app-muted-text: rgba(229, 226, 225, 0.62);
+  --app-accent: #e50914;
+  --app-divider: rgba(255, 255, 255, 0.08);
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -83,6 +91,15 @@
     scrollbar-width: none;
   }
 
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
   .card-hover-effect {
     transition: transform 0.3s ease, box-shadow 0.3s ease;
   }
@@ -146,6 +163,11 @@
     to { opacity: 1; }
   }
 
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
   @keyframes backdropZoom {
     0% { transform: scale(1); }
     100% { transform: scale(1.08); }
@@ -185,4 +207,26 @@
 
 .animate-beam {
   animation: beam 2.5s ease-in-out infinite;
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  animation: marquee 12s linear infinite;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+@keyframes spin-music {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-music {
+  animation: spin-music 6s linear infinite;
 }

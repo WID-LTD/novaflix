@@ -1,0 +1,36 @@
+# NovaFlix Render Blueprint — deploys the API/WebSocket engine.
+# Auto-deploys on every push to the default branch.
+#
+# Env vars required (set in Render dashboard):
+#   JWT_SECRET, TMDB_ACCESS_TOKEN, DATABASE_URL (Neon/Postgres)
+#   PAYSTACK_SECRET_KEY / FLUTTERWAVE_SECRET_KEY / STRIPE_SECRET_KEY (as needed)
+services:
+  - type: web
+    name: novaflix-api
+    runtime: node
+    rootDir: server
+    plan: starter            # free tiers get throttled; starter enables websockets + persistent build env
+    healthCheckPath: /api/health
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false          # set in dashboard
+      - key: JWT_SECRET
+        sync: false
+      - key: TMDB_ACCESS_TOKEN
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: FLUTTERWAVE_SECRET_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: WEB_PUSH_PUBLIC_KEY
+        sync: false
+      - key: WEB_PUSH_PRIVATE_KEY
+        sync: false

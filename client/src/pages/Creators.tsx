@@ -123,6 +123,7 @@ export default function Creators() {
                 key={c.id}
                 variants={{ initial: { opacity: 0, y: 30 }, whileInView: { opacity: 1, y: 0 } }}
                 whileHover={{ y: -4 }}
+                onClick={() => navigate(`/profile/${c.id}`)}
                 className="group cursor-pointer"
               >
                 <div className="aspect-[3/4] bg-surface-container-high border border-white/5 rounded-xl overflow-hidden mb-3 relative">
@@ -141,6 +142,9 @@ export default function Creators() {
                 </div>
                 <p className="font-label-md text-label-md text-on-surface truncate">{c.name}</p>
                 <p className="text-on-surface-variant/60 text-sm truncate">{c.known_for_department || 'Filmmaker'}</p>
+                <p className="text-xs text-primary mt-1 inline-flex items-center gap-1">
+                  <Icon name="group" className="w-3.5 h-3.5" /> {c.followers_count || 0} followers
+                </p>
               </motion.div>
             ))}
           </motion.div>

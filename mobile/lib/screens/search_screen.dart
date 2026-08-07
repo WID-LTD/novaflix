@@ -131,7 +131,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       },
                     );
                   },
-                  loading: () => const Center(child: CircularProgressIndicator()),
+                  loading: () => const LoadingSpinner(logo: true),
                   error: (e, _) => Center(child: Text('Error: $e')),
                 ),
               ),

@@ -11,7 +11,7 @@ interface Props {
 }
 
 const AuthGuard: FC<Props> = ({ children, requirePremium, requirePlan, creatorOnly }) => {
-  const { user, loading } = useAuth()
+  const { user, loading, accountStatus } = useAuth()
   const location = useLocation()
 
   if (loading) {
@@ -20,6 +20,10 @@ const AuthGuard: FC<Props> = ({ children, requirePremium, requirePlan, creatorOn
 
   if (!user) {
     return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />
+  }
+
+  if ((accountStatus === 'suspended' || accountStatus === 'banned') && location.pathname !== '/suspended') {
+    return <Navigate to="/suspended" replace />
   }
 
   if (creatorOnly && user.role !== 'creator' && user.role !== 'admin') {

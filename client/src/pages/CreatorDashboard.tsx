@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import Icon from '../components/ui/Icon'
-import { getToken, getCreatorDashboard, getCreatorComments, getPayoutHistory, requestWithdraw, createPayoutRecipient, getArtistGraph } from '../lib/auth'
+import { getToken, getCreatorDashboard, getCreatorComments, getPayoutHistory, requestWithdraw, createPayoutRecipient, getArtistGraph, getCreatorEarnings, getMyGlowGifts } from '../lib/auth'
 import Skeleton from '../components/ui/Skeleton'
 
 const tabs = ['Overview', 'Content', 'Audience', 'Engagement', 'Payouts', 'Network', 'Analytics']
@@ -24,6 +24,8 @@ export default function CreatorDashboard() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [comments, setComments] = useState<any[]>([])
   const [payouts, setPayouts] = useState<any[]>([])
+  const [earnings, setEarnings] = useState<any>({ summary: null, items: [] })
+  const [glowGifts, setGlowGifts] = useState<any>({ items: [], totals: null })
   const [graphData, setGraphData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -41,11 +43,15 @@ export default function CreatorDashboard() {
       getCreatorComments(token),
       getPayoutHistory(token),
       getArtistGraph(token),
-    ]).then(([d, c, p, g]) => {
+      getCreatorEarnings(token),
+      getMyGlowGifts(token),
+    ]).then(([d, c, p, g, e, gifts]) => {
       if (d.success) setData(d.dashboard)
       if (c.success) setComments(c.comments)
       if (p.success) setPayouts(p.payouts)
       if (g.success) setGraphData(g.edges)
+      if (e.success) setEarnings(e)
+      if (gifts.success) setGlowGifts(gifts)
       setLoading(false)
     })
   }, [])
@@ -220,6 +226,7 @@ export default function CreatorDashboard() {
         )
 
       case 'Payouts':
+        const e = earnings.summary
         return (
           <div className="space-y-6">
             <div className="grid md:grid-cols-3 gap-gutter">
@@ -234,6 +241,106 @@ export default function CreatorDashboard() {
               <div className="bg-surface-container-high border border-white/5 rounded-xl p-5">
                 <p className="text-xs text-on-surface-variant">Total Views</p>
                 <p className="text-2xl font-bold text-on-surface">{(data?.totalViews || 0).toLocaleString()}</p>
+              </div>
+            </div>
+
+            <div className="bg-surface-container-high border border-white/5 rounded-xl p-5">
+              <h3 className="font-label-md text-label-md text-on-surface mb-4 flex items-center gap-2">
+                <Icon name="savings" className="text-primary-container" /> Dual-Pool VPM Earnings
+              </h3>              <p className="text-xs text-on-surface-variant/60 mb-4 leading-relaxed">
+                60% of subscription revenue is split between Movie (80%) and Shorts (20%) pools and paid per-minute-watched (VPM). 40% funds corporate operations.
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                <div className="bg-surface-container rounded-xl p-3">
+                  <p className="text-[11px] text-on-surface-variant">Movie Pool</p>
+                  <p className="text-lg font-bold text-on-surface">${(e?.movie || 0).toLocaleString()}</p>
+                </div>
+                <div className="bg-surface-container rounded-xl p-3">
+                  <p className="text-[11px] text-on-surface-variant">Shorts Pool</p>
+                  <p className="text-lg font-bold text-on-surface">${(e?.short || 0).toLocaleString()}</p>
+                </div>
+                <div className="bg-surface-container rounded-xl p-3">
+                  <p className="text-[11px] text-on-surface-variant">Minutes Earned</p>
+                  <p className="text-lg font-bold text-on-surface">{Math.round(e?.minutes || 0).toLocaleString()}</p>
+                </div>
+                <div className="bg-surface-container rounded-xl p-3">
+                  <p className="text-[11px] text-on-surface-variant">Total VPM</p>
+                  <p className="text-lg font-bold text-primary">${(e?.total || 0).toLocaleString()}</p>
+                </div>
+              </div>
+              {Array.isArray(earnings.items) && earnings.items.length > 0 ? (
+                <div className="space-y-2">
+                  {earnings.items.map((row: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
+                      <span className="text-sm text-on-surface">{row.period} <span className="text-on-surface-variant/60">· {row.pool_type}</span></span>
+                      <span className="text-xs text-on-surface-variant/70">{(parseFloat(row.minutes) || 0).toLocaleString()} min</span>
+                      <span className="text-xs text-on-surface-variant/60">@ ${parseFloat(row.vpm).toFixed(3)}/min</span>
+                      <span className="text-sm font-semibold text-primary">${parseFloat(row.amount).toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-on-surface-variant/60 text-center py-4">No VPM earnings settled yet.</p>
+              )}
+            </div>
+
+            <div className="bg-surface-container-high border border-white/5 rounded-xl p-5">
+              <h3 className="font-label-md text-label-md text-on-surface mb-4 flex items-center gap-2">
+                <Icon name="bolt" className="text-primary-container" /> Glow Gifts Received
+              </h3>
+              <p className="text-xs text-on-surface-variant/60 mb-4">Fans send Glow Tokens your way. A 20% gifting fee funds the platform; you receive the remaining 80%.</p>
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="bg-surface-container rounded-xl p-3">
+                  <p className="text-[11px] text-on-surface-variant">Gross Gifts</p>
+                  <p className="text-lg font-bold text-on-surface">${(glowGifts.totals?.gross || 0).toLocaleString()}</p>
+                </div>
+                <div className="bg-surface-container rounded-xl p-3">
+                  <p className="text-[11px] text-on-surface-variant">Gifting Fee (20%)</p>
+                  <p className="text-lg font-bold text-on-surface-variant/70">${(glowGifts.totals?.fee || 0).toLocaleString()}</p>
+                </div>
+                <div className="bg-surface-container rounded-xl p-3">
+                  <p className="text-[11px] text-on-surface-variant">You Receive</p>
+                  <p className="text-lg font-bold text-primary">${(glowGifts.totals?.net || 0).toLocaleString()}</p>
+                </div>
+              </div>
+              {glowGifts.items && glowGifts.items.length > 0 ? (
+                <div className="space-y-2">
+                  {glowGifts.items.map((g: any) => (
+                    <div key={g.id} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
+                      <span className="text-sm text-on-surface">{g.sender_name || 'Fan'}</span>
+                      <span className="text-xs text-on-surface-variant/70 px-2 truncate">{g.note || ''}</span>
+                      <span className="text-sm font-semibold text-primary">+${parseFloat(g.net_amount).toFixed(2)}</span>
+                      <span className="text-xs text-on-surface-variant/60">{new Date(g.created_at).toLocaleDateString()}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-on-surface-variant/60 text-center py-4">No Glow Gifts yet.</p>
+              )}
+            </div>
+
+            <div className="bg-surface-container-high border border-white/5 rounded-xl p-5">
+              <h3 className="font-label-md text-label-md text-on-surface mb-4 flex items-center gap-2">
+                <Icon name="storefront" className="text-primary-container" /> Commerce Shelf
+              </h3>
+              <p className="text-xs text-on-surface-variant/60 mb-4">Sell merch on your shelf. A 15% marketplace fee funds the platform; you keep 85%.</p>
+              <div className="grid grid-cols-4 gap-3 mb-2">
+                <div className="bg-surface-container rounded-xl p-3">
+                  <p className="text-[11px] text-on-surface-variant">Orders</p>
+                  <p className="text-lg font-bold text-on-surface">{earnings.merch?.orders || 0}</p>
+                </div>
+                <div className="bg-surface-container rounded-xl p-3">
+                  <p className="text-[11px] text-on-surface-variant">Gross Sales</p>
+                  <p className="text-lg font-bold text-on-surface">${(earnings.merch?.gross || 0).toLocaleString()}</p>
+                </div>
+                <div className="bg-surface-container rounded-xl p-3">
+                  <p className="text-[11px] text-on-surface-variant">Marketplace Fee</p>
+                  <p className="text-lg font-bold text-on-surface-variant/70">${(earnings.merch?.fee || 0).toLocaleString()}</p>
+                </div>
+                <div className="bg-surface-container rounded-xl p-3">
+                  <p className="text-[11px] text-on-surface-variant">You Receive</p>
+                  <p className="text-lg font-bold text-primary">${(earnings.merch?.net || 0).toLocaleString()}</p>
+                </div>
               </div>
             </div>
 

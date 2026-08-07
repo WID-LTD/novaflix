@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom'
 import Layout from './components/layout/Layout'
 import AuthGuard from './components/layout/AuthGuard'
 import AdminGuard from './components/layout/AdminGuard'
+import AdminLayout from './components/layout/AdminLayout'
 import CreatorGuard from './components/layout/CreatorGuard'
 import Skeleton from './components/ui/Skeleton'
 
@@ -20,8 +21,13 @@ const Profile = lazy(() => import('./pages/Profile'))
 const Settings = lazy(() => import('./pages/Settings'))
 const Login = lazy(() => import('./pages/Login'))
 const Register = lazy(() => import('./pages/Register'))
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
+const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 const ProfileGateway = lazy(() => import('./pages/ProfileGateway'))
 const CreatorLogin = lazy(() => import('./pages/CreatorLogin'))
+const CreatorForgotPassword = lazy(() => import('./pages/CreatorForgotPassword'))
+const CreatorResetPassword = lazy(() => import('./pages/CreatorResetPassword'))
+const SuspendedPage = lazy(() => import('./pages/SuspendedPage'))
 const Pricing = lazy(() => import('./pages/Pricing'))
 const CreatorDashboard = lazy(() => import('./pages/CreatorDashboard'))
 const CreatorPlanPicker = lazy(() => import('./pages/CreatorPlanPicker'))
@@ -33,6 +39,8 @@ const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
 const Community = lazy(() => import('./pages/Community'))
 const Downloads = lazy(() => import('./pages/Downloads'))
 const HooksFeed = lazy(() => import('./pages/HooksFeed'))
+const News = lazy(() => import('./pages/News'))
+const ArticleNews = lazy(() => import('./pages/ArticleNews'))
 const CategoryPage = lazy(() => import('./pages/CategoryPage'))
 const CreatorAnalytics = lazy(() => import('./pages/CreatorAnalytics'))
 const CreatorProfileHub = lazy(() => import('./pages/CreatorProfileHub'))
@@ -42,6 +50,21 @@ const AdminAssetQC = lazy(() => import('./pages/AdminAssetQC'))
 const AdminFilters = lazy(() => import('./pages/AdminFilters'))
 const AdminCampaigns = lazy(() => import('./pages/AdminCampaigns'))
 const AdminLocalization = lazy(() => import('./pages/AdminLocalization'))
+const AdminAnnouncements = lazy(() => import('./pages/AdminAnnouncements'))
+const AdminOverview = lazy(() => import('./pages/AdminOverview'))
+const AdminContent = lazy(() => import('./pages/AdminContent'))
+const AdminShorts = lazy(() => import('./pages/AdminShorts'))
+const AdminAnalytics = lazy(() => import('./pages/AdminAnalytics'))
+const AdminTransactions = lazy(() => import('./pages/AdminTransactions'))
+const AdminSubscriptions = lazy(() => import('./pages/AdminSubscriptions'))
+const AdminUsers = lazy(() => import('./pages/AdminUsers'))
+const AdminCreators = lazy(() => import('./pages/AdminCreators'))
+const AdminCommunity = lazy(() => import('./pages/AdminCommunity'))
+const AdminModeration = lazy(() => import('./pages/AdminModeration'))
+const AdminMarketing = lazy(() => import('./pages/AdminMarketing'))
+const AdminFeedSettings = lazy(() => import('./pages/AdminFeedSettings'))
+const AdminRoles = lazy(() => import('./pages/AdminRoles'))
+const AdminSettings = lazy(() => import('./pages/AdminSettings'))
 const Referrals = lazy(() => import('./pages/Referrals'))
 const CreatorMembershipManager = lazy(() => import('./pages/CreatorMembershipManager'))
 const CreatorEventsManager = lazy(() => import('./pages/CreatorEventsManager'))
@@ -54,6 +77,11 @@ const Archive = lazy(() => import('./pages/Archive'))
 const ArchiveDetail = lazy(() => import('./pages/ArchiveDetail'))
 const PaymentSuccess = lazy(() => import('./pages/PaymentSuccess'))
 const NotFound = lazy(() => import('./pages/NotFound'))
+const Chat = lazy(() => import('./pages/Chat'))
+const Forum = lazy(() => import('./pages/Forum'))
+const Trivia = lazy(() => import('./pages/Trivia'))
+const SecretRoom = lazy(() => import('./pages/SecretRoom'))
+const PublicProfile = lazy(() => import('./pages/PublicProfile'))
 
 function PageLoading() {
   return (
@@ -79,12 +107,18 @@ export default function App() {
         <Route path="/landing" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/profiles" element={<ProfileGateway />} />
         <Route path="/creator/login" element={<CreatorLogin />} />
+        <Route path="/creator/forgot-password" element={<CreatorForgotPassword />} />
+        <Route path="/creator/reset-password" element={<CreatorResetPassword />} />
+        <Route path="/suspended" element={<SuspendedPage />} />
         <Route element={<Layout />}>
           <Route path="/home" element={<Home />} />
           <Route path="/community" element={<AuthGuard><Community /></AuthGuard>} />
           <Route path="/community/:id" element={<AuthGuard><Community /></AuthGuard>} />
+          <Route path="/community/room/:id" element={<AuthGuard><SecretRoom /></AuthGuard>} />
           <Route path="/downloads" element={<AuthGuard><Downloads /></AuthGuard>} />
           <Route path="/search" element={<Search />} />
           <Route path="/search/results" element={<SearchResults />} />
@@ -99,6 +133,8 @@ export default function App() {
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/payment/success" element={<AuthGuard><PaymentSuccess /></AuthGuard>} />
           <Route path="/hooks" element={<AuthGuard><HooksFeed /></AuthGuard>} />
+          <Route path="/news" element={<News />} />
+          <Route path="/news/:id" element={<ArticleNews />} />
           <Route path="/category" element={<CategoryPage />} />
           <Route path="/category/:slug" element={<CategoryPage />} />
           <Route path="/creator" element={<CreatorGuard><CreatorDashboard /></CreatorGuard>} />
@@ -125,11 +161,35 @@ export default function App() {
           <Route path="/archive" element={<AuthGuard><Archive /></AuthGuard>} />
           <Route path="/archive/:id" element={<AuthGuard><ArchiveDetail /></AuthGuard>} />
           <Route path="/watch-party" element={<AuthGuard requirePremium><WatchParty /></AuthGuard>} />
-          <Route path="/admin" element={<AdminGuard><AdminDashboard /></AdminGuard>} />
+          <Route path="/chat" element={<AuthGuard><Chat /></AuthGuard>} />
+          <Route path="/forum" element={<AuthGuard><Forum /></AuthGuard>} />
+          <Route path="/forum/:topicId" element={<AuthGuard><Forum /></AuthGuard>} />
+          <Route path="/trivia" element={<AuthGuard><Trivia /></AuthGuard>} />
+          <Route path="/profile/:id" element={<PublicProfile />} />
           <Route path="/admin/asset-qc" element={<AdminGuard><AdminAssetQC /></AdminGuard>} />
           <Route path="/admin/filters" element={<AdminGuard><AdminFilters /></AdminGuard>} />
           <Route path="/admin/campaigns" element={<AdminGuard><AdminCampaigns /></AdminGuard>} />
           <Route path="/admin/localization" element={<AdminGuard><AdminLocalization /></AdminGuard>} />
+          <Route path="/admin/announcements" element={<AdminGuard><AdminAnnouncements /></AdminGuard>} />
+        </Route>
+        <Route path="/admin" element={<AdminGuard><AdminLayout /></AdminGuard>}>
+          <Route index element={<AdminOverview />} />
+          <Route path="content" element={<AdminContent />} />
+          <Route path="shorts" element={<AdminShorts />} />
+          <Route path="creative" element={<AdminContent />} />
+          <Route path="analytics" element={<AdminAnalytics />} />
+          <Route path="transactions" element={<AdminTransactions />} />
+          <Route path="subscriptions" element={<AdminSubscriptions />} />
+          <Route path="users" element={<AdminUsers />} />
+          <Route path="creators" element={<AdminCreators />} />
+          <Route path="community" element={<AdminCommunity />} />
+          <Route path="moderation" element={<AdminModeration />} />
+          <Route path="announcements" element={<AdminAnnouncements />} />
+          <Route path="push-notifications" element={<AdminAnnouncements />} />
+          <Route path="marketing" element={<AdminMarketing />} />
+          <Route path="roles" element={<AdminRoles />} />
+          <Route path="feed-settings" element={<AdminFeedSettings />} />
+          <Route path="settings" element={<AdminSettings />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>

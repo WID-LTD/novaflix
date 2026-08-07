@@ -5,8 +5,10 @@ import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../providers/auth_provider.dart';
 import '../providers/store_provider.dart';
+import '../providers/downloads_provider.dart';
 import '../services/api_service.dart';
 import '../widgets/ui/index.dart';
+import '../widgets/features/download_progress_tile.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -56,6 +58,8 @@ class ProfileScreen extends ConsumerWidget {
               _statCard(Icons.play_circle, 'Continue Watching', '${store.continueWatching.length} items'),
             ]),
             const SizedBox(height: 24),
+            _downloadsPreview(context, ref),
+            const SizedBox(height: 24),
             _section('Quick Links', [
               _linkTile(Icons.settings, 'Settings', () => context.push('/settings')),
               _linkTile(Icons.bookmark, 'Watchlist', () => context.push('/watchlist')),
@@ -101,6 +105,64 @@ class ProfileScreen extends ConsumerWidget {
         ...children,
       ],
     );
+  }
+
+  Widget _downloadsPreview(BuildContext context, WidgetRef ref) {
+    final dlState = ref.watch(downloadsProvider);
+    final items = dlState.items;
+    final active = dlState.active;
+    final tiles = <Widget>[];
+
+    for (final a in active.take(3)) {
+      tiles.add(GestureDetector(
+        onTap: () => context.push('/downloads'),
+        child: DownloadProgressTile(
+          backdrop: a.backdrop,
+          poster: a.poster,
+          progress: a.fraction,
+          active: true,
+          size: 72,
+        ),
+      ));
+    }
+    for (final m in items.take(3)) {
+      tiles.add(GestureDetector(
+        onTap: () => context.push('/downloads'),
+        child: DownloadProgressTile(
+          backdrop: m.backdrop,
+          poster: m.poster,
+          progress: m.progress,
+          active: false,
+          size: 72,
+        ),
+      ));
+    }
+
+    if (tiles.isEmpty) {
+      return _section('Downloads', [
+        _linkTile(Icons.download, 'Your downloads', () => context.push('/downloads')),
+      ]);
+    }
+
+    return _section('Downloads', [
+      Text(
+        active.isNotEmpty
+            ? '${active.length} downloading • ${items.length} saved'
+            : '${items.length} saved for offline',
+        style: AppTypography.bodySm.copyWith(color: AppColors.onSurfaceVariant),
+      ),
+      const SizedBox(height: 12),
+      Row(
+        children: [
+          for (var i = 0; i < tiles.length; i++) ...[
+            if (i > 0) const SizedBox(width: 12),
+            tiles[i],
+          ],
+        ],
+      ),
+      const SizedBox(height: 8),
+      _linkTile(Icons.open_in_new, 'Go to downloads', () => context.push('/downloads')),
+    ]);
   }
 
   Widget _statCard(IconData icon, String label, String value) {

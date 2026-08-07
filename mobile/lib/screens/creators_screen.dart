@@ -5,6 +5,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../services/api_service.dart';
 import '../models/creator.dart';
+import '../widgets/ui/index.dart';
 
 final _publicCreatorsProvider = FutureProvider<List<Creator>>((ref) async {
   final api = ref.read(apiServiceProvider);
@@ -57,7 +58,7 @@ class CreatorsScreen extends ConsumerWidget {
             );
           },
         ),
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const LoadingSpinner(logo: true),
         error: (e, _) => Center(child: Text('Error: $e')),
       ),
     );

@@ -102,7 +102,7 @@ class DiscoverScreen extends ConsumerWidget {
                   itemBuilder: (_, i) => MovieCard(item: items[i]),
                 );
               },
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const LoadingSpinner(logo: true),
               error: (e, _) => Center(child: Text('Error: $e')),
             ),
           ),

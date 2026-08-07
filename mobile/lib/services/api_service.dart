@@ -1,12 +1,15 @@
-import 'dart:io';
+import 'dart:async';
+import 'dart:math';
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../core/config.dart';
 
 final apiServiceProvider = Provider<ApiService>((ref) => ApiService());
 
 class ApiService {
-  static const String baseUrl = 'http://10.0.2.2:5001/api';
+  static String get baseUrl => AppConfig.apiBaseUrl;
   static const _storage = FlutterSecureStorage();
   static const _tokenKey = 'novaflix-token';
   static const _creatorTokenKey = 'novaflix-creator-token';
@@ -53,6 +56,21 @@ class ApiService {
   Future<void> saveCreatorToken(String token) => _storage.write(key: _creatorTokenKey, value: token);
   Future<void> deleteCreatorToken() => _storage.delete(key: _creatorTokenKey);
 
+  static const _deviceIdKey = 'novaflix-device-id';
+  Future<String> getDeviceId() async {
+    final existing = await _storage.read(key: _deviceIdKey);
+    if (existing != null && existing.isNotEmpty) return existing;
+    final id = '${DateTime.now().millisecondsSinceEpoch}-${_randomHex(16)}';
+    await _storage.write(key: _deviceIdKey, value: id);
+    return id;
+  }
+
+  String _randomHex(int length) {
+    const chars = '0123456789abcdef';
+    final rnd = Random();
+    return List.generate(length, (_) => chars[rnd.nextInt(chars.length)]).join();
+  }
+
   Future<Response> get(String path, {Map<String, dynamic>? params}) =>
       _dio.get(path, queryParameters: params);
   Future<Response> post(String path, {Map<String, dynamic>? data}) =>
@@ -67,8 +85,15 @@ class ApiService {
   Future<Response> register(String email, String password, String? name) =>
       post('/auth/register', data: {'email': email, 'password': password, if (name != null) 'name': name});
 
-  Future<Response> login(String email, String password) =>
-      post('/auth/login', data: {'email': email, 'password': password});
+  Future<Response> login(String email, String password) async {
+    final deviceId = await getDeviceId();
+    return post('/auth/login', data: {'email': email, 'password': password, 'deviceId': deviceId});
+  }
+
+  Future<Response> loginVerify(int userId, String code) async {
+    final deviceId = await getDeviceId();
+    return post('/auth/login/verify', data: {'userId': userId, 'code': code, 'deviceId': deviceId});
+  }
 
   Future<Response> verifyEmail(int userId, String code) =>
       post('/auth/verify-email', data: {'userId': userId, 'code': code});
@@ -88,8 +113,14 @@ class ApiService {
 
   Future<Response> creatorRegister(String email, String password, String? name) =>
       post('/creator/auth/register', data: {'email': email, 'password': password, 'name': name});
-  Future<Response> creatorLogin(String email, String password) =>
-      post('/creator/auth/login', data: {'email': email, 'password': password});
+  Future<Response> creatorLogin(String email, String password) async {
+    final deviceId = await getDeviceId();
+    return post('/creator/auth/login', data: {'email': email, 'password': password, 'deviceId': deviceId});
+  }
+  Future<Response> creatorLoginVerify(int userId, String code) async {
+    final deviceId = await getDeviceId();
+    return post('/creator/auth/login/verify', data: {'userId': userId, 'code': code, 'deviceId': deviceId});
+  }
 
   Future<Response> getTrending() => get('/trending');
   Future<Response> getNowPlaying() => get('/now-playing');
@@ -253,6 +284,36 @@ class ApiService {
   Future<Response> getDownloadedFiles() => get('/downloads/list');
   Future<Response> deleteDownloadedFile(String filename) =>
       delete('/downloads/$filename');
+
+  /// Stream a media URL in chunks (used by encrypted offline downloads).
+  Future<Stream<Uint8List>> streamUrl(String url) async {
+    final token = await _storage.read(key: _tokenKey);
+    final cToken = await _storage.read(key: _creatorTokenKey);
+    final headers = <String, dynamic>{
+      if (token != null) 'Authorization': 'Bearer $token',
+      if (cToken != null) 'Authorization': 'Bearer $cToken',
+    };
+    final resp = await _dio.get<Uint8List>(
+      url.startsWith('http') ? url : baseUrl + url,
+      options: Options(
+        responseType: ResponseType.bytes,
+        headers: headers,
+        followRedirects: true,
+      ),
+    );
+    final bytes = resp.data;
+    if (bytes == null) return const Stream.empty();
+    // Emit in aligned chunks for on-the-fly encryption.
+    final controller = StreamController<Uint8List>();
+    var offset = 0;
+    while (offset < bytes.length) {
+      final end = (offset + 65536).clamp(0, bytes.length);
+      controller.add(Uint8List.sublistView(bytes, offset, end));
+      offset = end;
+    }
+    await controller.close();
+    return controller.stream;
+  }
 
   Future<Response> subscribeNewsletter(String email) =>
       post('/newsletter/subscribe', data: {'email': email});

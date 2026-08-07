@@ -1,4 +1,5 @@
 import pool from '../config/database.js'
+import { getShortsFeed } from '../db.js'
 
 const CACHE_TTL = 60 * 1000
 let feedCache = null
@@ -61,6 +62,42 @@ export async function getFeed(req, res) {
       feedCache = allItems
       feedCacheTime = now
     }
+
+    // Merge user-uploaded R2 shorts into the rotation
+    try {
+      const shorts = await getShortsFeed(40, 0, req.userId || null)
+      const shortItems = shorts.map((s) => ({
+        id: `short-${s.id}`,
+        videoUrl: s.video_url,
+        poster: s.thumbnail_url || null,
+        title: s.title,
+        year: '',
+        type: 'short',
+        promoted: false,
+        shortId: s.id,
+        creatorId: s.user_id,
+        creatorName: s.creator_name,
+        creatorAvatar: s.creator_avatar,
+        views: s.views,
+        likes: s.likes,
+        description: s.description,
+        likesCount: s.likes,
+        bookmarksCount: s.bookmarks || 0,
+        commentsCount: s.comments || 0,
+        shares: s.shares || 0,
+        liked: !!s.liked,
+        bookmarked: !!s.bookmarked,
+        following: !!s.isFollowingCreator,
+      }))
+      const merged = []
+      let si = 0
+      for (let i = 0; i < allItems.length; i++) {
+        if (i > 0 && i % 4 === 0 && si < shortItems.length) merged.push(shortItems[si++])
+        merged.push(allItems[i])
+      }
+      while (si < shortItems.length) merged.push(shortItems[si++])
+      allItems = merged
+    } catch (e) {}
 
     // Fetch promoted content from active hooks campaigns
     const nowTime = Date.now()

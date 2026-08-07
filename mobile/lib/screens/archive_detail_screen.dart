@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../services/api_service.dart';
+import '../widgets/ui/index.dart';
 
 class ArchiveDetailScreen extends ConsumerWidget {
   final String? genre;
@@ -45,7 +46,7 @@ class ArchiveDetailScreen extends ConsumerWidget {
                 ),
               );
             },
-            loading: () => const Center(child: CircularProgressIndicator()),
+            loading: () => const LoadingSpinner(logo: true),
             error: (e, _) => Center(child: Text('Error: $e', style: TextStyle(color: AppColors.error))),
           )
         : Center(child: Column(mainAxisSize: MainAxisSize.min, children: [

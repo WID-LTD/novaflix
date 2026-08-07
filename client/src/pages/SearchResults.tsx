@@ -4,6 +4,7 @@ import Icon from '../components/ui/Icon'
 import { searchAll } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import HoverCard from '../components/features/HoverCard'
+import RecommendationGrid from '../components/features/RecommendationGrid'
 import Skeleton from '../components/ui/Skeleton'
 import Tabs from '../components/ui/Tabs'
 import type { MediaItem } from '../types'
@@ -67,7 +68,7 @@ export default function SearchResults() {
 
         <div className="mt-6">
           {loading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-gutter">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
               {Array.from({ length: 10 }).map((_, i) => (
                 <div key={i}>
                   <Skeleton variant="poster" className="w-full" />
@@ -84,11 +85,11 @@ export default function SearchResults() {
           ) : (
             <>
               <p className="text-on-surface-variant text-sm mb-4">{filtered.length} result{filtered.length !== 1 ? 's' : ''}</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-gutter">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
                 {filtered.map((item, i) => {
                   if (item.source === 'creator' || item.source === 'archive') {
                     return (
-                      <div key={`${item.source}-${item.id}`} className="bg-surface-container-high rounded-xl overflow-hidden border border-white/5">
+                      <div key={`${item.source}-${item.id}`} className="min-w-0 bg-surface-container-high rounded-xl overflow-hidden border border-white/5">
                         <div className="aspect-[2/3] bg-surface-container relative">
                           {item.poster ? (
                             <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
@@ -110,7 +111,7 @@ export default function SearchResults() {
                       </div>
                     )
                   }
-                  return <HoverCard key={`${item.id}-${item.type}`} item={item} index={i} />
+                  return <HoverCard key={`${item.id}-${item.type}`} item={item} index={i} className="w-full min-w-0" />
                 })}
               </div>
             </>
@@ -119,13 +120,16 @@ export default function SearchResults() {
 
         {!loading && filtered.length === 0 && recs.length > 0 && (
           <div className="mt-12 pt-8 border-t border-white/5">
-            <h2 className="text-headline-md font-bold mb-2">You May Want to Check Out</h2>
-            <p className="text-on-surface-variant/60 text-sm mb-6">Personalized recommendations based on your watch history</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-gutter">
+            <RecommendationGrid
+              title="You May Want to Check Out"
+              subtitle="Personalized recommendations based on your watch history"
+            >
               {recs.map((item, i) => (
-                <HoverCard key={`rec-${item.id}-${item.type}`} item={item} index={i} />
+                <div key={`rec-${item.id}-${item.type}`} className="min-w-0">
+                  <HoverCard item={item} index={i} className="w-full min-w-0" />
+                </div>
               ))}
-            </div>
+            </RecommendationGrid>
           </div>
         )}
       </div>

@@ -8,6 +8,9 @@ class MainFlutterWindow: NSWindow {
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
 
+    // DRM guard: prevent the window contents from being captured/screen-recorded.
+    self.sharingType = .none
+
     RegisterGeneratedPlugins(registry: flutterViewController)
 
     super.awakeFromNib()

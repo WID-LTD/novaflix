@@ -84,7 +84,7 @@ class ReferralsScreen extends ConsumerWidget {
                   ],
                 );
               },
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const LoadingSpinner(logo: true),
               error: (_, __) => const SizedBox(),
             ),
             const SizedBox(height: 32),

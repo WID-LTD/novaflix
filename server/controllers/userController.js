@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid'
 import bcrypt from 'bcryptjs'
-import { findUserById, updateUser, getUploadsByUserId, getTotalMinutesWatched, getUserSubscription, addWatchEntry, getWatchHistory, checkAndAwardAchievements } from '../db.js'
+import { findUserById, updateUser, getUploadsByUserId, getTotalMinutesWatched, getUserSubscription, addWatchEntry, getWatchHistory, checkAndAwardAchievements, addXp } from '../db.js'
 import { uploadFile } from '../lib/r2.js'
 
 export async function updateProfile(req, res) {
@@ -90,6 +90,7 @@ export async function addWatchEntryHandler(req, res) {
       episode: episode || null,
     }
     await addWatchEntry(entry)
+    addXp(req.userId, 5).catch(() => {})
     checkAndAwardAchievements(req.userId).catch(() => {})
     res.json({ success: true, entry })
   } catch (err) {

@@ -5,6 +5,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../services/api_service.dart';
 import '../models/media_item.dart';
+import '../widgets/ui/index.dart';
 
 final _searchProvider = FutureProvider.family<List<MediaItem>, String>((ref, query) async {
   if (query.isEmpty) return [];
@@ -70,7 +71,7 @@ class SearchResultsScreen extends ConsumerWidget {
               );
             },
           ),
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const LoadingSpinner(logo: true),
         error: (e, _) => Center(child: Text('Error: $e', style: TextStyle(color: AppColors.error))),
       ),
     );

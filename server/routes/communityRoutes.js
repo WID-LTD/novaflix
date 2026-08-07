@@ -12,5 +12,7 @@ router.post('/:id/join', authMiddleware, controller.join)
 router.post('/:id/leave', authMiddleware, controller.leave)
 router.post('/:id/posts', authMiddleware, controller.addPost)
 router.delete('/:id/posts/:postId', authMiddleware, controller.deletePost)
+router.post('/:id/posts/:postId/like', authMiddleware, controller.togglePostLike)
+router.get('/:id/members', authMiddleware, controller.members)
 
 export default router

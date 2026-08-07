@@ -7,7 +7,8 @@ async function fetchJson<T>(url: string, params?: Record<string, string>): Promi
     const searchParams = new URLSearchParams(params)
     const queryString = searchParams.toString()
     const fullUrl = queryString ? `${url}?${queryString}` : url
-    const res = await fetch(fullUrl)
+    const token = localStorage.getItem('novaflix-token') || ''
+    const res = await fetch(fullUrl, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
       return { success: false, error: body.error || `Server error (${res.status})` } as T
@@ -24,6 +25,30 @@ export function searchMedia(query: string, type: 'movie' | 'tv'): Promise<{ succ
 
 export function getDetails(id: string, type: 'movie' | 'tv'): Promise<{ success: boolean; data: MediaDetails; error?: string }> {
   return fetchJson(`${BASE}/details`, { id, type })
+}
+
+export interface CastMember {
+  id: number
+  name: string
+  character: string
+  profile_path: string | null
+  order: number
+}
+
+export interface CrewMember {
+  id: number
+  name: string
+  job: string
+  profile_path: string | null
+}
+
+export interface Credits {
+  cast: CastMember[]
+  crew: CrewMember[]
+}
+
+export function getCredits(id: string, type: 'movie' | 'tv'): Promise<{ success: boolean; cast: CastMember[]; crew: CrewMember[]; error?: string }> {
+  return fetchJson(`${BASE}/credits`, { id, type })
 }
 
 export function getTVSeason(id: string, season: string): Promise<{ success: boolean; episodes: Episode[]; error?: string }> {
@@ -133,6 +158,11 @@ export function getDiscover(params: {
   sort_by?: string
   page?: number
   min_votes?: number
+  with_keywords?: string
+  with_companies?: string
+  with_original_language?: string
+  primary_release_date_gte?: string
+  primary_release_date_lte?: string
 }): Promise<{ success: boolean; data: MediaItem[]; total_pages?: number; page?: number; error?: string }> {
   const queryParams: Record<string, string> = {}
   if (params.genre_id) queryParams.genre_id = params.genre_id
@@ -140,6 +170,11 @@ export function getDiscover(params: {
   if (params.sort_by) queryParams.sort_by = params.sort_by
   if (params.page && params.page > 1) queryParams.page = String(params.page)
   if (params.min_votes) queryParams.min_votes = String(params.min_votes)
+  if (params.with_keywords) queryParams.with_keywords = params.with_keywords
+  if (params.with_companies) queryParams.with_companies = params.with_companies
+  if (params.with_original_language) queryParams.with_original_language = params.with_original_language
+  if (params.primary_release_date_gte) queryParams.primary_release_date_gte = params.primary_release_date_gte
+  if (params.primary_release_date_lte) queryParams.primary_release_date_lte = params.primary_release_date_lte
   return fetchJson(`${BASE}/discover`, queryParams)
 }
 
@@ -147,4 +182,100 @@ export function getHooksFeed(page?: number): Promise<{ success: boolean; data: H
   const params: Record<string, string> = {}
   if (page && page > 1) params.page = String(page)
   return fetchJson(`${BASE}/hooks`, params)
+}
+
+export interface NewsArticle {
+  id: string
+  title: string
+  description: string
+  content?: string | null
+  url: string
+  image: string | null
+  source: string
+  publishedAt: string | null
+  category: string
+  provider: string
+}
+
+export interface NewsFeed {
+  success: boolean
+  articles: NewsArticle[]
+  errors?: string[]
+  total?: number
+  page?: number
+  nextPage?: number | null
+}
+
+export function getNews(category = 'entertainment', q = '', page?: number, refresh?: boolean): Promise<NewsFeed> {
+  const params: Record<string, string> = { category }
+  if (q.trim()) params.q = q.trim()
+  if (page && page > 1) params.page = String(page)
+  if (refresh) params.refresh = '1'
+  return fetchJson(`${BASE}/news`, params)
+}
+
+export function getHomeNews(): Promise<NewsFeed> {
+  return fetchJson(`${BASE}/news/home`, {})
+}
+
+export function getIndustryNews(): Promise<NewsFeed> {
+  return fetchJson(`${BASE}/news/industry`, {})
+}
+
+export function getNewsArticle(url: string): Promise<{ success: boolean; article?: NewsArticle; error?: string }> {
+  return fetchJson(`${BASE}/news/article`, { url })
+}
+
+export interface DeepDiveHeadline {
+  title: string
+  url: string
+  body: string
+  image: string | null
+  source: string
+  provider: string
+  publishedAt: string | null
+}
+
+export interface DeepDiveImage {
+  url: string
+  alt: string
+  source: string
+}
+
+export interface DeepDiveRelated {
+  title: string
+  url: string
+  source: string
+  provider: string
+  publishedAt: string | null
+  snippet: string
+}
+
+export interface DeepDivePublisher {
+  name: string
+  domain: string | null
+  provider: string
+}
+
+export interface DeepDiveTimeline {
+  title: string
+  url: string
+  source: string
+  publishedAt: string | null
+}
+
+export interface NewsDeepDive {
+  success: boolean
+  query: { title: string; keywords: string[] }
+  headline: DeepDiveHeadline | null
+  images: DeepDiveImage[]
+  related: DeepDiveRelated[]
+  publishers: DeepDivePublisher[]
+  timeline: DeepDiveTimeline[]
+  meta: { synthesizedAt: string; errorCount: number; errors: string[]; providersTried: string[]; providersOk: string[] }
+  error?: string
+}
+
+export function fetchDeepDive(title: string, keywords: string[] = []): Promise<NewsDeepDive> {
+  return fetchJson(`${BASE}/news/fetch-deep-dive`, { title, keywords: keywords.join(',') })
 }

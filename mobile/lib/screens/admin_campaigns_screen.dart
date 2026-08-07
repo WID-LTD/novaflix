@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../services/api_service.dart';
+import '../widgets/ui/index.dart';
 
 final _allCampaignsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final api = ref.read(apiServiceProvider);
@@ -83,7 +84,7 @@ class AdminCampaignsScreen extends ConsumerWidget {
               );
             },
           ),
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const LoadingSpinner(logo: true),
         error: (e, _) => Center(child: Text('Error: $e', style: TextStyle(color: AppColors.error))),
       ),
     );

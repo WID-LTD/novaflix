@@ -27,6 +27,11 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
+  // DRM guard: exclude the window from screen capture & recording on Windows.
+  // WDA_EXCLUDEFROMCAPTURE (0x00000011) is supported on Windows 10 2004+.
+  const DWORD kWdaExcludeFromCapture = 0x00000011;
+  SetWindowDisplayAffinity(GetHandle(), kWdaExcludeFromCapture);
+
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     this->Show();
   });

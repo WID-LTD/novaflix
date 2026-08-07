@@ -107,12 +107,14 @@ class StoreState {
   final PlaybackSettings playbackSettings;
   final NotificationSettings notificationSettings;
   final bool sidebarCollapsed;
+  final String locale;
 
   const StoreState({
     this.continueWatching = const [], this.recentlySearched = const [],
     this.playbackSettings = const PlaybackSettings(),
     this.notificationSettings = const NotificationSettings(),
     this.sidebarCollapsed = false,
+    this.locale = 'en',
   });
 
   Map<String, dynamic> toJson() => {
@@ -121,6 +123,7 @@ class StoreState {
     'playbackSettings': playbackSettings.toJson(),
     'notificationSettings': notificationSettings.toJson(),
     'sidebarCollapsed': sidebarCollapsed,
+    'locale': locale,
   };
 
   factory StoreState.fromJson(Map<String, dynamic> json) => StoreState(
@@ -129,6 +132,7 @@ class StoreState {
     playbackSettings: json['playbackSettings'] != null ? PlaybackSettings.fromJson(json['playbackSettings'] as Map<String, dynamic>) : const PlaybackSettings(),
     notificationSettings: json['notificationSettings'] != null ? NotificationSettings.fromJson(json['notificationSettings'] as Map<String, dynamic>) : const NotificationSettings(),
     sidebarCollapsed: json['sidebarCollapsed'] as bool? ?? false,
+    locale: json['locale'] as String? ?? 'en',
   );
 }
 
@@ -151,7 +155,7 @@ class StoreNotifier extends StateNotifier<StoreState> {
     list.removeWhere((e) => e.id == item.id && e.type == item.type);
     list.insert(0, item);
     if (list.length > 20) list.removeLast();
-    state = StoreState(continueWatching: list, recentlySearched: state.recentlySearched, playbackSettings: state.playbackSettings, notificationSettings: state.notificationSettings);
+    state = StoreState(continueWatching: list, recentlySearched: state.recentlySearched, playbackSettings: state.playbackSettings, notificationSettings: state.notificationSettings, locale: state.locale);
     _save();
   }
 
@@ -160,7 +164,7 @@ class StoreNotifier extends StateNotifier<StoreState> {
       if (e.id == id && e.type == type) return ContinueWatchingItem(id: e.id, title: e.title, poster: e.poster, type: e.type, season: e.season, episode: e.episode, progress: progress, duration: e.duration);
       return e;
     }).toList();
-    state = StoreState(continueWatching: list, recentlySearched: state.recentlySearched, playbackSettings: state.playbackSettings, notificationSettings: state.notificationSettings);
+    state = StoreState(continueWatching: list, recentlySearched: state.recentlySearched, playbackSettings: state.playbackSettings, notificationSettings: state.notificationSettings, locale: state.locale);
     _save();
   }
 
@@ -168,22 +172,27 @@ class StoreNotifier extends StateNotifier<StoreState> {
     final list = List<String>.from(state.recentlySearched);
     list.remove(query); list.insert(0, query);
     if (list.length > 10) list.removeLast();
-    state = StoreState(continueWatching: state.continueWatching, recentlySearched: list, playbackSettings: state.playbackSettings, notificationSettings: state.notificationSettings);
+    state = StoreState(continueWatching: state.continueWatching, recentlySearched: list, playbackSettings: state.playbackSettings, notificationSettings: state.notificationSettings, locale: state.locale);
     _save();
   }
 
   void updatePlaybackSettings(PlaybackSettings settings) {
-    state = StoreState(continueWatching: state.continueWatching, recentlySearched: state.recentlySearched, playbackSettings: settings, notificationSettings: state.notificationSettings);
+    state = StoreState(continueWatching: state.continueWatching, recentlySearched: state.recentlySearched, playbackSettings: settings, notificationSettings: state.notificationSettings, locale: state.locale);
     _save();
   }
 
   void updateNotificationSettings(NotificationSettings settings) {
-    state = StoreState(continueWatching: state.continueWatching, recentlySearched: state.recentlySearched, playbackSettings: state.playbackSettings, notificationSettings: settings);
+    state = StoreState(continueWatching: state.continueWatching, recentlySearched: state.recentlySearched, playbackSettings: state.playbackSettings, notificationSettings: settings, locale: state.locale);
     _save();
   }
 
   void toggleSidebar() {
-    state = StoreState(continueWatching: state.continueWatching, recentlySearched: state.recentlySearched, playbackSettings: state.playbackSettings, notificationSettings: state.notificationSettings, sidebarCollapsed: !state.sidebarCollapsed);
+    state = StoreState(continueWatching: state.continueWatching, recentlySearched: state.recentlySearched, playbackSettings: state.playbackSettings, notificationSettings: state.notificationSettings, sidebarCollapsed: !state.sidebarCollapsed, locale: state.locale);
+    _save();
+  }
+
+  void setLocale(String locale) {
+    state = StoreState(continueWatching: state.continueWatching, recentlySearched: state.recentlySearched, playbackSettings: state.playbackSettings, notificationSettings: state.notificationSettings, sidebarCollapsed: state.sidebarCollapsed, locale: locale);
     _save();
   }
 }

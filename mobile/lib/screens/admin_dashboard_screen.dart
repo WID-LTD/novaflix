@@ -104,7 +104,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
             )).toList(),
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const LoadingSpinner(logo: true),
         error: (_, __) => const Center(child: Text('Error loading stats')),
       ),
     );

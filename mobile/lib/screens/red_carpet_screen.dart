@@ -112,7 +112,7 @@ class RedCarpetScreen extends ConsumerWidget {
             ),
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const LoadingSpinner(logo: true),
         error: (e, _) => Center(child: Text('Error: $e', style: TextStyle(color: AppColors.error))),
       ),
     );

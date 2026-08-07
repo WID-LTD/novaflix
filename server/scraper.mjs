@@ -61,19 +61,25 @@ async function checkFirstSegment(body, playlistUrl) {
     if (lines.length === 0) return false;
     const firstSeg = lines[0];
     const segUrl = firstSeg.startsWith('http') ? firstSeg : new URL(firstSeg, playlistUrl).href;
-    const headRes = await axios({
-      url: segUrl,
-      method: 'HEAD',
-      timeout: 5000,
-      validateStatus: () => true,
-      headers: { ...COMMON_HEADERS, Referer: 'https://nextgencloudfabric.com/' },
-    });
-    const sct = (headRes.headers['content-type'] || '').toLowerCase();
-    if (sct.includes('text/html')) {
-      console.log(`[verify] Rejecting - first segment returned text/html: ${segUrl.substring(0, 80)}...`);
-      return false;
+    const segHeaders = { ...COMMON_HEADERS, Referer: 'https://nextgencloudfabric.com/' };
+    // Prefer HEAD, fall back to GET with Range (some CDNs reject HEAD)
+    try {
+      const headRes = await axios({ url: segUrl, method: 'HEAD', timeout: 5000, validateStatus: () => true, headers: segHeaders });
+      const sct = (headRes.headers['content-type'] || '').toLowerCase();
+      if (sct.includes('text/html')) {
+        console.log(`[verify] Rejecting - first segment returned text/html: ${segUrl.substring(0, 80)}...`);
+        return false;
+      }
+      return true;
+    } catch {
+      try {
+        const getRes = await axios.get(segUrl, { timeout: 6000, validateStatus: () => true, responseType: 'arraybuffer', headers: { ...segHeaders, Range: 'bytes=0-4096' } });
+        const sct = (getRes.headers['content-type'] || '').toLowerCase();
+        return getRes.status < 400 && !sct.includes('text/html');
+      } catch {
+        return false;
+      }
     }
-    return true;
   } catch {
     return false;
   }
@@ -215,7 +221,38 @@ function buildSubtitleApiUrl(tmdbId, type, season, episode) {
   return `https://sub.1x2.space/api/movie/${tmdbId}`;
 }
 
+const streamCache = new Map();
+const STREAM_CACHE_TTL = 15 * 60 * 1000;
+const cacheKey = (tmdbId, type, season, episode) =>
+  type === 'tv' ? `tv:${tmdbId}:${season}:${episode}` : `movie:${tmdbId}`;
+
 export async function getStreamUrl(tmdbId, type = 'movie', season = null, episode = null) {
+  const key = cacheKey(tmdbId, type, season, episode);
+  const cached = streamCache.get(key);
+  if (cached && Date.now() - cached.at < STREAM_CACHE_TTL) {
+    return { streamUrl: cached.streamUrl, subtitles: cached.subtitles };
+  }
+
+  let lastError = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const result = await resolveStream(tmdbId, type, season, episode);
+      if (result && result.streamUrl) {
+        streamCache.set(key, { streamUrl: result.streamUrl, subtitles: result.subtitles || [], at: Date.now() });
+      }
+      return result;
+    } catch (err) {
+      lastError = err;
+      if (attempt === 1) {
+        console.log(`[source] Attempt ${attempt} failed for tmdb=${tmdbId}, retrying...`);
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
+  }
+  throw lastError || new Error('No stream source available');
+}
+
+async function resolveStream(tmdbId, type = 'movie', season = null, episode = null) {
   const result = await trySourceApi(tmdbId);
   if (result) return result;
 

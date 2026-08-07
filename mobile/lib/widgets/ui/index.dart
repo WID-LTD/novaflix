@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
+import 'animated_loader.dart';
+
+export 'animated_loader.dart';
 
 class AppButton extends StatelessWidget {
   final String label;
@@ -199,11 +202,15 @@ class RatingBadge extends StatelessWidget {
 class LoadingSpinner extends StatelessWidget {
   final double size;
   final Color? color;
+  final bool logo;
 
-  const LoadingSpinner({super.key, this.size = 24, this.color});
+  const LoadingSpinner({super.key, this.size = 50, this.color, this.logo = false});
 
   @override
   Widget build(BuildContext context) {
+    if (logo) {
+      return Center(child: AnimatedLoader(size: size * 4, color: color ?? AppColors.primary));
+    }
     return Center(child: CircularProgressIndicator(
       strokeWidth: 3,
       valueColor: AlwaysStoppedAnimation(color ?? AppColors.primary),
@@ -407,6 +414,25 @@ class FollowButton extends ConsumerWidget {
       outlined: isFollowing,
       fullWidth: false,
       height: 36,
+    );
+  }
+}
+
+class AppBackButton extends StatelessWidget {
+  final VoidCallback? onPressed;
+
+  const AppBackButton({super.key, this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: onPressed ?? () => Navigator.of(context).maybePop(),
+      tooltip: 'Back',
+      icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.onSurface, size: 20),
+      style: IconButton.styleFrom(
+        backgroundColor: AppColors.surfaceContainerLow,
+        side: const BorderSide(color: AppColors.outlineVariant),
+      ),
     );
   }
 }

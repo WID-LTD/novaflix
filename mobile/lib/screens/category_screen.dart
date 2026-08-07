@@ -61,7 +61,7 @@ class CategoryScreen extends ConsumerWidget {
             );
           },
         ),
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const LoadingSpinner(logo: true),
         error: (_, __) => const Center(child: Text('Failed to load categories')),
       ),
     );
@@ -82,7 +82,7 @@ class CategoryScreen extends ConsumerWidget {
             itemCount: items.length,
             itemBuilder: (_, i) => MovieCard(item: items[i]),
           ),
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const LoadingSpinner(logo: true),
           error: (_, __) => const Center(child: Text('No results')),
         ),
       ),

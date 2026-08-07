@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { authMiddleware } from '../middleware/auth.js'
 import * as creatorController from '../controllers/creatorController.js'
+import { getMyEarnings } from '../controllers/creatorEarningsController.js'
 import multer from 'multer'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 1024 * 1024 * 1024 } })
@@ -14,5 +15,6 @@ router.get('/stats', authMiddleware, creatorController.getStats)
 router.get('/dashboard', authMiddleware, creatorController.getDashboard)
 router.get('/comments', authMiddleware, creatorController.getCreatorComments)
 router.get('/graph', authMiddleware, creatorController.getGraph)
+router.get('/earnings', authMiddleware, getMyEarnings)
 
 export default router

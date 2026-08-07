@@ -24,11 +24,17 @@ const mainItems: NavItem[] = [
 ]
 
 const authItems: NavItem[] = [
-  { to: '/community', icon: 'diversity_3', label: 'Community', auth: true },
+  { to: '/hooks', icon: 'video_library', label: 'Shorts', auth: true },
   { to: '/watchlist', icon: 'bookmark', label: 'Watchlist', auth: true },
   { to: '/referrals', icon: 'share', label: 'Refer & Earn', auth: true },
   { to: '/downloads', icon: 'download', label: 'Downloads', auth: true },
   { to: '/archive', icon: 'archive', label: 'Archive Vault', auth: true },
+]
+
+const engagementItems: NavItem[] = [
+  { to: '/community', icon: 'diversity_3', label: 'Community', auth: true },
+  { to: '/forum', icon: 'forum', label: 'Hot Takes', auth: true },
+  { to: '/trivia', icon: 'quiz', label: 'Trivia & Rewards', auth: true },
 ]
 
 const creatorItems: NavItem[] = [
@@ -143,6 +149,24 @@ export default function MobileDrawer() {
                     <span className="font-label-md text-label-md">{item.label}</span>
                   </button>
                 ))}
+
+              {user && (
+                <>
+                  <p className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-on-surface-variant/50">Community &amp; Engagement</p>
+                  {engagementItems
+                    .filter((i) => !i.auth || user)
+                    .map((item) => (
+                      <button
+                        key={item.to}
+                        onClick={() => handleNav(item.to)}
+                        className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-on-surface-variant/60 hover:text-on-surface hover:bg-white/5 transition-colors text-left"
+                      >
+                        <Icon name={item.icon} size="sm" className="shrink-0" />
+                        <span className="font-label-md text-label-md">{item.label}</span>
+                      </button>
+                    ))}
+                </>
+              )}
 
               {(isCreator || isAdmin) && (
                 <>

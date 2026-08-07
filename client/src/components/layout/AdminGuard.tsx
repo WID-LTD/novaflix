@@ -20,7 +20,7 @@ const AdminGuard: FC<Props> = ({ children }) => {
   }
 
   if (!isAdmin) {
-    return <Navigate to="/home" replace />
+    return <Navigate to="/profile" replace />
   }
 
   return <>{children}</>

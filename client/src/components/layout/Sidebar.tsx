@@ -19,13 +19,20 @@ const navItems: NavItem[] = [
   { to: '/discover?sort=trending', icon: 'trending_up', label: 'Trending' },
   { to: '/discover?sort=top_rated', icon: 'star', label: 'Top Rated' },
   { to: '/discover', icon: 'explore', label: 'Discover' },
-  { to: '/community', icon: 'diversity_3', label: 'Community', auth: true },
   { to: '/watchlist', icon: 'bookmark', label: 'Watchlist', auth: true },
   { to: '/downloads', icon: 'download', label: 'Downloads', auth: true },
   { to: '/referrals', icon: 'share', label: 'Refer & Earn', auth: true },
   { to: '/archive', icon: 'archive', label: 'Archive Vault', auth: true },
   { to: '/events', icon: 'event', label: 'Live Events' },
   { to: '/red-carpet', icon: 'star', label: 'Red Carpet' },
+  { to: '/hooks', icon: 'video_library', label: 'Shorts', auth: true },
+  { to: '/news', icon: 'newspaper', label: 'News & Insights' },
+]
+
+const engagementItems: NavItem[] = [
+  { to: '/community', icon: 'diversity_3', label: 'Community', auth: true },
+  { to: '/forum', icon: 'forum', label: 'Hot Takes', auth: true },
+  { to: '/trivia', icon: 'quiz', label: 'Trivia & Rewards', auth: true },
 ]
 
 const businessItems: NavItem[] = [
@@ -48,6 +55,7 @@ export default function Sidebar() {
   const { user, isCreator, isAdmin } = useAuth()
 
   const visibleNav = navItems.filter(i => !i.auth || user)
+  const visibleEngagement = engagementItems.filter(i => !i.auth || user)
   const visibleBusiness = businessItems.filter(i => {
     if (i.auth && !user) return false
     if (i.creatorOnly && !isCreator) return false
@@ -103,6 +111,35 @@ export default function Sidebar() {
             )}
           </NavLink>
         ))}
+
+        {visibleEngagement.length > 0 && (
+          <>
+            <div className="my-3 px-3">
+              <div className="h-px bg-white/5" />
+            </div>
+            {!collapsed && (
+              <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-on-surface-variant/50">Community &amp; Engagement</p>
+            )}
+            {visibleEngagement.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors duration-200 ${
+                    isActive
+                      ? 'bg-primary-container/20 text-primary'
+                      : 'text-on-surface-variant/60 hover:text-on-surface hover:bg-white/5'
+                  }`
+                }
+              >
+                <Icon name={item.icon} size="sm" className="shrink-0" />
+                {!collapsed && (
+                  <span className="font-label-md text-label-md whitespace-nowrap">{item.label}</span>
+                )}
+              </NavLink>
+            ))}
+          </>
+        )}
 
         {!user && (
           <NavLink

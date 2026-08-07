@@ -107,7 +107,7 @@ class _CreatorCampaignsScreenState extends ConsumerState<CreatorCampaignsScreen>
                   ]),
                 )).toList(),
               ),
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const LoadingSpinner(logo: true),
               error: (e, _) => Center(child: Text('Error: $e')),
             ),
           ],

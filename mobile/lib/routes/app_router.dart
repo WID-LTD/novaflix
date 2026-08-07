@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/auth_provider.dart';
 import '../screens/splash_screen.dart';
+import '../screens/onboarding_screen.dart';
 import '../screens/landing_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/register_screen.dart';
@@ -48,6 +49,7 @@ import '../screens/community_screen.dart';
 import '../screens/live_events_screen.dart';
 import '../screens/event_detail_screen.dart';
 import '../screens/downloads_screen.dart';
+import '../screens/offline_play_screen.dart';
 import '../screens/archive_screen.dart';
 import '../screens/archive_detail_screen.dart';
 import '../screens/red_carpet_screen.dart';
@@ -58,30 +60,36 @@ import '../widgets/layout/index.dart';
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
 
-GoRouter appRouter(WidgetRef ref) {
-  final authState = ref.watch(authProvider);
+final routerProvider = Provider<GoRouter>((ref) {
+  final refreshNotifier = ValueNotifier(0);
+  ref.listen<AuthState>(authProvider, (_, _) => refreshNotifier.value++);
 
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/splash',
+    refreshListenable: refreshNotifier,
     redirect: (context, state) {
-      final isAuth = authState.status == AuthStatus.authenticated;
-      final isAuthRoute = state.matchedLocation == '/login' ||
-          state.matchedLocation == '/register' ||
-          state.matchedLocation == '/verify-email' ||
-          state.matchedLocation == '/splash' ||
-          state.matchedLocation == '/landing';
+      final isAuth = ref.read(authProvider).status == AuthStatus.authenticated;
+      final location = state.matchedLocation;
+      final isGuestBrowseable = location == '/home' ||
+          location == '/search' ||
+          location == '/discover' ||
+          location == '/tv-shows' ||
+          location.startsWith('/movie/') ||
+          location.startsWith('/tv/') ||
+          location == '/news' ||
+          location == '/pricing';
 
-      if (isAuth && isAuthRoute && state.matchedLocation != '/landing' && state.matchedLocation != '/splash') return '/home';
-      if (!isAuth && !isAuthRoute) {
-        if (state.matchedLocation == '/landing' || state.matchedLocation == '/creators' ||
-            state.matchedLocation == '/creator/login') return null;
-        return '/login';
+      if (isAuth && (location == '/login' || location == '/register' || location == '/verify-email')) {
+        return '/home';
       }
+      if (isGuestBrowseable) return null;
+      if (isAuth) return null;
       return null;
     },
     routes: [
       GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
+      GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
       GoRoute(path: '/landing', builder: (_, __) => const LandingScreen()),
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
@@ -92,7 +100,10 @@ GoRouter appRouter(WidgetRef ref) {
         movieId: int.tryParse(state.uri.queryParameters['id'] ?? ''),
         mediaType: state.uri.queryParameters['type'],
         streamUrl: state.uri.queryParameters['url'],
+        season: state.uri.queryParameters['season'],
+        episode: state.uri.queryParameters['episode'],
       )),
+      GoRoute(path: '/downloads/play', builder: (_, __) => const OfflinePlayScreen()),
 
       ShellRoute(
         navigatorKey: _shellNavigatorKey,
@@ -149,4 +160,4 @@ GoRouter appRouter(WidgetRef ref) {
       GoRoute(path: '/:path(.*)', builder: (_, __) => const NotFoundScreen()),
     ],
   );
-}
+});

@@ -11,6 +11,7 @@ router.get('/seed-actors', authMiddleware, (req, res, next) => {
 
 router.get('/search', tmdbController.search)
 router.get('/details', tmdbController.details)
+router.get('/credits', tmdbController.credits)
 router.get('/tv-season', tmdbController.tvSeason)
 router.get('/trending', tmdbController.getTrending)
 router.get('/now-playing', tmdbController.getNowPlaying)

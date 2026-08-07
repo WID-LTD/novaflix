@@ -1,22 +1,23 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Icon from '../components/ui/Icon'
 import { getStreamSource, getManifestInfo, getTVSeason, getDetails } from '../lib/api'
 import { useStore } from '../store/useStore'
 import { useAuth } from '../lib/AuthContext'
-import { recordWatch } from '../lib/auth'
+import { recordWatch, getEggs, collectEgg } from '../lib/auth'
 import VideoPlayer from '../components/features/VideoPlayer'
 import BingePassModal from '../components/features/BingePassModal'
 import Button from '../components/ui/Button'
 import Badge from '../components/ui/Badge'
 import Skeleton from '../components/ui/Skeleton'
 import Modal from '../components/ui/Modal'
-import type { Variant, Episode } from '../types'
+import type { Variant, Episode, EggPlacement } from '../types'
 
 export default function Watch() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const id = searchParams.get('id') || ''
   const type = searchParams.get('type') || 'movie'
   const seasonParam = searchParams.get('season')
@@ -40,9 +41,18 @@ export default function Watch() {
   const [bingePassActive, setBingePassActive] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [downloadDone, setDownloadDone] = useState(false)
+  const [viewers, setViewers] = useState<any[]>([])
+  const [flashes, setFlashes] = useState<{ id: number; name: string; emoji: string }[]>([])
+  const [partyInvite, setPartyInvite] = useState<{ fromName: string; room: string } | null>(null)
+  const [eggPlacements, setEggPlacements] = useState<EggPlacement[]>([])
+  const [collectedEggIds, setCollectedEggIds] = useState<string[]>([])
+  const [eggToast, setEggToast] = useState<string | null>(null)
   const addToContinueWatching = useStore((s) => s.addToContinueWatching)
   const { user, planRank } = useAuth()
   const lastRecordRef = useRef(0)
+  const presenceWsRef = useRef<WebSocket | null>(null)
+  const lastPresenceRef = useRef(0)
+  const flashIdRef = useRef(0)
 
   const { data: detailsData } = useQuery({
     queryKey: ['details', id, type],
@@ -103,10 +113,80 @@ export default function Watch() {
     }
   }, [details, currentStreamUrl, addToContinueWatching, season, episode])
 
+  // Ghost-watcher presence
+  useEffect(() => {
+    if (!user || !id || !currentStreamUrl) return
+    const token = localStorage.getItem('novaflix-token') || ''
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = window.location.host
+    const ws = new WebSocket(`${protocol}//${host}/ws?token=${encodeURIComponent(token)}`)
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({
+        type: 'presence',
+        payload: { contentId: id, name: user.name, avatar: user.avatar || null, currentTime: 0, playing: true },
+      }))
+    }
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data)
+        if (msg.type === 'presence-update') {
+          setViewers(msg.viewers || [])
+        } else if (msg.type === 'presence-flash') {
+          const fid = ++flashIdRef.current
+          setFlashes(prev => [...prev, { id: fid, name: msg.name, emoji: msg.emoji || '👋' }])
+          setTimeout(() => setFlashes(prev => prev.filter(f => f.id !== fid)), 4000)
+        } else if (msg.type === 'watch-party-invite') {
+          setPartyInvite({ fromName: msg.fromName, room: msg.room })
+        }
+      } catch {}
+    }
+
+    ws.onclose = () => { if (presenceWsRef.current === ws) presenceWsRef.current = null }
+    presenceWsRef.current = ws
+
+    return () => {
+      presenceWsRef.current = null
+      ws.close()
+      setViewers([])
+    }
+  }, [user, id, currentStreamUrl])
+
   const handleQualitySelect = (v: Variant) => {
     setSelectedVariant(v)
     setCurrentStreamUrl(v.url)
     setShowQuality(false)
+  }
+
+  // Easter-egg placements for this content
+  useEffect(() => {
+    if (!user || !id) return
+    const token = localStorage.getItem('novaflix-token') || ''
+    getEggs(token, id).then((res) => {
+      if (res.success) {
+        setEggPlacements(res.placements || [])
+        setCollectedEggIds(res.collected || [])
+      }
+    }).catch(() => {})
+  }, [user, id])
+
+  const handleCollectEgg = async (keyId: string) => {
+    if (!user) return
+    const token = localStorage.getItem('novaflix-token') || ''
+    const res = await collectEgg(token, keyId)
+    if (res.success) {
+      setCollectedEggIds((prev) => (prev.includes(keyId) ? prev : [...prev, keyId]))
+      if (res.alreadyCollected) return
+      let msg = 'Key collected! +50 coins'
+      if (res.reward) {
+        msg = res.reward.type === 'secret_room'
+          ? `Secret room unlocked: ${res.reward.name}`
+          : `Badge earned: ${res.reward.name}`
+      }
+      setEggToast(msg)
+      setTimeout(() => setEggToast(null), 4000)
+    }
   }
 
   const handleDownload = async () => {
@@ -133,6 +213,11 @@ export default function Watch() {
 
   const handleProgress = (time: number) => {
     if (details) {
+      // Ghost-watcher presence: throttle position updates to ~5s
+      if (user && presenceWsRef.current && presenceWsRef.current.readyState === 1 && time - lastPresenceRef.current > 5) {
+        lastPresenceRef.current = time
+        presenceWsRef.current.send(JSON.stringify({ type: 'presence', payload: { contentId: id, currentTime: time, playing: true } }))
+      }
       addToContinueWatching({
         id: details.id,
         title: details.title,
@@ -181,6 +266,17 @@ export default function Watch() {
         </div>
 
         <div className="flex items-center gap-2">
+          {eggPlacements.length > 0 && (
+            <button
+              onClick={() => navigate('/community')}
+              title="Hidden keys in this title — collect them for badges & secret rooms"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary/15 text-primary text-xs font-semibold hover:bg-primary/25 transition-colors"
+            >
+              <Icon name="vpn_key" size="sm" />
+              {collectedEggIds.length}/{eggPlacements.length} keys
+            </button>
+          )}
+
           {manifestVariants.length > 0 && (
             <Button
               variant="ghost"
@@ -232,9 +328,17 @@ export default function Watch() {
                 <p className="text-gray-500 text-sm mb-6">
                   {sourceData?.error || 'Could not load video source'}
                 </p>
-                <Button variant="secondary" onClick={() => navigate(-1)}>
-                  Go Back
-                </Button>
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="secondary"
+                    onClick={() => queryClient.invalidateQueries({ queryKey: ['source', id, type, season, episode] })}
+                  >
+                    Retry
+                  </Button>
+                  <Button variant="ghost" onClick={() => navigate(-1)}>
+                    Go Back
+                  </Button>
+                </div>
               </div>
             )
           })()
@@ -246,6 +350,9 @@ export default function Watch() {
             onProgress={handleProgress}
             plan={user?.plan || 'free'}
             bingePassActive={bingePassActive}
+            eggs={eggPlacements}
+            collectedEggIds={collectedEggIds}
+            onCollectEgg={handleCollectEgg}
           />
         ) : null}
 
@@ -257,6 +364,61 @@ export default function Watch() {
             setShowBingePass(false)
           }}
         />
+
+        {/* Easter-egg reward toast */}
+        {eggToast && (
+          <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[60] bg-accent text-black text-sm font-semibold px-5 py-3 rounded-full shadow-2xl">
+            <Icon name="redeem" className="mr-2" />
+            {eggToast}
+          </div>
+        )}
+
+        {/* Ghost-watcher presence */}
+        {(viewers.length > 0 || flashes.length > 0 || partyInvite) && (
+          <div className="fixed right-4 bottom-4 z-50 flex flex-col items-end gap-2">
+            {viewers.length > 0 && (
+              <div className="flex items-center gap-2 bg-black/70 backdrop-blur border border-white/10 rounded-full pl-3 pr-4 py-2">
+                <div className="flex -space-x-2">
+                  {viewers.slice(0, 4).map((v) =>
+                    v.avatar ? (
+                      <img key={v.userId} src={v.avatar} alt="" className="w-7 h-7 rounded-full ring-2 ring-black object-cover" />
+                    ) : (
+                      <div key={v.userId} className="w-7 h-7 rounded-full ring-2 ring-black bg-accent/20 flex items-center justify-center text-xs">
+                        {v.name.charAt(0).toUpperCase()}
+                      </div>
+                    )
+                  )}
+                </div>
+                <span className="text-xs text-gray-300">
+                  {viewers.length} ghost{viewers.length > 1 ? 's' : ''} watching now
+                </span>
+              </div>
+            )}
+            {flashes.map((f) => (
+              <div key={f.id} className="bg-accent/90 text-white text-xs font-medium rounded-full px-3 py-2 shadow-lg animate-bounce">
+                {f.name} {f.emoji}
+              </div>
+            ))}
+            {partyInvite && (
+              <div className="bg-black/80 backdrop-blur border border-accent/30 rounded-xl p-4 max-w-xs">
+                <p className="text-sm text-white mb-2">
+                  <span className="font-semibold">{partyInvite.fromName}</span> invited you to a watch party
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => navigate(`/watch-party?code=${partyInvite.room}`)}
+                    className="flex-1 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-semibold hover:bg-red-700 transition-colors"
+                  >
+                    Join party
+                  </button>
+                  <button onClick={() => setPartyInvite(null)} className="px-3 py-1.5 rounded-lg border border-white/20 text-gray-300 text-xs hover:bg-white/10 transition-colors">
+                    Later
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <Modal

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type FC, type ReactNode, useCallback } from 'react'
-import { login as apiLogin, register as apiRegister, verifyEmail as apiVerifyEmail, resendVerification as apiResendVerification, getMe, getToken, setToken, removeToken } from './auth'
+import { login as apiLogin, register as apiRegister, verifyEmail as apiVerifyEmail, resendVerification as apiResendVerification, loginVerify as apiLoginVerify, getMe, getToken, setToken, removeToken } from './auth'
 
 interface User {
   id: string
@@ -11,6 +11,11 @@ interface User {
   bio: string
   email_verified: boolean
   createdAt: string
+  suspended_until?: string | null
+  suspension_reason?: string
+  banned_reason?: string
+  accountStatus?: 'active' | 'suspended' | 'banned'
+  accountReason?: string
 }
 
 const PLAN_RANK: Record<string, number> = {
@@ -52,14 +57,17 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   pendingUserId: string | null
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; needsVerification?: boolean; userId?: string }>
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; needsVerification?: boolean; needsLoginVerification?: boolean; reason?: string; userId?: string }>
   register: (email: string, password: string, name?: string) => Promise<{ success: boolean; error?: string; userId?: string; needsVerification?: boolean }>
   verifyEmail: (code: string) => Promise<{ success: boolean; error?: string }>
+  verifyLogin: (code: string) => Promise<{ success: boolean; error?: string }>
   resendVerification: () => Promise<{ success: boolean; error?: string }>
   logout: () => void
+  refresh: () => Promise<void>
   isPremium: boolean
   isCreator: boolean
   isAdmin: boolean
+  accountStatus: 'active' | 'suspended' | 'banned'
   planFeatures: PlanFeatures
   planRank: number
   meetsPlan: (minPlan: string) => boolean
@@ -96,6 +104,10 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
       setUser(res.user)
       return { success: true }
     }
+    if (res.needsLoginVerification && res.userId) {
+      setPendingUserId(res.userId)
+      return { success: false, needsLoginVerification: true, reason: res.reason, userId: res.userId, error: res.message }
+    }
     if (res.needsVerification && res.userId) {
       setPendingUserId(res.userId)
       return { success: false, needsVerification: true, userId: res.userId, error: res.message }
@@ -129,6 +141,18 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
     return { success: false, error: res.error || 'Verification failed' }
   }
 
+  const verifyLogin = async (code: string) => {
+    if (!pendingUserId) return { success: false, error: 'No pending verification' }
+    const res = await apiLoginVerify(pendingUserId, code)
+    if (res.success && res.token && res.user) {
+      setToken(res.token)
+      setUser(res.user)
+      setPendingUserId(null)
+      return { success: true }
+    }
+    return { success: false, error: res.error || 'Verification failed' }
+  }
+
   const resendVerification = async () => {
     if (!pendingUserId) return { success: false, error: 'No pending verification' }
     const res = await apiResendVerification(pendingUserId)
@@ -146,10 +170,11 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
   return (
     <AuthContext.Provider value={{
       user, loading, pendingUserId,
-      login, register, verifyEmail, resendVerification, logout, refresh: loadUser,
+      login, register, verifyEmail, verifyLogin, resendVerification, logout, refresh: loadUser,
       isPremium: currentPlan !== 'free',
       isCreator: user?.role === 'creator' || user?.role === 'admin',
       isAdmin: user?.role === 'admin',
+      accountStatus: user?.accountStatus || 'active',
       planFeatures: getPlanFeatures(currentPlan),
       planRank: getPlanRank(currentPlan),
       meetsPlan: (minPlan: string) => getPlanRank(currentPlan) >= getPlanRank(minPlan),

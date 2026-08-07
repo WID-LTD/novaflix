@@ -128,7 +128,7 @@ class _CreatorCoursesScreenState extends ConsumerState<CreatorCoursesScreen> {
                   ),
                 ))).toList(),
               ),
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const LoadingSpinner(logo: true),
               error: (e, _) => Center(child: Text('Error: $e')),
             ),
           ],

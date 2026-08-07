@@ -1,8 +1,7 @@
 import { useState } from 'react'
-import { useNavigate, useSearchParams, Link } from 'react-router-dom'
+import { useNavigate, useSearchParams, Link, Navigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuth } from '../lib/AuthContext'
-import { Navigate } from 'react-router-dom'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Icon from '../components/ui/Icon'
@@ -12,7 +11,7 @@ export default function Login() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const redirect = searchParams.get('redirect') || '/home'
-  const { user, loading: authLoading, login, register, verifyEmail, resendVerification } = useAuth()
+  const { user, loading: authLoading, login, register, verifyEmail, verifyLogin, resendVerification } = useAuth()
   const [isSignUp, setIsSignUp] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState('')
@@ -21,6 +20,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [needsVerify, setNeedsVerify] = useState(false)
+  const [verifyReason, setVerifyReason] = useState<'email' | 'new-device' | 'inactive' | 'unknown-location'>('email')
   const [code, setCode] = useState('')
   const [verifying, setVerifying] = useState(false)
 
@@ -41,7 +41,12 @@ export default function Login() {
 
     if (result.success && !result.userId) {
       navigate(redirect)
+    } else if ('needsLoginVerification' in result && result.needsLoginVerification) {
+      const reason = (result as { reason?: 'new-device' | 'inactive' | 'unknown-location' }).reason
+      setVerifyReason(reason || 'new-device')
+      setNeedsVerify(true)
     } else if (result.needsVerification || (result.success && result.userId)) {
+      setVerifyReason('email')
       setNeedsVerify(true)
     } else {
       setError(result.error || 'Something went wrong')
@@ -51,7 +56,7 @@ export default function Login() {
   const handleVerify = async () => {
     setError('')
     setVerifying(true)
-    const result = await verifyEmail(code)
+    const result = verifyReason === 'email' ? await verifyEmail(code) : await verifyLogin(code)
     setVerifying(false)
     if (result.success) {
       navigate(redirect)
@@ -88,8 +93,13 @@ export default function Login() {
         >
           <div className="glass-panel rounded-xl p-8 shadow-2xl border border-outline-variant/20">
             <div className="text-center mb-8">
-              <h1 className="text-headline-md mb-2">Verify your email</h1>
-              <p className="text-body-md text-on-surface-variant">6-digit code sent to <span className="text-primary">{email}</span></p>
+              <h1 className="text-headline-md mb-2">{verifyReason === 'email' ? 'Verify your email' : 'Confirm it\'s you'}</h1>
+              <p className="text-body-md text-on-surface-variant">
+                {verifyReason === 'email' && <>6-digit code sent to <span className="text-primary">{email}</span></>}
+                {verifyReason === 'new-device' && <>We noticed a sign-in from a new device or network. A code was sent to <span className="text-primary">{email}</span>.</>}
+                {verifyReason === 'inactive' && <>You haven't signed in for a while, so we want to confirm it's you. A code was sent to <span className="text-primary">{email}</span>.</>}
+                {verifyReason === 'unknown-location' && <>We noticed a sign-in from an unfamiliar location. A code was sent to <span className="text-primary">{email}</span>.</>}
+              </p>
             </div>
             {error && (
               <div className="bg-error-container/20 border border-error/20 text-error text-sm rounded-xl px-4 py-3 mb-4">{error}</div>
@@ -104,7 +114,7 @@ export default function Login() {
                 className="w-full bg-surface-container-low border border-outline-variant/30 text-on-surface rounded-lg py-4 px-4 text-center text-2xl tracking-[0.5em] font-bold focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container"
               />
               <Button className="w-full" size="lg" loading={verifying} onClick={handleVerify} disabled={code.length !== 6}>
-                Verify Email
+                {verifyReason === 'email' ? 'Verify Email' : 'Verify & Sign In'}
               </Button>
               <button onClick={handleResend} className="w-full text-sm text-on-surface-variant hover:text-primary transition-colors font-label-md">
                 Resend code
@@ -189,7 +199,7 @@ export default function Login() {
               <div className="flex justify-between items-center px-1">
                 <label className="font-label-md text-label-md text-on-surface opacity-80">Password</label>
                 {!isSignUp && (
-                  <a className="font-label-sm text-label-sm text-primary-container hover:underline transition-all cursor-pointer">Forgot Password?</a>
+                  <Link to="/forgot-password" className="font-label-sm text-label-sm text-primary-container hover:underline transition-all cursor-pointer">Forgot Password?</Link>
                 )}
               </div>
               <div className="relative group transition-all duration-300 rounded-lg">

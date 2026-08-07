@@ -8,7 +8,7 @@ class NovaflixApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final router = appRouter(ref);
+    final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
       title: 'NovaFlix',

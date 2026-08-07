@@ -144,8 +144,9 @@ export async function verifyOrder(req, res) {
         return res.json({ success: false, error: 'Order not found or already processed' })
       }
       await updateOrder(reference, { status: 'paid' })
-      await updateTransactionByReference(reference, { status: 'success' })
-      res.json({ success: true, order: { ...order, status: 'paid' } })
+      const platformFee = +(parseFloat(order.total) * 0.15).toFixed(2)
+      await updateTransactionByReference(reference, { status: 'success', metadata: { platformFee, orderId: order.id } })
+      res.json({ success: true, order: { ...order, status: 'paid', platformFee } })
     } else {
       res.json({ success: false, error: 'Payment not completed' })
     }

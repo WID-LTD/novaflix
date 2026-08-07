@@ -12,32 +12,49 @@ class ProfileGatewayScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.play_circle_fill, size: 60, color: AppColors.primary),
-              const SizedBox(height: 16),
-              Text("Who's watching?", style: AppTypography.headlineMd),
-              const SizedBox(height: 32),
-              GestureDetector(
-                onTap: () => context.go('/home'),
-                child: Column(
-                  children: [
-                    CircleAvatar(
-                      radius: 48,
-                      backgroundColor: AppColors.surfaceContainerHighest,
-                      child: const Icon(Icons.person, size: 48, color: AppColors.onSurfaceVariant),
+        child: Stack(
+          children: [
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.play_circle_fill, size: 60, color: AppColors.primary),
+                  const SizedBox(height: 16),
+                  Text("Who's watching?", style: AppTypography.headlineMd),
+                  const SizedBox(height: 32),
+                  GestureDetector(
+                    onTap: () => context.go('/home'),
+                    child: Column(
+                      children: [
+                        CircleAvatar(
+                          radius: 48,
+                          backgroundColor: AppColors.surfaceContainerHighest,
+                          child: const Icon(Icons.person, size: 48, color: AppColors.onSurfaceVariant),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text('Default Profile', style: TextStyle(color: AppColors.onSurfaceVariant)),
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                    const Text('Default Profile', style: TextStyle(color: AppColors.onSurfaceVariant)),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 48),
+                  AppButton(label: 'Continue to Home', onPressed: () => context.go('/home')),
+                ],
               ),
-              const SizedBox(height: 48),
-              AppButton(label: 'Continue to Home', onPressed: () => context.go('/home')),
-            ],
-          ),
+            ),
+            Positioned(
+              top: 8,
+              left: 12,
+              child: AppBackButton(
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go('/home');
+                  }
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );

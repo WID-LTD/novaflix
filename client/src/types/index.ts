@@ -38,6 +38,21 @@ export interface HookItem {
   sponsorName?: string
   mediaId?: number
   mediaType?: 'movie' | 'tv'
+  shortId?: string
+  creatorName?: string
+  creatorId?: string
+  creatorAvatar?: string | null
+  views?: number
+  likes?: number
+  description?: string
+  hashtags?: string[]
+  likesCount?: number
+  bookmarksCount?: number
+  commentsCount?: number
+  shares?: number
+  liked?: boolean
+  bookmarked?: boolean
+  following?: boolean
 }
 
 export interface Episode {
@@ -69,6 +84,16 @@ export interface MediaDetails {
 export interface Subtitle {
   label: string
   file: string
+}
+
+export interface EggPlacement {
+  id: string
+  ts_seconds: number
+  pos_x: number
+  pos_y: number
+  radius: number
+  hint: string
+  reward_type: string
 }
 
 export interface StreamSource {
@@ -164,4 +189,27 @@ export interface CreatorAnalytics {
   revenueBreakdown: { label: string; value: number }[]
   topLocations: { country: string; percentage: number }[]
   demographics: { age: string; percentage: number }[]
+}
+
+export interface ShortVideo {
+  id: string
+  videoUrl: string
+  thumbnailUrl: string | null
+  title: string
+  description?: string
+  creatorName?: string
+  creatorAvatar?: string | null
+  audioTrackName?: string
+  likesCount?: number
+  commentsCount?: number
+  views?: number
+  liked?: boolean
+}
+
+export interface ShortComment {
+  id: string
+  userName: string
+  userAvatar: string | null
+  text: string
+  createdAt: string
 }

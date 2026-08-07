@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
 import { useStore } from '../../store/useStore'
+import { useNotifications } from '../../lib/notifications'
 import Icon from '../ui/Icon'
 import SearchLightbox from '../ui/SearchLightbox'
+import NotificationBell from './NotificationBell'
 
 export default function TopNav() {
   const { user } = useAuth()
@@ -12,6 +14,7 @@ export default function TopNav() {
   const sidebarCollapsed = useStore((s) => s.sidebarCollapsed)
   const mobileDrawerOpen = useStore((s) => s.mobileDrawerOpen)
   const [searchOpen, setSearchOpen] = useState(false)
+  const notif = useNotifications(Boolean(user))
 
   return (
     <header className="fixed top-0 left-0 right-0 z-40 glass-panel h-16 flex justify-between items-center px-margin-mobile md:px-margin-desktop">
@@ -31,6 +34,11 @@ export default function TopNav() {
           <Link to="/search?type=movie" className="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors">Movies</Link>
           <Link to="/tv-shows" className="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors">TV Shows</Link>
           <Link to="/discover?sort=trending" className="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors">New & Popular</Link>
+          <Link to="/hooks" className="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors">Shorts</Link>
+          <Link to="/news" className="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors">News</Link>
+          {user && (
+            <Link to="/forum" className="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors">Hot Takes</Link>
+          )}
         </nav>
       </div>
       {searchOpen && (
@@ -44,9 +52,7 @@ export default function TopNav() {
             <Icon name="search" />
           </button>
           {user && (
-            <button className="text-on-surface-variant hover:text-primary transition-colors p-2" aria-label="Notifications">
-              <Icon name="notifications" />
-            </button>
+            <NotificationBell {...notif} />
           )}
           <button
             onClick={() => navigate(user ? '/profile' : '/login')}

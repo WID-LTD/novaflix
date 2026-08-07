@@ -7,6 +7,9 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../models/media_item.dart';
 import '../ui/index.dart';
+import '../../widgets/movie_card.dart';
+
+export '../movie_card.dart';
 
 class ContentRow extends StatelessWidget {
   final String title;
@@ -48,50 +51,6 @@ class ContentRow extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class MovieCard extends StatelessWidget {
-  final MediaItem item;
-  final double width;
-  final double height;
-
-  const MovieCard({super.key, required this.item, this.width = 140, this.height = 200});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => Navigator.of(context).pushNamed(
-        item.isTV ? '/tv' : '/movie',
-        arguments: item.id,
-      ),
-      child: SizedBox(
-        width: width,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: item.posterUrl != null
-                    ? CachedNetworkImage(
-                        imageUrl: item.posterUrl!,
-                        fit: BoxFit.cover,
-                        width: width,
-                        placeholder: (_, __) => AppSkeleton(width: width, borderRadius: 8),
-                        errorWidget: (_, __, ___) => Container(color: AppColors.surfaceContainerHigh, child: const Icon(Icons.movie, color: Colors.grey)),
-                      )
-                    : Container(color: AppColors.surfaceContainerHigh, child: const Icon(Icons.movie, color: Colors.grey)),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(item.title, style: AppTypography.bodySm, maxLines: 1, overflow: TextOverflow.ellipsis),
-            if (item.releaseDate != null)
-              Text(item.year.toString(), style: const TextStyle(color: AppColors.onSurfaceVariant, fontSize: 12)),
-          ],
-        ),
-      ),
     );
   }
 }

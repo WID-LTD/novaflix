@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuth } from '../lib/AuthContext'
-import { getCommunities, getCommunity, createCommunity, joinCommunity, leaveCommunity, getMyCommunities, addCommunityPost, deleteCommunityPost } from '../lib/auth'
+import { getCommunities, getCommunity, createCommunity, joinCommunity, leaveCommunity, getMyCommunities, addCommunityPost, deleteCommunityPost, likeCommunityPost, getCommunityMembers, getForumTopics, getMyEggs } from '../lib/auth'
 import Button from '../components/ui/Button'
 import Icon from '../components/ui/Icon'
 import Skeleton from '../components/ui/Skeleton'
@@ -18,12 +18,34 @@ export default function Community() {
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName] = useState('')
   const [newDesc, setNewDesc] = useState('')
+  const [activeTab, setActiveTab] = useState('communities')
+  const [trendingTopics, setTrendingTopics] = useState<any[]>([])
+  const [trendingLoading, setTrendingLoading] = useState(true)
+  const [myKeys, setMyKeys] = useState<any[]>([])
+  const [myKeysLoading, setMyKeysLoading] = useState(false)
+
+  useEffect(() => {
+    if (activeTab !== 'keys') return
+    const token = localStorage.getItem('novaflix-token') || ''
+    if (!token) {
+      navigate('/login?redirect=/community')
+      return
+    }
+    setMyKeysLoading(true)
+    getMyEggs(token).then((res) => {
+      if (res.success) setMyKeys(res.keys || [])
+      setMyKeysLoading(false)
+    }).catch(() => setMyKeysLoading(false))
+  }, [activeTab, navigate])
 
   const [community, setCommunity] = useState<any>(null)
   const [isMember, setIsMember] = useState(false)
   const [posts, setPosts] = useState<any[]>([])
   const [newPost, setNewPost] = useState('')
   const [detailLoading, setDetailLoading] = useState(false)
+  const [showMembers, setShowMembers] = useState(false)
+  const [members, setMembers] = useState<any[]>([])
+  const [membersLoading, setMembersLoading] = useState(false)
 
   const loadData = async () => {
     const [allRes, mineRes] = await Promise.all([
@@ -34,6 +56,18 @@ export default function Community() {
     if (mineRes.success) setMyCommunities(mineRes.communities)
     setLoading(false)
   }
+
+  useEffect(() => {
+    getForumTopics('all', 20).then(r => {
+      if (r.success) {
+        const sorted = [...(r.topics || [])]
+          .sort((a, b) => ((b.upvotes || 0) - (b.downvotes || 0)) - ((a.upvotes || 0) - (a.downvotes || 0)))
+          .slice(0, 3)
+        setTrendingTopics(sorted)
+      }
+      setTrendingLoading(false)
+    })
+  }, [])
 
   useEffect(() => {
     loadData()
@@ -95,6 +129,23 @@ export default function Community() {
     setPosts(prev => prev.filter(p => p.id !== postId))
   }
 
+  const handleLikePost = async (postId: string) => {
+    if (!id) return
+    const res = await likeCommunityPost(id, postId)
+    if (res.success) {
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, liked: res.liked, like_count: res.likeCount } : p))
+    }
+  }
+
+  const openMembers = async () => {
+    if (!id) return
+    setShowMembers(true)
+    setMembersLoading(true)
+    const res = await getCommunityMembers(id)
+    if (res.success) setMembers(res.members)
+    setMembersLoading(false)
+  }
+
   if (id) {
     if (detailLoading) {
       return (
@@ -138,7 +189,9 @@ export default function Community() {
                 <h1 className="text-headline-md font-bold mb-2">{community.name}</h1>
                 <p className="text-on-surface-variant mb-4">{community.description || 'No description'}</p>
                 <div className="flex items-center gap-4 text-sm text-on-surface-variant mb-4">
-                  <span className="flex items-center gap-1"><Icon name="group" size="sm" /> {community.member_count} members</span>
+                  <button onClick={openMembers} className="flex items-center gap-1 hover:text-on-surface transition-colors">
+                    <Icon name="group" size="sm" /> {community.member_count} members
+                  </button>
                   <span>Created by {community.creator_name}</span>
                 </div>
                 {user?.id === community.creator_id ? (
@@ -203,9 +256,47 @@ export default function Community() {
                   )}
                 </div>
                 <p className="text-body-md whitespace-pre-wrap">{post.content}</p>
+                <div className="flex items-center gap-4 mt-3">
+                  <button
+                    onClick={() => handleLikePost(post.id)}
+                    className={`flex items-center gap-1.5 text-sm transition-colors ${post.liked ? 'text-primary-container' : 'text-on-surface-variant hover:text-on-surface'}`}
+                  >
+                    <Icon name={post.liked ? 'favorite' : 'favorite_border'} size="sm" fill={post.liked} />
+                    {post.like_count || 0} Likes
+                  </button>
+                </div>
               </motion.div>
             ))}
           </div>
+
+          {showMembers && (
+            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowMembers(false)}>
+              <div className="bg-surface-container-high rounded-2xl p-6 max-w-md w-full border border-white/5" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-headline-sm font-bold">Members ({community.member_count})</h2>
+                  <button onClick={() => setShowMembers(false)} className="p-2 rounded-lg hover:bg-white/10 transition-colors" aria-label="Close members">
+                    <Icon name="close" size="sm" />
+                  </button>
+                </div>
+                <div className="max-h-[60vh] overflow-y-auto space-y-2">
+                  {membersLoading ? (
+                    <p className="text-on-surface-variant text-sm py-4 text-center">Loading members...</p>
+                  ) : members.length === 0 ? (
+                    <p className="text-on-surface-variant text-sm py-4 text-center">No members yet.</p>
+                  ) : (
+                    members.map(m => (
+                      <div key={m.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5">
+                        <div className="w-8 h-8 rounded-full bg-primary-container/20 flex items-center justify-center overflow-hidden shrink-0">
+                          {m.avatar ? <img src={m.avatar} alt={m.name} className="w-full h-full object-cover" /> : <Icon name="person" className="text-primary-container text-sm" />}
+                        </div>
+                        <p className="font-label-md text-label-md truncate">{m.name}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     )
@@ -215,16 +306,37 @@ export default function Community() {
     <div className="min-h-screen">
       <div className="bg-surface-container border-b border-white/5">
         <div className="max-w-6xl mx-auto px-4 py-8">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-5">
             <div>
-              <h1 className="text-headline-md font-bold mb-1">Community</h1>
-              <p className="text-on-surface-variant text-sm">Connect with fellow movie lovers</p>
+              <h1 className="text-headline-md font-bold mb-1">Community &amp; Engagement</h1>
+              <p className="text-on-surface-variant text-sm">Communities · Hot Takes · Debate</p>
             </div>
             {isCreator && (
               <Button onClick={() => setShowCreate(true)}>
                 <Icon name="add" size="sm" /> New Community
               </Button>
             )}
+          </div>
+
+          <div className="flex gap-1 mb-6 max-w-md bg-surface-container-high rounded-xl p-1 border border-white/5">
+            <button
+              onClick={() => { setActiveTab('communities'); setSearch('') }}
+              className={`flex-1 flex items-center justify-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'communities' ? 'bg-primary-container text-on-primary-container' : 'text-on-surface-variant hover:text-on-surface'}`}
+            >
+              <Icon name="diversity_3" className="w-4 h-4" /> Communities
+            </button>
+            <button
+              onClick={() => navigate('/forum')}
+              className="flex-1 flex items-center justify-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-lg text-sm font-medium transition-colors text-on-surface-variant hover:text-on-surface"
+            >
+              <Icon name="forum" className="w-4 h-4" /> Hot Takes
+            </button>
+            <button
+              onClick={() => setActiveTab('keys')}
+              className={`flex-1 flex items-center justify-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'keys' ? 'bg-primary-container text-on-primary-container' : 'text-on-surface-variant hover:text-on-surface'}`}
+            >
+              <Icon name="key" className="w-4 h-4" /> My Keys
+            </button>
           </div>
 
           <div className="relative max-w-md">
@@ -266,6 +378,76 @@ export default function Community() {
       )}
 
       <div className="max-w-6xl mx-auto px-4 py-8">
+        {activeTab === 'keys' && (
+          <div className="mb-10">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-headline-sm font-bold flex items-center gap-2">
+                <Icon name="vpn_key" className="text-primary-container" /> My Digital Keys
+              </h2>
+              <span className="text-sm text-on-surface-variant">{myKeys.length} collected</span>
+            </div>
+
+            {myKeysLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[1, 2, 3].map(i => <Skeleton key={i} variant="text" className="w-full h-32 rounded-xl" />)}
+              </div>
+            ) : myKeys.length === 0 ? (
+              <div className="bg-surface-container rounded-xl border border-white/5 p-10 text-center">
+                <Icon name="key_off" className="text-5xl text-on-surface-variant/30 mx-auto mb-4" />
+                <p className="text-on-surface font-label-md mb-1">No keys yet</p>
+                <p className="text-on-surface-variant/70 text-sm mb-4 max-w-md mx-auto">
+                  Hidden keys are tucked into movies at exact moments. Pause when a glowing key appears on screen to collect it and unlock badges & secret rooms.
+                </p>
+                <Button variant="secondary" onClick={() => navigate('/')}>
+                  Start Hunting <Icon name="arrow_forward" size="sm" />
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {myKeys.map(k => (
+                  <motion.div
+                    key={k.keyId}
+                    whileHover={{ y: -2 }}
+                    className="bg-surface-container-high rounded-xl p-4 border border-white/5 transition-all"
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <div className="w-10 h-10 rounded-xl bg-primary-container/20 flex items-center justify-center shrink-0">
+                        <Icon name="vpn_key" className="text-primary-container" />
+                      </div>
+                      {k.rewardType === 'secret_room' && k.room ? (
+                        <button
+                          onClick={() => navigate(`/community/room/${k.room.id}`)}
+                          className="text-[10px] px-2 py-1 rounded-full bg-primary/15 text-primary font-semibold uppercase hover:bg-primary/25 transition-colors"
+                        >
+                          Enter Room →
+                        </button>
+                      ) : k.badge ? (
+                        <span className="text-[10px] px-2 py-1 rounded-full bg-primary/15 text-primary font-semibold uppercase flex items-center gap-1">
+                          <span>{k.badge.icon}</span> {k.badge.name}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="text-sm font-label-md text-on-surface truncate">
+                      {k.contentId}
+                    </p>
+                    {k.hint && (
+                      <p className="text-xs text-on-surface-variant/70 italic mt-1 line-clamp-2">
+                        “{k.hint}”
+                      </p>
+                    )}
+                    <p className="text-xs text-on-surface-variant/50 mt-2">
+                      Found at {Math.floor(k.ts_seconds / 60)}:{Math.floor(k.ts_seconds % 60).toString().padStart(2, '0')}
+                      {k.room ? ' • Secret Room unlocked' : ''}
+                    </p>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab !== 'keys' && (
+        <>
         {myCommunities.length > 0 && (
           <div className="mb-10">
             <h2 className="text-headline-sm font-bold mb-4 flex items-center gap-2">
@@ -294,6 +476,50 @@ export default function Community() {
             </div>
           </div>
         )}
+
+        <div className="mb-10">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-headline-sm font-bold flex items-center gap-2">
+              <Icon name="local_fire_department" className="text-primary-container" /> Trending Hot Takes
+            </h2>
+            <Button variant="secondary" size="sm" onClick={() => navigate('/forum')}>
+              Start a Debate <Icon name="arrow_forward" size="sm" />
+            </Button>
+          </div>
+          {trendingLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {[1, 2, 3].map(i => <Skeleton key={i} variant="text" className="w-full h-32 rounded-xl" />)}
+            </div>
+          ) : trendingTopics.length === 0 ? (
+            <div className="bg-surface-container rounded-xl border border-white/5 p-6 text-center">
+              <p className="text-on-surface-variant text-sm">No hot takes yet. Start the debate!</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {trendingTopics.map(t => (
+                <motion.div
+                  key={t.id}
+                  whileHover={{ y: -2 }}
+                  onClick={() => navigate(`/forum/${t.id}`)}
+                  className="bg-surface-container-high rounded-xl p-4 border border-white/5 cursor-pointer hover:border-primary-container/20 transition-all"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary font-semibold uppercase">{t.category}</span>
+                    <span className="text-xs text-on-surface-variant/60 ml-auto flex items-center gap-1">
+                      <Icon name="thumb_up" className="w-3.5 h-3.5" /> {t.upvotes - t.downvotes}
+                    </span>
+                  </div>
+                  <p className="font-label-md text-label-md text-on-surface line-clamp-2 mb-2">{t.title}</p>
+                  <div className="flex items-center gap-2 text-xs text-on-surface-variant/70">
+                    {t.author_avatar ? <img src={t.author_avatar} alt="" className="w-5 h-5 rounded-full object-cover" /> : <Icon name="person" className="w-4 h-4 text-on-surface-variant/50" />}
+                    <span className="truncate">{t.author_name}</span>
+                    <span className="ml-auto flex items-center gap-1">💬 {t.reply_count || 0}</span>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </div>
 
         <h2 className="text-headline-sm font-bold mb-4">All Communities</h2>
         {loading ? (
@@ -330,6 +556,8 @@ export default function Community() {
               </motion.div>
             ))}
           </div>
+        )}
+        </>
         )}
       </div>
     </div>

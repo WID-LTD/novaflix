@@ -6,6 +6,7 @@ import '../theme/app_typography.dart';
 import '../services/api_service.dart';
 import '../models/media_item.dart';
 import '../widgets/features/index.dart';
+import '../widgets/ui/index.dart';
 
 final _tvTrendingProvider = FutureProvider<List<MediaItem>>((ref) async {
   final api = ref.read(apiServiceProvider);
@@ -41,12 +42,12 @@ class TVShowsScreen extends ConsumerWidget {
             children: [
               trending.when(
                 data: (items) => ContentRow(title: 'Trending TV Shows', items: items),
-                loading: () => const SizedBox(height: 220, child: Center(child: CircularProgressIndicator())),
+                loading: () => const SizedBox(height: 220, child: LoadingSpinner(logo: true)),
                 error: (_, __) => const SizedBox.shrink(),
               ),
               topRated.when(
                 data: (items) => ContentRow(title: 'Top Rated TV Shows', items: items),
-                loading: () => const SizedBox(height: 220, child: Center(child: CircularProgressIndicator())),
+                loading: () => const SizedBox(height: 220, child: LoadingSpinner(logo: true)),
                 error: (_, __) => const SizedBox.shrink(),
               ),
             ],

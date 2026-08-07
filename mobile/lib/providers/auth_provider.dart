@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/user.dart';
 import '../services/auth_service.dart';
 
-enum AuthStatus { unknown, unauthenticated, authenticated, needsVerification, loading }
+enum AuthStatus { unknown, unauthenticated, authenticated, needsVerification, needsLoginVerification, loading }
 
 class AuthState {
   final AuthStatus status;
@@ -10,6 +10,7 @@ class AuthState {
   final String? error;
   final int? pendingUserId;
   final String? pendingEmail;
+  final String? loginVerifyReason;
 
   const AuthState({
     this.status = AuthStatus.unknown,
@@ -17,6 +18,7 @@ class AuthState {
     this.error,
     this.pendingUserId,
     this.pendingEmail,
+    this.loginVerifyReason,
   });
 
   AuthState copyWith({
@@ -25,6 +27,7 @@ class AuthState {
     String? error,
     int? pendingUserId,
     String? pendingEmail,
+    String? loginVerifyReason,
     bool clearError = false,
   }) {
     return AuthState(
@@ -33,6 +36,7 @@ class AuthState {
       error: clearError ? null : (error ?? this.error),
       pendingUserId: pendingUserId ?? this.pendingUserId,
       pendingEmail: pendingEmail ?? this.pendingEmail,
+      loginVerifyReason: loginVerifyReason ?? this.loginVerifyReason,
     );
   }
 }
@@ -91,6 +95,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
           status: AuthStatus.needsVerification,
           pendingEmail: email,
         );
+      } else if (e.code == 'login_verify') {
+        state = state.copyWith(
+          status: AuthStatus.needsLoginVerification,
+          pendingUserId: e.userId,
+          pendingEmail: email,
+          loginVerifyReason: e.reason,
+        );
       } else {
         state = state.copyWith(
           status: AuthStatus.unauthenticated,
@@ -100,6 +111,22 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (e) {
       state = state.copyWith(
         status: AuthStatus.unauthenticated,
+        error: e.toString(),
+      );
+    }
+  }
+
+  Future<void> loginVerify(String code) async {
+    final userId = state.pendingUserId;
+    if (userId == null) return;
+
+    state = state.copyWith(status: AuthStatus.loading, clearError: true);
+    try {
+      final user = await _authService.loginVerify(userId, code);
+      state = AuthState(status: AuthStatus.authenticated, user: user);
+    } catch (e) {
+      state = state.copyWith(
+        status: AuthStatus.needsLoginVerification,
         error: e.toString(),
       );
     }

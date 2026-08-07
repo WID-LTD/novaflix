@@ -16,7 +16,7 @@ export async function getById(req, res) {
     const community = await db.getCommunityById(req.params.id)
     if (!community) return res.status(404).json({ error: 'Community not found' })
     const isMember = await db.isCommunityMember(req.params.id, req.userId)
-    const posts = await db.getPosts(req.params.id)
+    const posts = await db.getPosts(req.params.id, req.userId)
     res.json({ success: true, community, isMember, posts })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -85,13 +85,8 @@ export async function addPost(req, res) {
       userId: req.userId,
       content,
     })
-    const { rows } = await db.pool.query(
-      `SELECT p.*, u.name as user_name, u.avatar as user_avatar
-       FROM community_posts p JOIN users u ON u.id = p.user_id
-       WHERE p.id = $1`,
-      [post.id]
-    )
-    res.json({ success: true, post: rows[0] })
+    const result = await db.getPostById(post.id, req.userId)
+    res.json({ success: true, post: result })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -102,6 +97,26 @@ export async function deletePost(req, res) {
     const post = await db.deletePost(req.params.postId, req.userId)
     if (!post) return res.status(404).json({ error: 'Post not found or unauthorized' })
     res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+export async function members(req, res) {
+  try {
+    const community = await db.getCommunityById(req.params.id)
+    if (!community) return res.status(404).json({ error: 'Community not found' })
+    const members = await db.getCommunityMembers(req.params.id)
+    res.json({ success: true, members })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+export async function togglePostLike(req, res) {
+  try {
+    const result = await db.togglePostLike(req.params.postId, req.userId)
+    res.json({ success: true, ...result })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

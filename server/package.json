@@ -8,6 +8,7 @@
     "dev": "node server.js",
     "start": "node server.js",
     "seed": "node scripts/seedArtists.js",
+    "seed:shorts": "node scripts/seedShorts.js",
     "seed:communities": "node seedCommunities.js"
   },
   "dependencies": {
@@ -22,6 +23,8 @@
     "paystack-api": "^2.0.6",
     "stripe": "^22.3.1",
     "uuid": "^14.0.1",
-    "ws": "^8.21.0"
+    "web-push": "^3.6.7",
+    "ws": "^8.21.0",
+    "ffmpeg-static": "^5.2.0"
   }
 }

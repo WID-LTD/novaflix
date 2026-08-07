@@ -46,6 +46,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
     final isVerify = authState.status == AuthStatus.needsVerification;
+    final isLoginVerify = authState.status == AuthStatus.needsLoginVerification;
 
     if (authState.status == AuthStatus.authenticated) {
       WidgetsBinding.instance.addPostFrameCallback((_) => context.go('/home'));
@@ -54,11 +55,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: isVerify ? _buildVerify(authState) : _buildAuth(authState),
-          ),
+        child: Stack(
+          children: [
+            Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: isVerify
+                    ? _buildVerify(authState)
+                    : isLoginVerify
+                        ? _buildLoginVerify(authState)
+                        : _buildAuth(authState),
+              ),
+            ),
+            Positioned(
+              top: 8,
+              left: 12,
+              child: AppBackButton(
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go('/home');
+                  }
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -163,6 +185,61 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         const SizedBox(height: 16),
         TextButton(
           onPressed: () => ref.read(authProvider.notifier).resendVerification(),
+          child: const Text('Resend Code', style: TextStyle(color: AppColors.primaryLight)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLoginVerify(AuthState state) {
+    final email = state.pendingEmail ?? '';
+    final reason = state.loginVerifyReason ?? 'new-device';
+    final title = reason == 'email' ? 'Verify your email' : 'Confirm it\'s you';
+
+    String getMessage() {
+      switch (reason) {
+        case 'new-device':
+          return 'We noticed a sign-in from a new device or network. A code was sent to $email.';
+        case 'inactive':
+          return "You haven't signed in for a while, so we want to confirm it's you. A code was sent to $email.";
+        case 'unknown-location':
+          return 'We noticed a sign-in from an unfamiliar location. A code was sent to $email.';
+        default:
+          return 'A code was sent to $email.';
+      }
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.verified_user, size: 64, color: AppColors.primary),
+        const SizedBox(height: 16),
+        Text(title, style: AppTypography.headlineMd),
+        const SizedBox(height: 8),
+        Text(getMessage(),
+          style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 32),
+        AppInput(controller: _codeCtl, hint: 'Enter 6-digit code', keyboardType: TextInputType.number),
+        const SizedBox(height: 24),
+        AppButton(
+          label: 'Verify & Sign In',
+          onPressed: () => ref.read(authProvider.notifier).loginVerify(_codeCtl.text),
+          loading: state.status == AuthStatus.loading,
+        ),
+        if (state.error != null) ...[
+          const SizedBox(height: 12),
+          Text(state.error!, style: const TextStyle(color: AppColors.error, fontSize: 13)),
+        ],
+        const SizedBox(height: 16),
+        TextButton(
+          onPressed: () {
+            final userId = state.pendingUserId;
+            if (userId != null) {
+              ref.read(authProvider.notifier).resendVerification();
+            }
+          },
           child: const Text('Resend Code', style: TextStyle(color: AppColors.primaryLight)),
         ),
       ],

@@ -128,7 +128,7 @@ class _CreatorMembershipManagerScreenState extends ConsumerState<CreatorMembersh
                   ),
                 )).toList(),
               ),
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const LoadingSpinner(logo: true),
               error: (e, _) => Center(child: Text('Error: $e')),
             ),
           ],

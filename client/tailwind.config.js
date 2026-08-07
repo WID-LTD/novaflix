@@ -46,6 +46,11 @@ export default {
         'tertiary-fixed': '#e2e2e2',
         'tertiary-fixed-dim': '#c6c6c7',
         'surface-tint': '#ffb4aa',
+        'app-background': 'var(--app-background)',
+        'app-primary-text': 'var(--app-primary-text)',
+        'app-muted-text': 'var(--app-muted-text)',
+        'app-accent': 'var(--app-accent)',
+        'app-divider': 'var(--app-divider)',
       },
       fontFamily: {
         'display-lg': ['Inter', 'system-ui', 'sans-serif'],

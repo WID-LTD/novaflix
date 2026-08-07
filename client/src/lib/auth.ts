@@ -8,6 +8,39 @@ interface AuthResponse {
   message?: string
   userId?: string
   needsVerification?: boolean
+  needsLoginVerification?: boolean
+  reason?: 'new-device' | 'inactive' | 'unknown-location'
+}
+
+export function getDeviceId(): string {
+  let id = localStorage.getItem('novaflix-device-id')
+  if (!id) {
+    id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    localStorage.setItem('novaflix-device-id', id)
+  }
+  return id
+}
+
+export function getCoords(): Promise<{ lat: number; lng: number; accuracy: number } | null> {
+  return new Promise((resolve) => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return resolve(null)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+      () => resolve(null),
+      { enableHighAccuracy: false, timeout: 4000, maximumAge: 600000 }
+    )
+  })
+}
+
+async function withLoginMeta(body: Record<string, any>): Promise<Record<string, any>> {
+  const deviceId = getDeviceId()
+  const coords = await getCoords()
+  if (coords) {
+    body.lat = coords.lat
+    body.lng = coords.lng
+    body.accuracy = coords.accuracy
+  }
+  return { ...body, deviceId }
 }
 
 export async function register(email: string, password: string, name?: string): Promise<AuthResponse> {
@@ -25,10 +58,51 @@ export async function register(email: string, password: string, name?: string): 
 
 export async function login(email: string, password: string): Promise<AuthResponse> {
   try {
+    const body = await withLoginMeta({ email, password })
     const res = await fetch(`${BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(body),
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function loginVerify(userId: string, code: string): Promise<AuthResponse> {
+  try {
+    const body = await withLoginMeta({ userId, code })
+    const res = await fetch(`${BASE}/auth/login/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function forgotPassword(email: string): Promise<AuthResponse> {
+  try {
+    const res = await fetch(`${BASE}/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function resetPassword(token: string, password: string): Promise<AuthResponse> {
+  try {
+    const res = await fetch(`${BASE}/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, password }),
     })
     return res.json()
   } catch {
@@ -106,6 +180,111 @@ export async function uploadAvatar(token: string, file: File): Promise<any> {
       headers: { Authorization: `Bearer ${token}` },
       body: formData,
     })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function uploadShort(file: File, title: string, description?: string): Promise<any> {
+  try {
+    const token = getToken()
+    const formData = new FormData()
+    formData.append('video', file)
+    formData.append('title', title)
+    if (description) formData.append('description', description)
+    const res = await fetch(`${BASE}/shorts`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function likeShort(shortId: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/shorts/${shortId}/like`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function bookmarkShort(shortId: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/shorts/${shortId}/bookmark`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function shareShort(shortId: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/shorts/${shortId}/share`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function getShortComments(shortId: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/shorts/${shortId}/comments`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function postShortComment(shortId: string, text: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/shorts/${shortId}/comment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ text }),
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function followUser(userId: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/interactions/follow`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ followingId: userId }),
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function recordShortView(shortId: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/shorts/${shortId}/view`, { method: 'POST' })
     return res.json()
   } catch {
     return { success: false, error: 'Network error' }
@@ -202,6 +381,41 @@ export async function sendTip(token: string, creatorId: string, amount: number, 
   }
 }
 
+export async function initializeGlowGift(token: string, creatorId: string, amount: number, note?: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/gift/initialize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ creatorId, amount, note }),
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function verifyGlowGift(token: string, reference: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/gift/verify?reference=${reference}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function getMyGlowGifts(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/gift/mine`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
 export async function recordWatch(token: string, data: any): Promise<any> {
   try {
     const res = await fetch(`${BASE}/user/watch-history`, {
@@ -226,6 +440,65 @@ export async function getWatchHistory(token: string): Promise<any> {
   }
 }
 
+export async function getEggs(token: string, contentId: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/eggs?contentId=${encodeURIComponent(contentId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function collectEgg(token: string, keyId: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/eggs/collect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ keyId }),
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function getMyEggs(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/eggs/mine`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function createEgg(token: string, data: any): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/eggs/creator`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function getSecretRoom(token: string, roomId: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/eggs/room/${encodeURIComponent(roomId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
 // Creator auth
 export async function creatorRegister(email: string, password: string, name?: string): Promise<AuthResponse> {
   try {
@@ -242,10 +515,51 @@ export async function creatorRegister(email: string, password: string, name?: st
 
 export async function creatorLogin(email: string, password: string): Promise<AuthResponse> {
   try {
+    const body = await withLoginMeta({ email, password })
     const res = await fetch(`${BASE}/creator/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(body),
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function creatorLoginVerify(userId: string, code: string): Promise<AuthResponse> {
+  try {
+    const body = await withLoginMeta({ userId, code })
+    const res = await fetch(`${BASE}/creator/auth/login/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function creatorForgotPassword(email: string): Promise<AuthResponse> {
+  try {
+    const res = await fetch(`${BASE}/creator/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function creatorResetPassword(token: string, password: string): Promise<AuthResponse> {
+  try {
+    const res = await fetch(`${BASE}/creator/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, password }),
     })
     return res.json()
   } catch {
@@ -374,6 +688,275 @@ export async function adminGetNewsletterSubscribers(token: string): Promise<any>
   }
 }
 
+export async function adminSendAnnouncement(token: string, payload: Record<string, any>): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/announcements`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload),
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function pushSubscribe(token: string, sub: { endpoint: string; keys: { p256dh: string; auth: string } }): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/push/subscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(sub),
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function pushStatus(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/push/status`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+// Admin platform v2
+export async function adminOverview(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/overview`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function adminAnalytics(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/analytics`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function adminCatalog(token: string, type?: string): Promise<any> {
+  const q = type ? `?type=${type}` : ''
+  try {
+    const res = await fetch(`${BASE}/admin/catalog${q}`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function adminUpdateCatalogItem(token: string, kind: string, id: string, fields: Record<string, any>): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/catalog/${kind}/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(fields),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function adminTransactions(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/transactions`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function adminSubscriptions(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/subscriptions`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function adminPromoCodes(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/promo`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function adminCreatePromo(token: string, payload: Record<string, any>): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/promo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function adminBanners(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/banners`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function adminCreateBanner(token: string, data: Record<string, any>): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/banners`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(data),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function adminFeedSettings(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/feed-settings`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function adminSetFeedSetting(token: string, key: string, value: any): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/feed-settings`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ key, value }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function adminModeration(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/moderation`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function adminResolveReport(token: string, id: string, status: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/moderation/reports/${id}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ status }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function adminAuditLog(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/audit-log`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function adminCommunity(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/community`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function submitReport(token: string, targetType: string, targetId: string, reason: string, details?: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/reports`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ targetType, targetId, reason, details }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function submitAppeal(token: string, message: string, appealType?: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/appeals`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ message, appealType }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function myAppeals(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/appeals/mine`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, appeals: [], error: 'Network error' } }
+}
+
+export async function adminAppeals(token: string, status?: string): Promise<any> {
+  try {
+    const q = status && status !== 'all' ? `?status=${status}` : ''
+    const res = await fetch(`${BASE}/admin/appeals${q}`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, appeals: [], error: 'Network error' } }
+}
+
+export async function adminDecideAppeal(token: string, id: string, status: string, resolutionNote?: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/appeals/${id}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ status, resolutionNote }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+// RBAC (admin roles & permissions)
+export async function adminPermissions(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/permissions`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, permissions: [], error: 'Network error' } }
+}
+
+export async function adminRoles(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/roles`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, roles: [], error: 'Network error' } }
+}
+
+export async function adminCreateRole(token: string, payload: Record<string, any>): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/roles`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(payload),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function adminUpdateRole(token: string, id: string, payload: Record<string, any>): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/roles/${id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(payload),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function adminDeleteRole(token: string, id: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/roles/${id}`, {
+      method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function adminAssignRole(token: string, userId: string, adminRoleId: string | null): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/users/${userId}/admin-role`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ adminRoleId }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function adminGetMe(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/me`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
 // Communities
 export async function getCommunities(search?: string): Promise<any> {
   try {
@@ -455,6 +1038,25 @@ export async function deleteCommunityPost(communityId: string, postId: string): 
     })
     return res.json()
   } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function likeCommunityPost(communityId: string, postId: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/community/${communityId}/posts/${postId}/like`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getCommunityMembers(communityId: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/community/${communityId}/members`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, members: [], error: 'Network error' } }
 }
 
 // Downloads
@@ -554,6 +1156,36 @@ export async function checkFollow(followingId: string): Promise<any> {
   } catch { return { success: false, error: 'Network error' } }
 }
 
+export async function getFollowStats(userId: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/interactions/follow-stats?userId=${userId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getFollowers(userId: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/interactions/followers?userId=${userId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getFollowing(userId: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/interactions/following?userId=${userId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
 // Comments
 export async function getComments(contentId: string, contentType: string): Promise<any> {
   try {
@@ -621,6 +1253,15 @@ export async function getPayoutHistory(token: string): Promise<any> {
 export async function getCreatorDashboard(token: string): Promise<any> {
   try {
     const res = await fetch(`${BASE}/creator/dashboard`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getCreatorEarnings(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/creator/earnings`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     return res.json()
@@ -1051,6 +1692,16 @@ export async function getMyAchievements(): Promise<any> {
   } catch { return { success: false, data: [], error: 'Network error' } }
 }
 
+export async function getGamification(): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/achievements/me/stats`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, data: null, error: 'Network error' } }
+}
+
 export async function checkAchievements(): Promise<any> {
   try {
     const token = getToken()
@@ -1060,4 +1711,266 @@ export async function checkAchievements(): Promise<any> {
     })
     return res.json()
   } catch { return { success: false, awarded: [], error: 'Network error' } }
+}
+
+// ============ SHARE DEEP-LINKS ============
+export async function createShareLink(contentId: string, contentType = 'movie', creatorId?: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/share/links`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ contentId, contentType, creatorId }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getShareStats(contentId: string, contentType = 'movie'): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/share/links/stats?contentId=${contentId}&contentType=${contentType}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, stats: { totalClicks: 0 }, error: 'Network error' } }
+}
+
+// ============ FAN LEADERBOARDS / SUPERFAN ============
+export async function getFanLeaderboard(creatorId: string, limit = 20): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/fan/${creatorId}/leaderboard?limit=${limit}`)
+    return res.json()
+  } catch { return { success: false, fans: [], error: 'Network error' } }
+}
+
+export async function getFanStatus(creatorId: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/fan/${creatorId}/status`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, engaged: false, points: 0, error: 'Network error' } }
+}
+
+// ============ HOT-TAKE FORUM ============
+export async function getForumTopics(category = 'all', limit = 30, offset = 0, sort = 'new'): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/forum/topics?category=${category}&limit=${limit}&offset=${offset}&sort=${sort}`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, topics: [], error: 'Network error' } }
+}
+
+export async function getForumTopic(id: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/forum/topics/${id}`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function createForumTopic(title: string, category: string, content: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/forum/topics`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ title, category, content }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function voteForumTopic(topicId: string, vote: number): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/forum/topics/${topicId}/vote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ vote }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function addForumReply(topicId: string, content: string, parentId?: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/forum/topics/${topicId}/replies`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ content, parentId }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function voteForumReply(replyId: string, vote: number): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/forum/replies/${replyId}/vote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ vote }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getForumCategories(): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/forum/categories`)
+    return res.json()
+  } catch { return { success: false, categories: [], error: 'Network error' } }
+}
+
+// ============ TRIVIA / GAMIFICATION ============
+export async function getDailyTrivia(): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/trivia/today`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, questions: [], error: 'Network error' } }
+}
+
+export async function submitDailyTrivia(answers: { id: string; answerIndex: number }[]): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/trivia/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ answers }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getTriviaStreak(): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/trivia/streak`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, streak: 0, error: 'Network error' } }
+}
+
+export async function getTriviaLeaderboard(limit = 20): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/trivia/leaderboard?limit=${limit}`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, leaderboard: [], error: 'Network error' } }
+}
+
+export async function getGuessMovie(): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/trivia/guess`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function submitGuess(questionId: string, answerIndex: number): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/trivia/guess/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ questionId, answerIndex }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getCoinsBalance(): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/trivia/coins`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, coins: 0, error: 'Network error' } }
+}
+
+export async function getCosmetics(): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/trivia/cosmetics`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, cosmetics: [], coins: 0, error: 'Network error' } }
+}
+
+export async function purchaseCosmetic(id: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/trivia/cosmetics/${id}/purchase`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function equipCosmetic(id: string, equipped: boolean): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/trivia/cosmetics/${id}/equip`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ equipped }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+// ============ DIRECT CHAT ============
+export async function getConversations(): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/chat/conversations`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, conversations: [], error: 'Network error' } }
+}
+
+export async function getDirectMessages(withUserId: string, limit = 50): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/chat/messages?with=${withUserId}&limit=${limit}`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, messages: [], error: 'Network error' } }
+}
+
+// ============ MEDIA COMMENTS ============
+export async function postCommentFull(opts: {
+  contentId: string
+  contentType: string
+  text?: string
+  creatorId?: string
+  parentId?: string
+  mediaUrl?: string
+  mediaType?: string
+  durationSeconds?: number
+  unlockAt?: string
+  milestoneUnlock?: string
+}): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/interactions/comment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(opts),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function uploadCommentMedia(file: File): Promise<any> {
+  try {
+    const token = getToken()
+    const fd = new FormData()
+    fd.append('media', file)
+    const res = await fetch(`${BASE}/interactions/comment-media`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd,
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
 }

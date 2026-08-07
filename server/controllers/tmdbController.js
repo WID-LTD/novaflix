@@ -211,7 +211,7 @@ export function getCategoryMovies(req, res) {
 
 export function getDiscover(req, res) {
   const tmdb = req.app.locals.tmdb
-  const { genre_id, type, sort_by, page, min_votes } = req.query
+  const { genre_id, type, sort_by, page, min_votes, with_keywords, with_companies, with_original_language, primary_release_date_gte, primary_release_date_lte } = req.query
   const mediaType = type === 'tv' ? 'tv' : 'movie'
   const pageNum = Math.min(Math.max(parseInt(page, 10) || 1, 1), 500)
   const params = {
@@ -221,6 +221,11 @@ export function getDiscover(req, res) {
   }
   if (genre_id) params.with_genres = genre_id
   if (min_votes) params['vote_count.gte'] = parseInt(min_votes, 10)
+  if (with_keywords) params.with_keywords = with_keywords
+  if (with_companies) params.with_companies = with_companies
+  if (with_original_language) params.with_original_language = with_original_language
+  if (primary_release_date_gte) params['primary_release_date.gte'] = primary_release_date_gte
+  if (primary_release_date_lte) params['primary_release_date.lte'] = primary_release_date_lte
 
   tmdb.get(`/discover/${mediaType}`, { params })
     .then(({ data }) => {
@@ -382,4 +387,44 @@ export async function searchAll(req, res) {
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
+}
+
+export function credits(req, res) {
+  const { id, type } = req.query
+  if (!id) return res.status(400).json({ error: 'TMDB ID is required' })
+
+  const mediaType = type === 'tv' ? 'tv' : 'movie'
+  const tmdb = req.app.locals.tmdb
+
+  tmdb.get(`/${mediaType}/${id}/credits`, { params: { language: 'en-US' } })
+    .then(({ data }) => {
+      const cast = (data.cast || [])
+        .filter((c) => c.name)
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          character: c.character || '',
+          profile_path: c.profile_path || null,
+          order: c.order ?? 999,
+        }))
+        .sort((a, b) => a.order - b.order)
+        .slice(0, 24)
+
+      const crew = (data.crew || [])
+        .filter((c) => c.name)
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          job: c.job || c.department || '',
+          profile_path: c.profile_path || null,
+        }))
+        .filter((c) => ['Director', 'Producer', 'Writer', 'Executive Producer', 'Screenplay', 'Cinematography', 'Editor', 'Original Music Composer', 'Music'].includes(c.job))
+        .slice(0, 12)
+
+      res.json({ success: true, id, type: mediaType, cast, crew })
+    })
+    .catch((err) => {
+      console.error(err.message)
+      res.status(500).json({ success: false, error: 'Failed to fetch credits' })
+    })
 }

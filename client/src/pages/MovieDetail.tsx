@@ -2,6 +2,8 @@ import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { getDetails } from '../lib/api'
+import { getCredits } from '../lib/api'
+import type { CastMember, CrewMember } from '../lib/api'
 import { getSimilarRecommendations, checkAchievements } from '../lib/auth'
 import { useStore } from '../store/useStore'
 import { useAuth } from '../lib/AuthContext'
@@ -15,8 +17,11 @@ import SeasonEpisodeSelector from '../components/features/SeasonEpisodeSelector'
 import TipButton from '../components/ui/TipButton'
 import LikeButton from '../components/features/LikeButton'
 import HoverCard from '../components/features/HoverCard'
+import RecommendationGrid from '../components/features/RecommendationGrid'
 import CommentSection from '../components/features/CommentSection'
+import CastCrew from '../components/features/CastCrew'
 import CreatorCard from '../components/ui/CreatorCard'
+import ShareButton from '../components/ui/ShareButton'
 import type { MediaDetails } from '../types'
 
 export default function MovieDetail() {
@@ -46,6 +51,14 @@ export default function MovieDetail() {
     enabled: !!id && !!details?.type,
   })
   const similarItems = similarData?.data || []
+
+  const { data: creditsData } = useQuery({
+    queryKey: ['credits', id, details?.type],
+    queryFn: () => getCredits(id!, details!.type),
+    enabled: !!id && !!details?.type,
+  })
+  const cast = creditsData?.success ? (creditsData.cast as CastMember[]) : []
+  const crew = creditsData?.success ? (creditsData.crew as CrewMember[]) : []
 
   const handleWatch = (season?: number, episode?: number) => {
     if (!user) {
@@ -202,10 +215,9 @@ export default function MovieDetail() {
 
       {/* Content Section */}
       <section className="px-margin-mobile md:px-margin-desktop -mt-10 relative z-10 space-y-16 pb-32">
-        {/* Info Bento */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-gutter">
-          <div className="md:col-span-3 bg-surface-container p-8 rounded-xl border border-white/5 space-y-6">
-            {details.trailerKey && (
+        {/* Info */}
+        <div className="bg-surface-container p-8 rounded-xl border border-white/5 space-y-6">
+          {details.trailerKey && (
               <div className="aspect-video rounded-xl overflow-hidden mb-6 bg-black">
                 <iframe
                   src={`https://www.youtube.com/embed/${details.trailerKey}?autoplay=0&rel=0`}
@@ -218,6 +230,7 @@ export default function MovieDetail() {
             )}
             <h3 className="text-headline-md">Synopsis</h3>
             <p className="text-body-md text-on-surface-variant leading-relaxed">{details.overview}</p>
+            {(cast.length > 0 || crew.length > 0) && <CastCrew cast={cast} crew={crew} />}
             <div className="pt-4 grid grid-cols-2 sm:grid-cols-4 gap-6">
               <div>
                 <span className="block text-[10px] uppercase tracking-wider text-on-surface-variant mb-1">Rating</span>
@@ -243,32 +256,6 @@ export default function MovieDetail() {
             </div>
           </div>
 
-          <div className="bg-surface-container-high p-8 rounded-xl border border-white/5 flex flex-col justify-between">
-            <div>
-              <h3 className="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest mb-4">Engagement</h3>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-on-surface-variant font-label-sm">Popularity</span>
-                  <span className="text-secondary font-bold">#1 Today</span>
-                </div>
-                <div className="w-full bg-white/10 h-1 rounded-full overflow-hidden">
-                  <div className="bg-secondary h-full w-[92%]" />
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-on-surface-variant font-label-sm">Critical Score</span>
-                  <span className="text-on-surface font-bold">{Math.round(details.rating * 10)}/100</span>
-                </div>
-              </div>
-            </div>
-            <div className="mt-8 space-y-3">
-              <LikeButton contentId={details.id} contentType={details.type} className="w-full justify-center" />
-              <button className="w-full py-3 rounded-lg border border-primary/30 text-primary font-label-md hover:bg-primary/10 transition-colors">
-                Rate this Movie
-              </button>
-            </div>
-          </div>
-        </div>
-
         {/* Creator Card */}
         <div className="grid md:grid-cols-2 gap-4">
           <CreatorCard
@@ -277,12 +264,40 @@ export default function MovieDetail() {
             filmCount={4}
             followers={2847}
             location="Los Angeles, CA"
+            creatorId={user?.id}
           />
           <TipButton recipientName={details.title} />
         </div>
 
         {/* Comments */}
         <CommentSection contentId={details.id} contentType={details.type} />
+
+        {/* Engagement */}
+        <section className="bg-surface-container-high p-8 rounded-xl border border-white/5">
+          <h3 className="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest mb-6">Engagement</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-on-surface-variant font-label-sm">Popularity</span>
+                <span className="text-secondary font-bold">#1 Today</span>
+              </div>
+              <div className="w-full bg-white/10 h-1 rounded-full overflow-hidden">
+                <div className="bg-secondary h-full w-[92%]" />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-on-surface-variant font-label-sm">Critical Score</span>
+                <span className="text-on-surface font-bold">{Math.round(details.rating * 10)}/100</span>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 md:justify-end">
+              <LikeButton contentId={details.id} contentType={details.type} className="w-full" />
+              <ShareButton contentId={details.id} contentType={details.type} className="w-full" />
+              <button className="w-full py-3 rounded-lg border border-primary/30 text-primary font-label-md hover:bg-primary/10 transition-colors">
+                Rate this Movie
+              </button>
+            </div>
+          </div>
+        </section>
 
         {/* Season/Episode Selector for TV */}
         {details.type === 'tv' && details.seasons && details.seasons.length > 0 && (
@@ -299,20 +314,19 @@ export default function MovieDetail() {
         {/* More Like This */}
         {similarItems.length > 0 && (
           <div className="space-y-8">
-            <div className="flex items-center justify-between">
-              <h2 className="text-headline-md">More Like This</h2>
-              <Link
-                to={`/discover?similar_to=${id}&type=${details.type}`}
-                className="text-primary font-label-md hover:underline"
-              >
-                View All
-              </Link>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-gutter">
+            <RecommendationGrid
+              title="More Like This"
+              viewAllLink={`/discover?similar_to=${id}&type=${details.type}`}
+            >
               {similarItems.slice(0, 12).map((item: any, i: number) => (
-                <HoverCard key={`${item.id}-${item.type}`} item={item} index={i} />
+                <HoverCard
+                  key={`${item.id}-${item.type}`}
+                  item={item}
+                  index={i}
+                  className="w-full min-w-0"
+                />
               ))}
-            </div>
+            </RecommendationGrid>
           </div>
         )}
       </section>

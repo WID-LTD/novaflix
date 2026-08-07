@@ -7,6 +7,7 @@ import '../services/api_service.dart';
 import '../models/media_item.dart';
 import '../providers/store_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/downloads_provider.dart';
 import '../widgets/ui/index.dart';
 import '../widgets/features/index.dart';
 
@@ -34,6 +35,12 @@ class HomeScreen extends ConsumerWidget {
     final trending = ref.watch(_trendingProvider);
     final nowPlaying = ref.watch(_nowPlayingProvider);
     final store = ref.watch(storeProvider);
+    final netStatus = ref.watch(netStatusProvider);
+    final dlState = ref.watch(downloadsProvider);
+    final isOffline = netStatus == NetStatus.offline;
+    final auth = ref.watch(authProvider);
+    final hasDownloads = dlState.items.isNotEmpty;
+    final isAuthed = auth.status == AuthStatus.authenticated;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -56,6 +63,8 @@ class HomeScreen extends ConsumerWidget {
               ),
             ),
             SliverToBoxAdapter(child: _buildQuickActions(context)),
+            if (isAuthed && isOffline && hasDownloads)
+              SliverToBoxAdapter(child: _offlineCta(context, dlState)),
             SliverToBoxAdapter(child: _buildContinueWatching(store.continueWatching)),
             SliverToBoxAdapter(
               child: trending.when(
@@ -63,14 +72,14 @@ class HomeScreen extends ConsumerWidget {
                   final movies = items.where((m) => !m.isTV).toList();
                   return ContentRow(title: 'Trending Movies', items: movies.take(10).toList());
                 },
-                loading: () => const SizedBox(height: 220, child: Center(child: CircularProgressIndicator())),
+                loading: () => const SizedBox(height: 220, child: LoadingSpinner(logo: true)),
                 error: (_, __) => const SizedBox.shrink(),
               ),
             ),
             SliverToBoxAdapter(
               child: nowPlaying.when(
                 data: (items) => ContentRow(title: 'Now Playing', items: items.take(10).toList()),
-                loading: () => const SizedBox(height: 220, child: Center(child: CircularProgressIndicator())),
+                loading: () => const SizedBox(height: 220, child: LoadingSpinner(logo: true)),
                 error: (_, __) => const SizedBox.shrink(),
               ),
             ),
@@ -102,6 +111,50 @@ class HomeScreen extends ConsumerWidget {
           _quickAction(Icons.bookmark, 'Watchlist', () => context.push('/watchlist')),
           const SizedBox(width: 12),
           _quickAction(Icons.store, 'Store', () => context.push('/store')),
+        ],
+      ),
+    );
+  }
+
+  Widget _offlineCta(BuildContext context, DownloadsState dlState) {
+    final movies = dlState.items.where((i) => !i.isTv).toList();
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppColors.primary, AppColors.primary.withValues(alpha: 0.6)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'You\'re offline',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${dlState.items.length} saved — watch your downloads anytime',
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          FilledButton(
+            onPressed: () => context.push('/downloads'),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.black,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Go to Downloads'),
+          ),
         ],
       ),
     );

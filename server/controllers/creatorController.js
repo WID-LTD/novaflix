@@ -137,7 +137,8 @@ export async function getPublicCreators(req, res) {
               cp.known_for_department,
               (SELECT COUNT(*) FROM uploads WHERE user_id = u.id) as film_count,
               (SELECT COALESCE(SUM(views), 0) FROM uploads WHERE user_id = u.id) as total_views,
-              (SELECT COUNT(*) FROM likes WHERE creator_id = u.id) as total_likes
+              (SELECT COUNT(*) FROM likes WHERE creator_id = u.id) as total_likes,
+              (SELECT COUNT(*) FROM followers WHERE following_id = u.id) as followers_count
        FROM users u
        JOIN creator_profiles cp ON cp.user_id = u.id
        WHERE u.role = 'creator'

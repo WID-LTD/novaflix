@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { getTrendingFeed, getNowPlaying, getDetails } from '../lib/api'
+import { getTrendingFeed, getNowPlaying, getDetails, getHomeNews, getCategoryMovies, getDiscover } from '../lib/api'
 import { useStore } from '../store/useStore'
 import HeroBanner from '../components/features/HeroBanner'
 import ContentRow from '../components/features/ContentRow'
+import NewsRow from '../components/features/NewsRow'
 import HoverCard from '../components/features/HoverCard'
 import Icon from '../components/ui/Icon'
 import type { MediaItem, MediaDetails } from '../types'
+import type { NewsArticle } from '../lib/api'
 
 function shuffleArray<T>(arr: T[]): T[] {
   const shuffled = [...arr]
@@ -28,6 +30,11 @@ export default function Home() {
   const [trendingMovies, setTrendingMovies] = useState<MediaItem[]>([])
   const [trendingTV, setTrendingTV] = useState<MediaItem[]>([])
   const [nowPlaying, setNowPlaying] = useState<MediaItem[]>([])
+  const [horrorMovies, setHorrorMovies] = useState<MediaItem[]>([])
+  const [indieMovies, setIndieMovies] = useState<MediaItem[]>([])
+  const [anime, setAnime] = useState<MediaItem[]>([])
+  const [classicMovies, setClassicMovies] = useState<MediaItem[]>([])
+  const [newsArticles, setNewsArticles] = useState<NewsArticle[]>([])
   const [loading, setLoading] = useState(true)
   const [showScrollLeft, setShowScrollLeft] = useState(false)
   const [showScrollRight, setShowScrollRight] = useState(true)
@@ -53,18 +60,32 @@ export default function Home() {
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const [trendingRes, nowPlayingRes] = await Promise.all([
+      const [trendingRes, nowPlayingRes, newsRes, horrorRes, indieRes, animeRes, classicRes] = await Promise.all([
         getTrendingFeed(),
         getNowPlaying(),
+        getHomeNews(),
+        getCategoryMovies('27', 'movie'),
+        getDiscover({ type: 'movie', with_companies: '1549' }),
+        getDiscover({ type: 'movie', genre_id: '16', with_original_language: 'ja' }),
+        getDiscover({ type: 'movie', sort_by: 'vote_average.desc', min_votes: 1000, primary_release_date_lte: '1999-12-31' }),
       ])
 
       const movies = trendingRes.success ? trendingRes.data.movies.slice(0, 20) : []
       const tv = trendingRes.success ? trendingRes.data.tv.slice(0, 20) : []
       const np = nowPlayingRes.success ? nowPlayingRes.data.slice(0, 20) : []
+      const horror = horrorRes.success ? horrorRes.data.slice(0, 20) : []
+      const indie = indieRes.success ? indieRes.data.slice(0, 20) : []
+      const animeList = animeRes.success ? animeRes.data.slice(0, 20) : []
+      const classics = classicRes.success ? classicRes.data.slice(0, 20) : []
+      if (newsRes.success) setNewsArticles(newsRes.articles || [])
 
       setTrendingMovies(movies)
       setTrendingTV(tv)
       setNowPlaying(np)
+      setHorrorMovies(horror)
+      setIndieMovies(indie)
+      setAnime(animeList)
+      setClassicMovies(classics)
 
       const heroCandidates = shuffleArray([...np.slice(0, 8), ...movies.slice(0, 8)]).slice(0, HERO_COUNT)
 
@@ -83,6 +104,17 @@ export default function Home() {
       setLoading(false)
     }
     load()
+
+    const poll = setInterval(() => {
+      getHomeNews().then((res) => {
+        if (res.success && res.articles) setNewsArticles((prev) => {
+          const seen = new Set(prev.map((a) => a.id))
+          const fresh = res.articles.filter((a) => !seen.has(a.id))
+          return fresh.length ? [...fresh, ...prev].slice(0, 12) : prev
+        })
+      })
+    }, 60000)
+    return () => clearInterval(poll)
   }, [])
 
   return (
@@ -161,6 +193,15 @@ export default function Home() {
           />
         )}
 
+        {newsArticles.length > 0 && (
+          <NewsRow
+            title="Latest Movie News"
+            articles={newsArticles}
+            loading={false}
+            link="/news"
+          />
+        )}
+
         {watchlist.length > 0 && (
           <ContentRow
             title="Because You Watched"
@@ -191,6 +232,26 @@ export default function Home() {
             items={shuffleArray(trendingMovies).slice(0, 20)}
             link="/discover?sort=top_rated"
           />
+        )}
+
+        {horrorMovies.length > 0 && (
+          <ContentRow
+            title="Horror Movies"
+            items={horrorMovies}
+            link="/discover?genre_id=27"
+          />
+        )}
+
+        {indieMovies.length > 0 && (
+          <ContentRow title="Indie Films" items={indieMovies} />
+        )}
+
+        {anime.length > 0 && (
+          <ContentRow title="Anime" items={anime} link="/discover?genre_id=16" />
+        )}
+
+        {classicMovies.length > 0 && (
+          <ContentRow title="Classic Movies" items={classicMovies} />
         )}
       </main>
     </div>

@@ -4,7 +4,7 @@ import Icon from '../ui/Icon'
 import AdOverlay, { AdTimelinePips } from './AdOverlay'
 import { getNextAd, recordAdImpression, getSkipLimit, incrementSkip } from '../../lib/api'
 import { useAuth } from '../../lib/AuthContext'
-import type { Subtitle, AdItem } from '../../types'
+import type { Subtitle, AdItem, EggPlacement } from '../../types'
 
 interface VideoPlayerProps {
   streamUrl: string
@@ -14,7 +14,12 @@ interface VideoPlayerProps {
   onDuration?: (duration: number) => void
   plan?: string
   bingePassActive?: boolean
+  eggs?: EggPlacement[]
+  collectedEggIds?: string[]
+  onCollectEgg?: (keyId: string) => void
 }
+
+const EGG_WINDOW = 2
 
 export default function VideoPlayer({
   streamUrl,
@@ -24,6 +29,9 @@ export default function VideoPlayer({
   onDuration,
   plan: _plan,
   bingePassActive = false,
+  eggs = [],
+  collectedEggIds = [],
+  onCollectEgg,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -53,6 +61,11 @@ export default function VideoPlayer({
   const [showPauseAd, setShowPauseAd] = useState(false)
   const [adCount, setAdCount] = useState(0)
   const [skipLimit, setSkipLimit] = useState({ skips_used: 0, skips_max: 999 })
+
+  // Egg state
+  const [locallyCollected, setLocallyCollected] = useState<string[]>([])
+  const [flashKey, setFlashKey] = useState<{ hint: string } | null>(null)
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout>>()
 
   // Load ads on mount
   useEffect(() => {
@@ -355,6 +368,20 @@ export default function VideoPlayer({
 
   const speeds = [0.5, 1, 1.5, 2]
 
+  const allCollected = new Set([...collectedEggIds, ...locallyCollected])
+  const activeEggs = eggs.filter(
+    (e) => !allCollected.has(e.id) && Math.abs(currentTime - e.ts_seconds) <= EGG_WINDOW
+  )
+
+  const handleEggCollect = (e: EggPlacement) => {
+    if (allCollected.has(e.id) || currentAd || showPauseAd) return
+    setLocallyCollected((prev) => [...prev, e.id])
+    setFlashKey({ hint: e.hint })
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current)
+    flashTimerRef.current = setTimeout(() => setFlashKey(null), 3500)
+    onCollectEgg?.(e.id)
+  }
+
   return (
     <div
       ref={containerRef}
@@ -389,6 +416,42 @@ export default function VideoPlayer({
         playsInline
         poster={undefined}
       />
+
+      {/* Easter-egg key hotspots */}
+      {activeEggs.length > 0 && !currentAd && !showPauseAd && (
+        <div className="absolute inset-0 z-10 pointer-events-none">
+          {activeEggs.map((e) => (
+            <button
+              key={e.id}
+              onClick={(ev) => {
+                ev.stopPropagation()
+                handleEggCollect(e)
+              }}
+              title={e.hint}
+              aria-label={`Collect key: ${e.hint || 'hidden key'}`}
+              className="pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 rounded-full group/egg"
+              style={{
+                left: `${e.pos_x * 100}%`,
+                top: `${e.pos_y * 100}%`,
+                width: Math.max(e.radius * 180, 36),
+                height: Math.max(e.radius * 180, 36),
+              }}
+            >
+              <span className="absolute inset-0 rounded-full bg-accent/40 animate-ping" />
+              <span className="relative w-full h-full rounded-full bg-accent/90 border-2 border-accent flex items-center justify-center text-black shadow-lg transition-transform group-hover/egg:scale-110">
+                <Icon name="key" size="lg" className="text-black" />
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {flashKey && (
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-30 bg-accent text-black text-sm font-semibold px-4 py-2 rounded-full shadow-2xl flex items-center gap-2 animate-bounce">
+          <Icon name="key" size="sm" />
+          Key found! {flashKey.hint ? `"${flashKey.hint}"` : 'Reward unlocked'}
+        </div>
+      )}
 
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/60">

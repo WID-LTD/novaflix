@@ -12,7 +12,14 @@ function rowToUser(row) {
     avatar: row.avatar,
     bio: row.bio || '',
     email_verified: row.email_verified,
+    last_login_at: row.last_login_at,
     createdAt: row.created_at,
+    verified: row.verified,
+    suspended_until: row.suspended_until,
+    suspension_reason: row.suspension_reason,
+    banned_reason: row.banned_reason,
+    banned_at: row.banned_at,
+    admin_role_id: row.admin_role_id,
   }
 }
 
@@ -86,6 +93,7 @@ export async function addWatchEntry(entry) {
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
     [entry.id, entry.userId, entry.contentId, entry.title, entry.type, entry.minutes || 0, entry.season || null, entry.episode || null]
   )
+  bumpUploadViewMinutes(entry.contentId, entry.minutes || 0).catch(() => {})
   return rows[0]
 }
 
@@ -120,6 +128,35 @@ export async function addTip(tip) {
   return rows[0]
 }
 
+export async function addGlowGift(gift) {
+  const { rows } = await pool.query(
+    `INSERT INTO glow_gifts (id, sender_id, creator_id, amount, fee, net_amount, note)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [gift.id, gift.senderId, gift.creatorId, gift.amount, gift.fee, gift.netAmount, gift.note || '']
+  )
+  return rows[0]
+}
+
+export async function getGlowGiftsForCreator(creatorId) {
+  const { rows } = await pool.query(
+    `SELECT g.*, u.username AS sender_name FROM glow_gifts g
+     LEFT JOIN users u ON u.id = g.sender_id
+     WHERE g.creator_id = $1 ORDER BY g.created_at DESC`,
+    [creatorId]
+  )
+  return rows
+}
+
+export async function getGlowGiftsTotals(creatorId) {
+  const { rows } = await pool.query(
+    `SELECT COALESCE(SUM(amount),0) AS gross, COALESCE(SUM(net_amount),0) AS net, COALESCE(SUM(fee),0) AS fee
+     FROM glow_gifts WHERE creator_id = $1`,
+    [creatorId]
+  )
+  const r = rows[0] || {}
+  return { gross: parseFloat(r.gross) || 0, net: parseFloat(r.net) || 0, fee: parseFloat(r.fee) || 0 }
+}
+
 export async function getTipsForCreator(creatorId) {
   const { rows } = await pool.query(
     'SELECT * FROM tips WHERE creator_id = $1 ORDER BY created_at DESC',
@@ -142,6 +179,72 @@ export async function getTotalViewsForUpload(uploadId) {
     [uploadId]
   )
   return parseInt(rows[0].count) || 0
+}
+
+export async function updateLastLogin(userId) {
+  await pool.query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [userId])
+}
+
+export async function findDevice(userId, deviceId) {
+  const { rows } = await pool.query(
+    'SELECT * FROM user_devices WHERE user_id = $1 AND device_id = $2',
+    [userId, deviceId]
+  )
+  return rows[0] || null
+}
+
+export async function upsertDevice(userId, deviceId, ipAddress, userAgent) {
+  const { rows } = await pool.query(
+    `INSERT INTO user_devices (user_id, device_id, ip_address, user_agent)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (user_id, device_id) DO UPDATE SET
+       last_seen_at = NOW(),
+       ip_address = EXCLUDED.ip_address,
+       user_agent = EXCLUDED.user_agent
+     RETURNING *`,
+    [userId, deviceId, ipAddress || null, userAgent || null]
+  )
+  return rows[0]
+}
+
+export async function findKnownLocation(userId, lat, lng, radiusKm = 150) {
+  const { rows } = await pool.query(
+    `SELECT *,
+       (6371 * acos(
+         LEAST(1, GREATEST(-1,
+           cos(radians($2)) * cos(radians(lat)) * cos(radians(lng) - radians($3))
+           + sin(radians($2)) * sin(radians(lat))
+         ))
+       )) AS distance_km
+     FROM user_locations
+     WHERE user_id = $1
+       AND (6371 * acos(
+         LEAST(1, GREATEST(-1,
+           cos(radians($2)) * cos(radians(lat)) * cos(radians(lng) - radians($3))
+           + sin(radians($2)) * sin(radians(lat))
+         ))
+       )) <= $4
+     ORDER BY last_seen_at DESC
+     LIMIT 1`,
+    [userId, lat, lng, radiusKm]
+  )
+  return rows[0] || null
+}
+
+export async function recordLocation(userId, lat, lng, accuracy, source, ipAddress, userAgent) {
+  const { rows } = await pool.query(
+    `INSERT INTO user_locations (user_id, lat, lng, accuracy, source, ip_address, user_agent)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (user_id, lat, lng) DO UPDATE SET
+       last_seen_at = NOW(),
+       accuracy = EXCLUDED.accuracy,
+       source = EXCLUDED.source,
+       ip_address = EXCLUDED.ip_address,
+       user_agent = EXCLUDED.user_agent
+     RETURNING *`,
+    [userId, lat, lng, accuracy || 0, source || 'geolocation', ipAddress || null, userAgent || null]
+  )
+  return rows[0]
 }
 
 export async function saveVerificationCode(userId, code) {
@@ -266,17 +369,43 @@ export async function getTotalLikesForCreator(creatorId) {
   return parseInt(rows[0].count) || 0
 }
 
-// Comments
-export async function addComment(userId, contentId, contentType, text, creatorId) {
+export async function getCreatorMerchRevenue(creatorId) {
   const { rows } = await pool.query(
-    `INSERT INTO comments (user_id, content_id, content_type, text, creator_id)
-     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-    [userId, contentId, contentType, text, creatorId || null]
+    `SELECT COALESCE(SUM(oi.price * oi.quantity),0) AS gross, COUNT(DISTINCT o.id) AS orders
+     FROM order_items oi
+     JOIN products p ON p.id = oi.product_id
+     JOIN orders o ON o.id = oi.order_id
+     WHERE p.creator_id = $1 AND o.status IN ('paid','shipped','delivered')`,
+    [creatorId]
+  )
+  const r = rows[0] || {}
+  const gross = parseFloat(r.gross) || 0
+  return { gross, fee: +(gross * 0.15).toFixed(2), net: +(gross * 0.85).toFixed(2), orders: parseInt(r.orders) || 0 }
+}
+
+// Comments
+export async function addComment(userId, contentId, contentType, text, creatorId, opts = {}) {
+  const { rows } = await pool.query(
+    `INSERT INTO comments (user_id, content_id, content_type, text, creator_id, parent_id, media_url, media_type, duration_seconds, unlock_at, milestone_unlock)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+    [
+      userId,
+      contentId,
+      contentType,
+      text || '',
+      creatorId || null,
+      opts.parentId || null,
+      opts.mediaUrl || null,
+      opts.mediaType || null,
+      opts.durationSeconds || null,
+      opts.unlockAt || null,
+      opts.milestoneUnlock || null,
+    ]
   )
   return rows[0]
 }
 
-export async function getContentComments(contentId, contentType, limit = 20, offset = 0) {
+export async function getContentComments(contentId, contentType, limit = 20, offset = 0, viewerId = null) {
   const { rows } = await pool.query(
     `SELECT c.*, u.name as user_name, u.avatar as user_avatar
      FROM comments c JOIN users u ON u.id = c.user_id
@@ -284,7 +413,16 @@ export async function getContentComments(contentId, contentType, limit = 20, off
      ORDER BY c.created_at DESC LIMIT $3 OFFSET $4`,
     [contentId, contentType, limit, offset]
   )
-  return rows
+  const now = Date.now()
+  return rows.map((c) => {
+    const locked =
+      (c.unlock_at && new Date(c.unlock_at).getTime() > now) &&
+      (!viewerId || c.user_id !== viewerId)
+    if (locked) {
+      return { ...c, text: null, media_url: null, media_type: null, locked: true }
+    }
+    return { ...c, locked: false }
+  })
 }
 
 export async function getCommentsForCreator(creatorId, limit = 20, offset = 0) {
@@ -365,6 +503,23 @@ export async function getFollowing(userId) {
     [userId]
   )
   return rows
+}
+
+export async function saveMessage(room, userId, userName, message) {
+  const { rows } = await pool.query(
+    `INSERT INTO messages (room, user_id, user_name, message) VALUES ($1, $2, $3, $4) RETURNING id, room, user_id, user_name, message, created_at`,
+    [room, userId, userName, message]
+  )
+  return rows[0] || null
+}
+
+export async function getRoomMessages(room, limit = 50) {
+  const { rows } = await pool.query(
+    `SELECT id, room, user_id, user_name, message, created_at
+     FROM messages WHERE room = $1 ORDER BY created_at DESC LIMIT $2`,
+    [room, limit]
+  )
+  return rows.reverse()
 }
 
 // Artist Graph
@@ -1028,13 +1183,15 @@ export async function createPost(post) {
   return rows[0]
 }
 
-export async function getPosts(communityId) {
+export async function getPosts(communityId, userId = null) {
   const { rows } = await pool.query(
-    `SELECT p.*, u.name as user_name, u.avatar as user_avatar
+    `SELECT p.*, u.name as user_name, u.avatar as user_avatar,
+       (SELECT COUNT(*) FROM community_post_likes l WHERE l.post_id = p.id) AS like_count,
+       ${userId ? 'EXISTS(SELECT 1 FROM community_post_likes l2 WHERE l2.post_id = p.id AND l2.user_id = $2) AS liked' : 'false AS liked'}
      FROM community_posts p JOIN users u ON u.id = p.user_id
      WHERE p.community_id = $1
      ORDER BY p.created_at DESC`,
-    [communityId]
+    userId ? [communityId, userId] : [communityId]
   )
   return rows
 }
@@ -1045,6 +1202,49 @@ export async function deletePost(id, userId) {
     [id, userId]
   )
   return rows[0] || null
+}
+
+export async function getPostById(postId, userId = null) {
+  const { rows } = await pool.query(
+    `SELECT p.*, u.name as user_name, u.avatar as user_avatar,
+       (SELECT COUNT(*) FROM community_post_likes l WHERE l.post_id = p.id) AS like_count,
+       ${userId ? 'EXISTS(SELECT 1 FROM community_post_likes l2 WHERE l2.post_id = p.id AND l2.user_id = $2) AS liked' : 'false AS liked'}
+     FROM community_posts p JOIN users u ON u.id = p.user_id
+     WHERE p.id = $1`,
+    userId ? [postId, userId] : [postId]
+  )
+  return rows[0] || null
+}
+
+export async function getCommunityMembers(communityId) {
+  const { rows } = await pool.query(
+    `SELECT u.id, u.name, u.avatar, cm.joined_at
+     FROM community_members cm JOIN users u ON u.id = cm.user_id
+     WHERE cm.community_id = $1
+     ORDER BY cm.joined_at ASC`,
+    [communityId]
+  )
+  return rows
+}
+
+export async function hasUserLikedPost(postId, userId) {
+  if (!userId) return false
+  const { rows } = await pool.query(
+    'SELECT 1 FROM community_post_likes WHERE post_id = $1 AND user_id = $2 LIMIT 1',
+    [postId, userId]
+  )
+  return rows.length > 0
+}
+
+export async function togglePostLike(postId, userId) {
+  const exists = await hasUserLikedPost(postId, userId)
+  if (exists) {
+    await pool.query('DELETE FROM community_post_likes WHERE post_id = $1 AND user_id = $2', [postId, userId])
+  } else {
+    await pool.query('INSERT INTO community_post_likes (post_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [postId, userId])
+  }
+  const { rows } = await pool.query('SELECT COUNT(*) as count FROM community_post_likes WHERE post_id = $1', [postId])
+  return { liked: !exists, likeCount: parseInt(rows[0].count) || 0 }
 }
 
 // Actors
@@ -1086,6 +1286,10 @@ const ACHIEVEMENT_DEFS = [
   { key: 'night_owl', name: 'Night Owl', description: 'Watch content after midnight', icon: 'schedule', criteria: { type: 'night_watch', threshold: 1 } },
   { key: 'genre_explorer', name: 'Explorer', description: 'Explore 5 different genres', icon: 'explore', criteria: { type: 'genre_count', threshold: 5 } },
   { key: 'social_follower', name: 'Social Butterfly', description: 'Follow 3 creators', icon: 'diversity_3', criteria: { type: 'follow_count', threshold: 3 } },
+  { key: 'first_follow', name: 'Making Friends', description: 'Follow your first creator', icon: 'person_add', criteria: { type: 'follow_count', threshold: 1 } },
+  { key: 'first_comment', name: 'Trending Topic', description: 'Post your first comment', icon: 'forum', criteria: { type: 'comment_count', threshold: 1 } },
+  { key: 'first_like', name: 'Sealed With A Like', description: 'Like your first title', icon: 'thumb_up', criteria: { type: 'like_count', threshold: 1 } },
+  { key: 'premium_member', name: 'Premium Life', description: 'Upgrade to a paid plan', icon: 'workspace_premium', criteria: { type: 'premium_member', threshold: 1 } },
 ]
 
 export async function seedAchievements() {
@@ -1131,15 +1335,23 @@ export async function checkAndAwardAchievements(userId) {
   ])
   const earned = new Set(userAchievements.map((r) => r.key))
 
-  const [watchRes, watchlistRes, followRes] = await Promise.all([
+  const [watchRes, watchlistRes, followRes, commentRes, likeRes, nightRes, userRes] = await Promise.all([
     pool.query('SELECT COUNT(*) as count FROM watch_history WHERE user_id = $1', [userId]),
     pool.query('SELECT COUNT(*) as count FROM watchlist WHERE user_id = $1', [userId]),
     pool.query('SELECT COUNT(*) as count FROM followers WHERE follower_id = $1', [userId]),
+    pool.query('SELECT COUNT(*) as count FROM comments WHERE user_id = $1', [userId]),
+    pool.query('SELECT COUNT(*) as count FROM likes WHERE user_id = $1', [userId]),
+    pool.query("SELECT COUNT(*) as count FROM watch_history WHERE user_id = $1 AND EXTRACT(HOUR FROM watched_at) BETWEEN 0 AND 4", [userId]),
+    pool.query('SELECT plan FROM users WHERE id = $1', [userId]),
   ])
 
   const watchCount = parseInt(watchRes.rows[0].count) || 0
   const watchlistCount = parseInt(watchlistRes.rows[0].count) || 0
   const followCount = parseInt(followRes.rows[0].count) || 0
+  const commentCount = parseInt(commentRes.rows[0].count) || 0
+  const likeCount = parseInt(likeRes.rows[0].count) || 0
+  const nightCount = parseInt(nightRes.rows[0].count) || 0
+  const plan = userRes.rows[0]?.plan || 'free'
 
   const awards = []
   const checks = [
@@ -1148,6 +1360,11 @@ export async function checkAndAwardAchievements(userId) {
     { key: 'first_watchlist', ok: watchlistCount >= 1 },
     { key: 'watchlist_5', ok: watchlistCount >= 5 },
     { key: 'social_follower', ok: followCount >= 3 },
+    { key: 'first_follow', ok: followCount >= 1 },
+    { key: 'first_comment', ok: commentCount >= 1 },
+    { key: 'first_like', ok: likeCount >= 1 },
+    { key: 'night_owl', ok: nightCount >= 1 },
+    { key: 'premium_member', ok: plan !== 'free' },
   ]
 
   for (const c of checks) {
@@ -1158,4 +1375,1469 @@ export async function checkAndAwardAchievements(userId) {
   }
 
   return awards
+}
+
+function xpForLevel(level) {
+  return (level - 1) * 100
+}
+
+export async function addXp(userId, amount) {
+  if (!userId || !amount) return null
+  const { rows } = await pool.query(
+    `UPDATE users SET xp = xp + $2,
+       level = GREATEST(1, FLOOR((xp + $2) / 100) + 1)
+     WHERE id = $1 RETURNING xp, level`,
+    [userId, amount]
+  )
+  return rows[0] || null
+}
+
+export async function getGamification(userId) {
+  const [{ rows }] = await Promise.all([
+    pool.query('SELECT xp, level FROM users WHERE id = $1', [userId]),
+  ])
+  const user = rows[0]
+  if (!user) return null
+  const level = user.level || 1
+  const xp = user.xp || 0
+  const baseXp = xpForLevel(level)
+  const nextXp = xpForLevel(level + 1)
+  return {
+    xp,
+    level,
+    currentLevelXp: xp - baseXp,
+    nextLevelXp: nextXp - baseXp,
+    progressPct: Math.min(100, Math.round(((xp - baseXp) / (nextXp - baseXp)) * 100)),
+  }
+}
+
+export async function getLeaderboard(limit = 20) {
+  const { rows } = await pool.query(
+    `SELECT id, name, avatar, xp, level, plan
+     FROM users ORDER BY xp DESC, level DESC LIMIT $1`,
+    [limit]
+  )
+  return rows
+}
+
+export async function addShort(short) {
+  const { rows } = await pool.query(
+    `INSERT INTO shorts (id, user_id, title, description, video_url, thumbnail_url, duration_seconds, status, trailer_url, media_id, media_type)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+    [short.id, short.userId, short.title, short.description, short.videoUrl, short.thumbnailUrl, short.durationSeconds || 0, short.status || 'active', short.trailerUrl || '', short.mediaId || null, short.mediaType || null]
+  )
+  return rows[0]
+}
+
+export async function getShortsFeed(limit = 30, offset = 0, viewerId = null) {
+  const { rows } = await pool.query(
+    `SELECT s.*, u.name as creator_name, u.avatar as creator_avatar
+     FROM shorts s
+     LEFT JOIN users u ON u.id = s.user_id
+     WHERE s.status = 'active'
+     ORDER BY s.created_at DESC
+     LIMIT $1 OFFSET $2`,
+    [limit, offset]
+  )
+  if (viewerId && rows.length) {
+    const ids = rows.map(r => r.id)
+    const [likesRes, bookmarksRes, followsRes] = await Promise.all([
+      pool.query(`SELECT short_id FROM short_likes WHERE user_id = $1 AND short_id = ANY($2::uuid[])`, [viewerId, ids]),
+      pool.query(`SELECT short_id FROM short_bookmarks WHERE user_id = $1 AND short_id = ANY($2::uuid[])`, [viewerId, ids]),
+      pool.query(`SELECT following_id FROM followers WHERE follower_id = $1`, [viewerId]),
+    ])
+    const likedSet = new Set(likesRes.rows.map(r => r.short_id))
+    const bookmarkedSet = new Set(bookmarksRes.rows.map(r => r.short_id))
+    const followingSet = new Set(followsRes.rows.map(r => r.following_id))
+    for (const row of rows) {
+      row.liked = likedSet.has(row.id)
+      row.bookmarked = bookmarkedSet.has(row.id)
+      row.isFollowingCreator = followingSet.has(row.user_id)
+    }
+  }
+  return rows
+}
+
+export async function getShortsCount() {
+  const { rows } = await pool.query(`SELECT COUNT(*) as count FROM shorts WHERE status = 'active'`)
+  return parseInt(rows[0].count) || 0
+}
+
+export async function getShortById(id) {
+  const { rows } = await pool.query(
+    `SELECT s.*, u.name as creator_name, u.avatar as creator_avatar
+     FROM shorts s
+     LEFT JOIN users u ON u.id = s.user_id
+     WHERE s.id = $1`,
+    [id]
+  )
+  return rows[0] || null
+}
+
+export async function incrementShortViews(id) {
+  const { rows } = await pool.query(
+    `UPDATE shorts SET views = views + 1 WHERE id = $1 RETURNING views`,
+    [id]
+  )
+  return rows[0] || null
+}
+
+export async function hasUserLikedShort(shortId, userId) {
+  if (!userId) return false
+  const { rows } = await pool.query(
+    `SELECT 1 FROM short_likes WHERE short_id = $1 AND user_id = $2`,
+    [shortId, userId]
+  )
+  return rows.length > 0
+}
+
+export async function toggleShortLike(shortId, userId) {
+  const exists = await hasUserLikedShort(shortId, userId)
+  if (exists) {
+    await pool.query(`DELETE FROM short_likes WHERE short_id = $1 AND user_id = $2`, [shortId, userId])
+    const { rows } = await pool.query(`UPDATE shorts SET likes = GREATEST(likes - 1, 0) WHERE id = $1 RETURNING likes`, [shortId])
+    return { liked: false, likes: rows[0].likes }
+  }
+  await pool.query(`INSERT INTO short_likes (short_id, user_id) VALUES ($1, $2)`, [shortId, userId])
+  const { rows } = await pool.query(`UPDATE shorts SET likes = likes + 1 WHERE id = $1 RETURNING likes`, [shortId])
+  return { liked: true, likes: rows[0].likes }
+}
+
+export async function hasUserBookmarkedShort(shortId, userId) {
+  if (!userId) return false
+  const { rows } = await pool.query(
+    `SELECT 1 FROM short_bookmarks WHERE short_id = $1 AND user_id = $2`,
+    [shortId, userId]
+  )
+  return rows.length > 0
+}
+
+export async function toggleShortBookmark(shortId, userId) {
+  const exists = await hasUserBookmarkedShort(shortId, userId)
+  if (exists) {
+    await pool.query(`DELETE FROM short_bookmarks WHERE short_id = $1 AND user_id = $2`, [shortId, userId])
+    const { rows } = await pool.query(`UPDATE shorts SET bookmarks = GREATEST(bookmarks - 1, 0) WHERE id = $1 RETURNING bookmarks`, [shortId])
+    return { bookmarked: false, bookmarks: rows[0].bookmarks }
+  }
+  await pool.query(`INSERT INTO short_bookmarks (short_id, user_id) VALUES ($1, $2)`, [shortId, userId])
+  const { rows } = await pool.query(`UPDATE shorts SET bookmarks = bookmarks + 1 WHERE id = $1 RETURNING bookmarks`, [shortId])
+  return { bookmarked: true, bookmarks: rows[0].bookmarks }
+}
+
+export async function incrementShortShares(shortId) {
+  const { rows } = await pool.query(`UPDATE shorts SET shares = shares + 1 WHERE id = $1 RETURNING shares`, [shortId])
+  return rows[0] ? { shares: rows[0].shares } : null
+}
+
+export async function getShortComments(shortId) {
+  const { rows } = await pool.query(
+    `SELECT c.*, u.name as user_name, u.avatar as user_avatar
+     FROM short_comments c
+     LEFT JOIN users u ON u.id = c.user_id
+     WHERE c.short_id = $1
+     ORDER BY c.created_at DESC`,
+    [shortId]
+  )
+  return rows
+}
+
+export async function addShortComment(shortId, userId, text) {
+  const { rows } = await pool.query(
+    `INSERT INTO short_comments (short_id, user_id, text) VALUES ($1, $2, $3) RETURNING *`,
+    [shortId, userId, text]
+  )
+  const comment = rows[0]
+  if (!comment) return null
+  await pool.query(`UPDATE shorts SET comments = comments + 1 WHERE id = $1`, [shortId])
+  const user = await pool.query(`SELECT name, avatar FROM users WHERE id = $1`, [userId]).then(r => r.rows[0] || {})
+  return { ...comment, user_name: user.name, user_avatar: user.avatar }
+}
+
+export async function deleteShort(id) {
+  const { rows } = await pool.query(`DELETE FROM shorts WHERE id = $1 RETURNING id`, [id])
+  return rows[0] || null
+}
+
+// ============ SHARE DEEP-LINKS ============
+export function genShareCode() {
+  return Math.random().toString(36).slice(2, 10).toUpperCase()
+}
+
+export async function createShareLink({ code, contentId, contentType, creatorId, createdBy }) {
+  const { rows } = await pool.query(
+    `INSERT INTO share_links (code, content_id, content_type, creator_id, created_by)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (code) DO NOTHING RETURNING *`,
+    [code, contentId, contentType, creatorId || null, createdBy || null]
+  )
+  return rows[0] || null
+}
+
+export async function getShareLinkByContent(createdBy, contentId, contentType) {
+  const { rows } = await pool.query(
+    `SELECT * FROM share_links WHERE created_by = $1 AND content_id = $2 AND content_type = $3 ORDER BY created_at DESC LIMIT 1`,
+    [createdBy, contentId, contentType]
+  )
+  return rows[0] || null
+}
+
+export async function getShareLinkByCode(code) {
+  const { rows } = await pool.query(`SELECT * FROM share_links WHERE code = $1`, [code])
+  return rows[0] || null
+}
+
+export async function incrementShareClicks(code) {
+  const { rows } = await pool.query(
+    `UPDATE share_links SET clicks = clicks + 1 WHERE code = $1 RETURNING *`,
+    [code]
+  )
+  return rows[0] || null
+}
+
+export async function getShareLinkStats(contentId, contentType) {
+  const { rows } = await pool.query(
+    `SELECT COALESCE(SUM(clicks), 0)::int as total_clicks, COUNT(*)::int as total_links
+     FROM share_links WHERE content_id = $1 AND content_type = $2`,
+    [contentId, contentType]
+  )
+  return { totalClicks: rows[0]?.total_clicks || 0, totalLinks: rows[0]?.total_links || 0 }
+}
+
+// ============ DIRECT MESSAGING ============
+export function dmRoom(a, b) {
+  return a < b ? `dm:${a}:${b}` : `dm:${b}:${a}`
+}
+
+export async function getConversations(userId, limit = 50) {
+  const { rows } = await pool.query(
+    `SELECT m.room, m.message, m.user_id, m.user_name, m.created_at
+     FROM messages m
+     WHERE m.room LIKE $1
+       AND m.created_at = (SELECT MAX(m2.created_at) FROM messages m2 WHERE m2.room = m.room)
+     ORDER BY m.created_at DESC
+     LIMIT $2`,
+    [`dm:%${userId}%`, limit]
+  )
+  const convos = []
+  for (const r of rows) {
+    const parts = r.room.split(':')
+    const otherId = parts[1] === userId ? parts[2] : parts[1]
+    const other = await findUserById(otherId)
+    if (!other) continue
+    convos.push({
+      room: r.room,
+      otherUser: { id: other.id, name: other.name, avatar: other.avatar },
+      lastMessage: r.message,
+      lastUserId: r.user_id,
+      lastAt: new Date(r.created_at).getTime(),
+    })
+  }
+  return convos
+}
+
+export async function getDirectMessages(userId, otherUserId, limit = 50) {
+  const room = dmRoom(userId, otherUserId)
+  const { rows } = await pool.query(
+    `SELECT id, room, user_id, user_name, message, created_at
+     FROM messages WHERE room = $1 ORDER BY created_at DESC LIMIT $2`,
+    [room, limit]
+  )
+  return rows.reverse()
+}
+
+// ============ FAN ENGAGEMENT / SUPERFAN ============
+export async function recordFanEngagement(userId, creatorId, kind, delta = 1) {
+  if (!creatorId || userId === creatorId) return null
+  const col = kind === 'like' ? 'likes' : kind === 'comment' ? 'comments' : kind === 'share' ? 'shares' : 'watch_minutes'
+  const { rows } = await pool.query(
+    `INSERT INTO fan_engagement (user_id, creator_id, ${col})
+     VALUES ($1, $2, $3)
+     ON CONFLICT (user_id, creator_id)
+     DO UPDATE SET ${col} = fan_engagement.${col} + EXCLUDED.${col}, updated_at = NOW()
+     RETURNING *`,
+    [userId, creatorId, delta]
+  )
+  return rows[0]
+}
+
+export function superfanBadge(points) {
+  if (points >= 1000) return { tier: 'Diamond', color: '#67e8f9', points, threshold: 1000 }
+  if (points >= 400) return { tier: 'Platinum', color: '#a5f3fc', points, threshold: 400 }
+  if (points >= 150) return { tier: 'Gold', color: '#fbbf24', points, threshold: 150 }
+  if (points >= 50) return { tier: 'Silver', color: '#cbd5e1', points, threshold: 50 }
+  if (points >= 10) return { tier: 'Bronze', color: '#d97706', points, threshold: 10 }
+  return { tier: 'Rising Fan', color: '#94a3b8', points, threshold: 0 }
+}
+
+export function superfanPoints(e) {
+  return (e?.likes || 0) * 2 + (e?.comments || 0) * 3 + (e?.shares || 0) * 1 + Math.floor((e?.watch_minutes || 0) / 30)
+}
+
+export async function getFanLeaderboard(creatorId, limit = 20) {
+  const { rows } = await pool.query(
+    `SELECT fe.user_id, u.name, u.avatar,
+            fe.likes, fe.comments, fe.shares, fe.watch_minutes,
+            (fe.likes * 2 + fe.comments * 3 + fe.shares * 1 + FLOOR(fe.watch_minutes / 30)) AS points
+     FROM fan_engagement fe JOIN users u ON u.id = fe.user_id
+     WHERE fe.creator_id = $1
+     ORDER BY points DESC
+     LIMIT $2`,
+    [creatorId, limit]
+  )
+  return rows.map((r) => ({ ...r, badge: superfanBadge(r.points) }))
+}
+
+export async function getFanStatus(userId, creatorId) {
+  if (!creatorId || userId === creatorId) {
+    return { engaged: false, points: 0, badge: superfanBadge(0), rank: null }
+  }
+  const { rows } = await pool.query(
+    `SELECT fe.*, (
+       SELECT COUNT(*) FROM fan_engagement fe2
+       WHERE fe2.creator_id = $2 AND (fe2.likes * 2 + fe2.comments * 3 + fe2.shares * 1 + FLOOR(fe2.watch_minutes / 30)) >= (fe.likes * 2 + fe.comments * 3 + fe.shares * 1 + FLOOR(fe.watch_minutes / 30))
+     )::int as rank
+     FROM fan_engagement fe WHERE fe.user_id = $1 AND fe.creator_id = $2`,
+    [userId, creatorId]
+  )
+  const e = rows[0]
+  if (!e) return { engaged: false, points: 0, badge: superfanBadge(0), rank: null }
+  return { engaged: true, points: superfanPoints(e), badge: superfanBadge(superfanPoints(e)), rank: e.rank, detail: e }
+}
+
+// ============ HOT-TAKE FORUM ============
+export async function createForumTopic({ id, title, category, content, authorId }) {
+  const { rows } = await pool.query(
+    `INSERT INTO forum_topics (id, title, category, content, author_id)
+     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [id, title, category || 'general', content, authorId]
+  )
+  return rows[0]
+}
+
+export async function getForumTopics(category = null, limit = 30, offset = 0, sort = 'new') {
+  const params = []
+  let where = ''
+  if (category && category !== 'all') {
+    params.push(category)
+    where = 'WHERE t.category = $1'
+  }
+  params.push(limit, offset)
+  const orderBy = sort === 'hot'
+    ? 'ORDER BY (t.upvotes - t.downvotes) DESC, t.created_at DESC'
+    : 'ORDER BY t.created_at DESC'
+  const { rows } = await pool.query(
+    `SELECT t.*, u.name as author_name, u.avatar as author_avatar,
+       (SELECT COUNT(*) FROM forum_replies r WHERE r.topic_id = t.id) as reply_count
+     FROM forum_topics t JOIN users u ON u.id = t.author_id
+     ${where}
+     ${orderBy} LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    params
+  )
+  return rows
+}
+
+export async function getForumTopicById(id) {
+  const { rows } = await pool.query(
+    `SELECT t.*, u.name as author_name, u.avatar as author_avatar
+     FROM forum_topics t JOIN users u ON u.id = t.author_id
+     WHERE t.id = $1`,
+    [id]
+  )
+  return rows[0] || null
+}
+
+export async function getForumReplies(topicId) {
+  const { rows } = await pool.query(
+    `SELECT r.*, u.name as author_name, u.avatar as author_avatar
+     FROM forum_replies r JOIN users u ON u.id = r.author_id
+     WHERE r.topic_id = $1
+     ORDER BY r.created_at ASC`,
+    [topicId]
+  )
+  return rows
+}
+
+export async function getForumReplyById(id) {
+  const { rows } = await pool.query(
+    `SELECT r.*, u.name as author_name, u.avatar as author_avatar
+     FROM forum_replies r JOIN users u ON u.id = r.author_id
+     WHERE r.id = $1`,
+    [id]
+  )
+  return rows[0] || null
+}
+
+async function getReplyDepth(client, replyId) {
+  let depth = 0
+  let currentId = replyId
+  for (let i = 0; i < 32; i++) {
+    const { rows } = await client.query(`SELECT parent_id FROM forum_replies WHERE id = $1`, [currentId])
+    if (rows.length === 0 || !rows[0].parent_id) break
+    depth++
+    currentId = rows[0].parent_id
+  }
+  return depth
+}
+
+export async function createForumReply({ id, topicId, parentId, authorId, content }) {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    if (parentId) {
+      const depth = await getReplyDepth(client, parentId)
+      if (depth >= 6) {
+        await client.query('ROLLBACK')
+        const err = new Error('Reply chain is too deep (max 6 levels).')
+        err.statusCode = 400
+        throw err
+      }
+    }
+    const { rows } = await client.query(
+      `INSERT INTO forum_replies (id, topic_id, parent_id, author_id, content)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [id, topicId, parentId || null, authorId, content]
+    )
+    await client.query('COMMIT')
+    return rows[0]
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw err
+  } finally {
+    client.release()
+  }
+}
+
+export async function castForumVote({ targetType, targetId, userId, vote }) {
+  const table = targetType === 'reply' ? 'forum_replies' : 'forum_topics'
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const existing = await client.query(
+      `SELECT id, vote FROM forum_votes WHERE target_type = $1 AND target_id = $2 AND user_id = $3 FOR UPDATE`,
+      [targetType, targetId, userId]
+    )
+    let myVote = 0
+    if (existing.rows.length > 0) {
+      const prev = existing.rows[0].vote
+      if (vote === 0 || prev === vote) {
+        await client.query(`DELETE FROM forum_votes WHERE id = $1`, [existing.rows[0].id])
+        await client.query(
+          `UPDATE ${table} SET ${prev > 0 ? 'upvotes = GREATEST(upvotes - 1, 0)' : 'downvotes = GREATEST(downvotes - 1, 0)'} WHERE id = $1`,
+          [targetId]
+        )
+        myVote = 0
+      } else {
+        await client.query(`UPDATE forum_votes SET vote = $1 WHERE id = $2`, [vote, existing.rows[0].id])
+        await client.query(
+          `UPDATE ${table} SET upvotes = upvotes + $1, downvotes = downvotes + $2 WHERE id = $3`,
+          [vote > 0 ? 1 : -1, vote > 0 ? -1 : 1, targetId]
+        )
+        myVote = vote
+      }
+    } else if (vote !== 0) {
+      await client.query(
+        `INSERT INTO forum_votes (target_type, target_id, user_id, vote) VALUES ($1, $2, $3, $4)`,
+        [targetType, targetId, userId, vote]
+      )
+      await client.query(
+        `UPDATE ${table} SET ${vote > 0 ? 'upvotes = upvotes + 1' : 'downvotes = downvotes + 1'} WHERE id = $1`,
+        [targetId]
+      )
+      myVote = vote
+    }
+    const { rows } = await client.query(`SELECT upvotes, downvotes FROM ${table} WHERE id = $1`, [targetId])
+    await client.query('COMMIT')
+    return { ...rows[0], myVote }
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw err
+  } finally {
+    client.release()
+  }
+}
+
+export async function getUserForumVotes(userId, targetIds) {
+  if (!targetIds.length) return {}
+  const { rows } = await pool.query(
+    `SELECT target_id, vote FROM forum_votes WHERE user_id = $1 AND target_id = ANY($2::uuid[])`,
+    [userId, targetIds]
+  )
+  const map = {}
+  for (const r of rows) map[r.target_id] = r.vote
+  return map
+}
+
+// ============ TRIVIA / GAMIFICATION ============
+export async function addCoins(userId, amount) {
+  const { rows } = await pool.query(
+    `UPDATE users SET coins = coins + $2 WHERE id = $1 RETURNING coins`,
+    [userId, amount]
+  )
+  return rows[0]?.coins || 0
+}
+
+export async function getCoins(userId) {
+  const { rows } = await pool.query(`SELECT coins FROM users WHERE id = $1`, [userId])
+  return rows[0]?.coins || 0
+}
+
+export async function insertTriviaQuestion(q) {
+  const { rows } = await pool.query(
+    `INSERT INTO trivia_questions (game_type, date_key, question, options, answer_index, answer_text, movie_id, movie_title, difficulty, clue, image_url)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+    [q.game_type || 'trivia', q.date_key, q.question, q.options ? JSON.stringify(q.options) : null, q.answer_index ?? null, q.answer_text || null, q.movie_id || null, q.movie_title || null, q.difficulty || 'easy', q.clue || null, q.image_url || null]
+  )
+  return rows[0]
+}
+
+export async function getTriviaForDate(dateKey) {
+  const { rows } = await pool.query(
+    `SELECT * FROM trivia_questions WHERE game_type = 'trivia' AND date_key = $1 ORDER BY created_at ASC`,
+    [dateKey]
+  )
+  return rows
+}
+
+export async function getTriviaQuestion(id) {
+  const { rows } = await pool.query(`SELECT * FROM trivia_questions WHERE id = $1`, [id])
+  return rows[0] || null
+}
+
+export async function getRandomGuessQuestion() {
+  const { rows } = await pool.query(
+    `SELECT * FROM trivia_questions WHERE game_type = 'guess' ORDER BY RANDOM() LIMIT 1`
+  )
+  return rows[0] || null
+}
+
+export async function recordTriviaAttempt({ userId, questionId, gameType, correct, points }) {
+  const { rows } = await pool.query(
+    `INSERT INTO trivia_attempts (user_id, question_id, game_type, correct, points_awarded)
+     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [userId, questionId, gameType, correct, points]
+  )
+  return rows[0]
+}
+
+export async function updateTriviaStreak(userId, dateKey, correct) {
+  const existing = await pool.query(`SELECT * FROM trivia_streaks WHERE user_id = $1`, [userId])
+  let streak = 0
+  let best = 0
+  if (correct) {
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    const yStr = yesterday.toISOString().slice(0, 10)
+    if (existing.rows[0] && existing.rows[0].last_date === yStr) {
+      streak = existing.rows[0].streak + 1
+      best = Math.max(existing.rows[0].best_streak, streak)
+    } else {
+      streak = existing.rows[0] && existing.rows[0].last_date === dateKey ? existing.rows[0].streak : 1
+      best = existing.rows[0] ? Math.max(existing.rows[0].best_streak, streak) : streak
+    }
+  } else {
+    streak = existing.rows[0]?.streak || 0
+    best = existing.rows[0]?.best_streak || 0
+  }
+  const { rows } = await pool.query(
+    `INSERT INTO trivia_streaks (user_id, streak, best_streak, last_date, updated_at)
+     VALUES ($1, $2, $3, $4, NOW())
+     ON CONFLICT (user_id) DO UPDATE SET streak = $2, best_streak = $3, last_date = $4, updated_at = NOW()
+     RETURNING *`,
+    [userId, streak, best, correct ? dateKey : (existing.rows[0]?.last_date || dateKey)]
+  )
+  return rows[0]
+}
+
+export async function getTriviaStreak(userId) {
+  const { rows } = await pool.query(`SELECT * FROM trivia_streaks WHERE user_id = $1`, [userId])
+  return rows[0] || { streak: 0, best_streak: 0 }
+}
+
+export async function getTriviaLeaderboard(limit = 20) {
+  const { rows } = await pool.query(
+    `SELECT u.id, u.name, u.avatar,
+       SUM(CASE WHEN ta.correct THEN 1 ELSE 0 END)::int as correct,
+       COUNT(*)::int as answered,
+       SUM(ta.points_awarded)::int as points
+     FROM trivia_attempts ta JOIN users u ON u.id = ta.user_id
+     GROUP BY u.id, u.name, u.avatar
+     ORDER BY points DESC
+     LIMIT $1`,
+    [limit]
+  )
+  return rows
+}
+
+export async function getCosmeticsCatalog() {
+  const { rows } = await pool.query(`SELECT * FROM cosmetics WHERE active = TRUE ORDER BY price ASC`)
+  return rows
+}
+
+export async function getUserCosmetics(userId) {
+  const { rows } = await pool.query(
+    `SELECT c.*, uc.equipped, uc.purchased_at
+     FROM user_cosmetics uc JOIN cosmetics c ON c.id = uc.cosmetic_id
+     WHERE uc.user_id = $1 ORDER BY uc.purchased_at DESC`,
+    [userId]
+  )
+  return rows
+}
+
+export async function purchaseCosmetic(userId, cosmeticId) {
+  const cosmetic = await pool.query(`SELECT * FROM cosmetics WHERE id = $1 AND active = TRUE`, [cosmeticId])
+  if (!cosmetic.rows[0]) return { error: 'Cosmetic not found' }
+  const owned = await pool.query(`SELECT 1 FROM user_cosmetics WHERE user_id = $1 AND cosmetic_id = $2`, [userId, cosmeticId])
+  if (owned.rows.length) return { error: 'Already owned' }
+  const coins = await getCoins(userId)
+  if (coins < cosmetic.rows[0].price) return { error: 'Not enough coins' }
+  await addCoins(userId, -cosmetic.rows[0].price)
+  await pool.query(
+    `INSERT INTO user_cosmetics (user_id, cosmetic_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+    [userId, cosmeticId]
+  )
+  return { success: true, cosmetic: cosmetic.rows[0] }
+}
+
+export async function equipCosmetic(userId, cosmeticId, equipped) {
+  if (equipped) {
+    await pool.query(`UPDATE user_cosmetics SET equipped = FALSE WHERE user_id = $1`, [userId])
+    await pool.query(
+      `UPDATE user_cosmetics SET equipped = TRUE WHERE user_id = $1 AND cosmetic_id = $2`,
+      [userId, cosmeticId]
+    )
+  } else {
+    await pool.query(`UPDATE user_cosmetics SET equipped = FALSE WHERE user_id = $1 AND cosmetic_id = $2`, [userId, cosmeticId])
+  }
+  const { rows } = await pool.query(`SELECT * FROM user_cosmetics WHERE user_id = $1 AND equipped = TRUE`, [userId])
+  return { success: true, equipped: rows[0] || null }
+}
+
+// ============ EASTER-EGG DIGITAL KEYS ============
+export async function getDigitalKeysByContent(contentId) {
+  const { rows } = await pool.query(
+    `SELECT id, content_id, ts_seconds, pos_x, pos_y, radius, hint, reward_type
+     FROM digital_keys
+     WHERE content_id = $1 AND active = TRUE
+     ORDER BY ts_seconds ASC`,
+    [contentId]
+  )
+  return rows
+}
+
+export async function getDigitalKeyById(id) {
+  const { rows } = await pool.query(`SELECT * FROM digital_keys WHERE id = $1`, [id])
+  return rows[0] || null
+}
+
+export async function getCollectedKeyIds(userId, contentId) {
+  const { rows } = await pool.query(
+    `SELECT k.id FROM collected_keys ck
+     JOIN digital_keys k ON k.id = ck.key_id
+     WHERE ck.user_id = $1 AND k.content_id = $2`,
+    [userId, contentId]
+  )
+  return rows.map(r => r.id)
+}
+
+export async function getKeyForSecretRoom(roomId) {
+  const { rows } = await pool.query(`SELECT key_id FROM secret_rooms WHERE id = $1`, [roomId])
+  return rows[0] ? rows[0].key_id : null
+}
+
+export async function hasSecretRoomAccess(userId, roomId) {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM secret_rooms sr
+     JOIN collected_keys ck ON ck.key_id = sr.key_id
+     WHERE sr.id = $1 AND ck.user_id = $2`,
+    [roomId, userId]
+  )
+  return rows.length > 0
+}
+
+export async function getSecretRoom(roomId) {
+  const { rows } = await pool.query(
+    `SELECT sr.*, k.content_id, k.ts_seconds FROM secret_rooms sr
+     JOIN digital_keys k ON k.id = sr.key_id
+     WHERE sr.id = $1`,
+    [roomId]
+  )
+  return rows[0] || null
+}
+
+export async function getUserCollectedKeys(userId) {
+  const { rows } = await pool.query(
+    `SELECT ck.collected_at, k.id AS key_id, k.content_id, k.ts_seconds, k.hint, k.reward_type,
+       k.reward_ref,
+       sr.id AS room_id, sr.name AS room_name,
+       c.name AS badge_name, c.icon AS badge_icon
+     FROM collected_keys ck
+     JOIN digital_keys k ON k.id = ck.key_id
+     LEFT JOIN secret_rooms sr ON sr.key_id = k.id
+     LEFT JOIN cosmetics c ON c.id = k.reward_ref AND k.reward_type = 'badge'
+     WHERE ck.user_id = $1
+     ORDER BY ck.collected_at DESC`,
+    [userId]
+  )
+  return rows
+}
+
+export async function collectKey(userId, keyId) {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const keyRes = await client.query(
+      `SELECT k.*, sr.id AS room_id, sr.name AS room_name,
+        c.id AS cosmetic_id, c.name AS cosmetic_name, c.icon AS cosmetic_icon
+       FROM digital_keys k
+       LEFT JOIN secret_rooms sr ON sr.key_id = k.id
+       LEFT JOIN cosmetics c ON c.id = k.reward_ref AND k.reward_type = 'badge'
+       WHERE k.id = $1 AND k.active = TRUE`,
+      [keyId]
+    )
+    const key = keyRes.rows[0]
+    if (!key) {
+      await client.query('ROLLBACK')
+      return { collected: false, already: false, error: 'key_not_found' }
+    }
+    const cached = await client.query(
+      `INSERT INTO collected_keys (user_id, key_id) VALUES ($1, $2) ON CONFLICT (user_id, key_id) DO NOTHING`,
+      [userId, keyId]
+    )
+    if (cached.rowCount === 0) {
+      await client.query('ROLLBACK')
+      return { collected: true, already: true, reward: null, alreadyCollected: true }
+    }
+    let reward = null
+    if (key.reward_type === 'badge' && key.cosmetic_id) {
+      await client.query(
+        `INSERT INTO user_cosmetics (user_id, cosmetic_id) VALUES ($1, $2)
+         ON CONFLICT (user_id, cosmetic_id) DO NOTHING`,
+        [userId, key.cosmetic_id]
+      )
+      reward = { type: 'badge', id: key.cosmetic_id, name: key.cosmetic_name, icon: key.cosmetic_icon }
+    } else if (key.reward_type === 'secret_room' && key.room_id) {
+      reward = { type: 'secret_room', id: key.room_id, name: key.room_name }
+    }
+    await client.query(
+      `UPDATE users SET coins = coins + 50, xp = xp + 25 WHERE id = $1`,
+      [userId]
+    )
+    await client.query('COMMIT')
+    return { collected: true, already: false, reward }
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw err
+  } finally {
+    client.release()
+  }
+}
+
+export async function createDigitalKey({ contentId, creatorId, code, ts, x, y, radius, hint, rewardType, rewardRef }) {
+  const { rows } = await pool.query(
+    `INSERT INTO digital_keys
+       (content_id, creator_id, code, ts_seconds, pos_x, pos_y, radius, hint, reward_type, reward_ref)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     RETURNING *`,
+    [contentId, creatorId, code, ts, x, y, radius, hint, rewardType, rewardRef]
+  )
+  return rows[0]
+}
+
+export async function createSecretRoom({ keyId, name, description }) {
+  const { rows } = await pool.query(
+    `INSERT INTO secret_rooms (key_id, name, description) VALUES ($1, $2, $3)
+     ON CONFLICT (key_id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description
+     RETURNING *`,
+    [keyId, name, description]
+  )
+  return rows[0]
+}
+
+export async function getUploadById(id) {
+  const { rows } = await pool.query(
+    `SELECT * FROM uploads WHERE id::text = $1`,
+    [id]
+  )
+  return rows[0] || null
+}
+
+export async function getCosmeticById(id) {
+  const { rows } = await pool.query(`SELECT * FROM cosmetics WHERE id = $1 AND active = TRUE`, [id])
+  return rows[0] || null
+}
+
+export async function getDefaultEggBadge() {
+  const { rows } = await pool.query(
+    `SELECT * FROM cosmetics WHERE kind = 'badge' AND active = TRUE
+     ORDER BY (name = 'Easter Egg Hunter') DESC, price ASC
+     LIMIT 1`
+  )
+  return rows[0] || null
+}
+
+// ============ CREATOR REVENUE / DUAL-POOL VPM ============
+export async function bumpUploadViewMinutes(contentId, minutes) {
+  if (!minutes || minutes <= 0) return
+  await pool.query(
+    `UPDATE uploads SET minutes_watched = COALESCE(minutes_watched,0) + $2
+     WHERE id::text = $1`,
+    [contentId, minutes]
+  )
+}
+
+export async function getNetSubscriptionRevenue() {
+  const { rows } = await pool.query(
+    `SELECT COALESCE(SUM(amount),0) AS total FROM transactions
+     WHERE type = 'subscription' AND status = 'success'`
+  )
+  return parseFloat(rows[0].total) || 0
+}
+
+export async function getMovieMinutesByCreator() {
+  const { rows } = await pool.query(
+    `SELECT user_id AS creator_id, COALESCE(SUM(minutes_watched),0) AS minutes
+     FROM uploads
+     WHERE status IN ('active','published')
+     GROUP BY user_id`
+  )
+  return rows
+}
+
+export async function getShortMinutesByCreator() {
+  const { rows } = await pool.query(
+    `SELECT s.user_id AS creator_id,
+            COALESCE(SUM(COALESCE(s.views,0) * COALESCE(s.duration_seconds,0)) / 60.0,0) AS minutes
+     FROM shorts s
+     WHERE s.status = 'active'
+     GROUP BY s.user_id`
+  )
+  return rows
+}
+
+export async function settleDualPool(period) {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    await client.query('DELETE FROM creator_earnings WHERE period = $1', [period])
+
+    const netRevenue = parseFloat((await client.query(
+      `SELECT COALESCE(SUM(amount),0) AS total FROM transactions
+       WHERE type='subscription' AND status='success'
+         AND to_char(created_at,'YYYY-MM') = $1`, [period]
+    )).rows[0].total) || 0
+
+    const corporate = netRevenue * 0.40
+    const creative = netRevenue * 0.60
+    const moviePool = creative * 0.80
+    const shortPool = creative * 0.20
+
+    const movies = (await client.query(
+      `SELECT user_id AS creator_id, SUM(minutes_watched) AS minutes FROM uploads
+       WHERE status IN ('active','published') GROUP BY user_id`
+    )).rows
+    const shorts = (await client.query(
+      `SELECT s.user_id AS creator_id, SUM(COALESCE(s.views,0)*COALESCE(s.duration_seconds,0))/60.0 AS minutes
+       FROM shorts s WHERE s.status='active' GROUP BY s.user_id`
+    )).rows
+
+    const movieMinutes = movies.reduce((s, r) => s + parseFloat(r.minutes || 0), 0)
+    const shortMinutes = shorts.reduce((s, r) => s + parseFloat(r.minutes || 0), 0)
+    const movieVpm = movieMinutes > 0 ? moviePool / movieMinutes : 0
+    const shortVpm = shortMinutes > 0 ? shortPool / shortMinutes : 0
+
+const rows = []
+    for (const m of movies) {
+      const amount = (parseFloat(m.minutes || 0) * movieVpm).toFixed(2)
+      if (parseFloat(amount) > 0) {
+        await client.query(
+          `INSERT INTO creator_earnings (period, creator_id, pool_type, minutes, vpm, amount)
+           VALUES ($1,$2,$3,$4,$5,$6)
+           ON CONFLICT (period, creator_id, pool_type) DO UPDATE
+           SET minutes=EXCLUDED.minutes, vpm=EXCLUDED.vpm, amount=EXCLUDED.amount`,
+          [period, m.creator_id, 'movie', m.minutes, movieVpm.toFixed(5), amount]
+        )
+        rows.push({ period, creator_id: m.creator_id, pool_type: 'movie', minutes: m.minutes, vpm: movieVpm.toFixed(5), amount })
+      }
+    }
+    for (const s of shorts) {
+      const amount = (parseFloat(s.minutes || 0) * shortVpm).toFixed(2)
+      if (parseFloat(amount) > 0) {
+        await client.query(
+          `INSERT INTO creator_earnings (period, creator_id, pool_type, minutes, vpm, amount)
+           VALUES ($1,$2,$3,$4,$5,$6)
+           ON CONFLICT (period, creator_id, pool_type) DO UPDATE
+           SET minutes=EXCLUDED.minutes, vpm=EXCLUDED.vpm, amount=EXCLUDED.amount`,
+          [period, s.creator_id, 'short', s.minutes, shortVpm.toFixed(5), amount]
+        )
+        rows.push({ period, creator_id: s.creator_id, pool_type: 'short', minutes: s.minutes, vpm: shortVpm.toFixed(5), amount })
+      }
+    }
+
+    await client.query('COMMIT')
+    return {
+      period,
+      netRevenue,
+      corporate: +corporate.toFixed(2),
+      creative: +creative.toFixed(2),
+      moviePool: +moviePool.toFixed(2),
+      shortPool: +shortPool.toFixed(2),
+      movieMinutes: +movieMinutes.toFixed(1),
+      shortMinutes: +shortMinutes.toFixed(1),
+      movieVpm: +movieVpm.toFixed(5),
+      shortVpm: +shortVpm.toFixed(5),
+      entries: rows.length,
+    }
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw err
+  } finally {
+    client.release()
+  }
+}
+
+export async function getCreatorEarnings(creatorId) {
+  const { rows } = await pool.query(
+    `SELECT period, pool_type, minutes, vpm, amount, settled_at
+     FROM creator_earnings WHERE creator_id = $1 ORDER BY period DESC, pool_type ASC`,
+    [creatorId]
+  )
+  return rows
+}
+
+export async function getCreatorEarningsSummary(creatorId) {
+  const { rows } = await pool.query(
+    `SELECT pool_type, COALESCE(SUM(amount),0) AS total, COALESCE(SUM(minutes),0) AS minutes
+     FROM creator_earnings WHERE creator_id = $1 GROUP BY pool_type`,
+    [creatorId]
+  )
+  const movie = rows.find(r => r.pool_type === 'movie') || { total: 0, minutes: 0 }
+  const short = rows.find(r => r.pool_type === 'short') || { total: 0, minutes: 0 }
+  const grandTotal = parseFloat(movie.total) + parseFloat(short.total)
+  return { movie: parseFloat(movie.total), short: parseFloat(short.total), total: grandTotal, minutes: parseFloat(movie.minutes) + parseFloat(short.minutes) }
+}
+
+// ============ NOTIFICATIONS ============
+export async function createNotification({ userId, type = 'system', title, body = '', link = '', actorId = null }) {
+  if (!userId) return null
+  const { rows } = await pool.query(
+    `INSERT INTO notifications (user_id, type, title, body, link, actor_id)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [userId, type, title, body, link, actorId]
+  )
+  return rows[0]
+}
+
+export async function createNotificationsBulk(recipients, { type = 'system', title, body = '', link = '', actorId = null }) {
+  if (!recipients || recipients.length === 0) return []
+  const userIds = recipients.map((r) => r.id)
+  const types = recipients.map(() => type)
+  const titles = recipients.map(() => title)
+  const bodies = recipients.map(() => body)
+  const links = recipients.map(() => link)
+  const actorIds = recipients.map(() => actorId)
+  const { rows } = await pool.query(
+    `INSERT INTO notifications (user_id, type, title, body, link, actor_id)
+     SELECT * FROM unnest($1::uuid[], $2::text[], $3::text[], $4::text[], $5::text[], $6::uuid[])
+     RETURNING id, user_id, type, title, body, link, is_read, created_at, actor_id`,
+    [userIds, types, titles, bodies, links, actorIds]
+  )
+  return rows
+}
+
+export async function getNotifications(userId, limit = 30) {
+  const { rows } = await pool.query(
+    `SELECT n.id, n.type, n.title, n.body, n.link, n.is_read, n.created_at,
+            u.name AS actor_name, u.avatar AS actor_avatar
+     FROM notifications n
+     LEFT JOIN users u ON u.id = n.actor_id
+     WHERE n.user_id = $1
+     ORDER BY n.created_at DESC
+     LIMIT $2`,
+    [userId, Math.min(parseInt(limit, 10) || 30, 50)]
+  )
+  return rows
+}
+
+export async function getUnreadCount(userId) {
+  const { rows } = await pool.query(
+    `SELECT COUNT(*) AS count FROM notifications WHERE user_id = $1 AND is_read = FALSE`,
+    [userId]
+  )
+  return parseInt(rows[0].count, 10) || 0
+}
+
+export async function markNotificationRead(id, userId) {
+  const { rows } = await pool.query(
+    `UPDATE notifications SET is_read = TRUE WHERE id = $1 AND user_id = $2 RETURNING *`,
+    [id, userId]
+  )
+  return rows[0] || null
+}
+
+export async function markAllNotificationsRead(userId) {
+  const { rows } = await pool.query(
+    `UPDATE notifications SET is_read = TRUE WHERE user_id = $1 AND is_read = FALSE RETURNING id`,
+    [userId]
+  )
+  return rows.length
+}
+
+export async function savePushSubscription({ userId, endpoint, p256dh, auth, plan = 'free' }) {
+  if (!userId || !endpoint || !p256dh || !auth) return null
+  const { rows } = await pool.query(
+    `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, plan)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (endpoint) DO UPDATE SET
+       user_id = EXCLUDED.user_id,
+       p256dh = EXCLUDED.p256dh,
+       auth = EXCLUDED.auth,
+       plan = EXCLUDED.plan,
+       updated_at = NOW()
+     RETURNING *`,
+    [userId, endpoint, p256dh, auth, plan]
+  )
+  return rows[0]
+}
+
+export async function getPushSubscriptionsForUsers(userIds) {
+  if (!userIds || userIds.length === 0) return []
+  const { rows } = await pool.query(
+    `SELECT user_id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ANY($1)`,
+    [userIds]
+  )
+  return rows
+}
+
+export async function deletePushSubscription(endpoint) {
+  if (!endpoint) return
+  await pool.query(`DELETE FROM push_subscriptions WHERE endpoint = $1`, [endpoint])
+}
+
+export async function getUsersByPlans(plans) {
+  if (!plans || plans.length === 0) return []
+  const { rows } = await pool.query(
+    `SELECT id, email, name, plan, role, email_verified FROM users WHERE plan = ANY($1) AND role != 'banned'`,
+    [plans]
+  )
+  return rows
+}
+
+export async function getUsersByRoles(roles) {
+  if (!roles || roles.length === 0) return []
+  const { rows } = await pool.query(
+    `SELECT id, email, name, plan, role, email_verified FROM users WHERE role = ANY($1)`,
+    [roles]
+  )
+  return rows
+}
+
+export { pool }
+
+// ============ Admin Platform ============
+
+export async function logAdminAudit({ actorId, action, entity, entityId, meta = {} }) {
+  if (!actorId) return
+  await pool.query(
+    `INSERT INTO admin_audit_log (actor_id, action, entity, entity_id, meta) VALUES ($1,$2,$3,$4,$5)`,
+    [actorId, action, entity, entityId || null, meta]
+  ).catch(() => {})
+}
+
+export async function getRecentAdminActivity(limit = 15) {
+  const { rows } = await pool.query(
+    `SELECT a.id, a.action, a.entity, a.entity_id, a.meta, a.created_at, u.name AS actor_name
+     FROM admin_audit_log a LEFT JOIN users u ON u.id = a.actor_id
+     ORDER BY a.created_at DESC LIMIT $1`,
+    [limit]
+  )
+  return rows
+}
+
+export async function getOverview() {
+  const [allUsers, allTime, minutes, activeSubs, revenue, tips, shorts, reports, sockets] = await Promise.all([
+    pool.query('SELECT COUNT(*) AS n FROM users'),
+    pool.query('SELECT COUNT(*) AS n FROM uploads'),
+    pool.query('SELECT COALESCE(SUM(minutes),0) AS n FROM watch_history'),
+    pool.query('SELECT COUNT(*) AS n FROM subscriptions WHERE active = true'),
+    pool.query('SELECT COALESCE(SUM(amount),0) AS n FROM transactions WHERE type IN ($1,$2)', ['subscription', 'renewal']),
+    pool.query('SELECT COALESCE(SUM(amount),0) AS n FROM tips'),
+    pool.query('SELECT COUNT(*) AS n FROM shorts'),
+    pool.query('SELECT COUNT(*) AS n FROM reports WHERE status = \'open\''),
+  ])
+  return {
+    totalUsers: allUsers.rows[0].n,
+    totalUploads: allTime.rows[0].n,
+    totalMinutesWatched: allTime.rows[0].n,
+    activeSubscriptions: activeSubs.rows[0].n,
+    revenue: revenue.rows[0].n,
+    tips: tips.rows[0].n,
+    totalShorts: shorts.rows[0].n,
+    openReports: reports.rows[0].n,
+  }
+}
+
+export async function getRevenueTimeSeries(days = 30) {
+  const { rows } = await pool.query(
+    `SELECT to_char(created_at, 'YYYY-MM-DD') AS day,
+            SUM(amount) AS revenue,
+            COUNT(*) AS txns
+     FROM transactions
+     WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')
+     GROUP BY day ORDER BY day`,
+    [days]
+  )
+  return rows.map(r => ({ day: r.day, revenue: Number(r.revenue || 0), txns: Number(r.txns) }))
+}
+
+export async function getSignupsByDay(days = 30) {
+  const { rows } = await pool.query(
+    `SELECT to_char(created_at, 'YYYY-MM-DD') AS day, COUNT(*) AS n
+     FROM users WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')
+     GROUP BY day ORDER BY day`,
+    [days]
+  )
+  return rows.map(r => ({ day: r.day, n: Number(r.n) }))
+}
+
+export async function getWatchMinutesByDay(days = 30) {
+  const { rows } = await pool.query(
+    `SELECT to_char(watched_at, 'YYYY-MM-DD') AS day, COALESCE(SUM(minutes),0) AS n
+     FROM watch_history WHERE watched_at >= NOW() - ($1::int * INTERVAL '1 day')
+     GROUP BY day ORDER BY day`,
+    [days]
+  )
+  return rows.map(r => ({ day: r.day, n: Number(r.n) }))
+}
+
+export async function getRevenueByType(limit = 20) {
+  const { rows } = await pool.query(
+    `SELECT type, COUNT(*) AS n, COALESCE(SUM(amount),0) AS total
+     FROM transactions GROUP BY type ORDER BY total DESC LIMIT $1`,
+    [limit]
+  )
+  return rows
+}
+
+export async function getSubscriberPlanBreakdown() {
+  const { rows } = await pool.query(
+    `SELECT plan, COUNT(*) AS n FROM subscriptions WHERE active = true GROUP BY plan`
+  )
+  return rows
+}
+
+export async function getChurnStats() {
+  const { rows } = await pool.query(
+    `SELECT
+      (SELECT COUNT(*) FROM subscriptions WHERE active = false) AS churned,
+      (SELECT COUNT(*) FROM subscriptions WHERE active = true) AS active`
+  )
+  return rows[0]
+}
+
+export async function getPlanCounts() {
+  const { rows } = await pool.query(`SELECT plan, COUNT(*) AS n FROM users GROUP BY plan`)
+  return rows
+}
+
+export async function getTopContent(limit = 10) {
+  const [uploads, shorts] = await Promise.all([
+    pool.query(
+      `SELECT 'upload' AS content_type, id, title, views, minutes_watched AS minutes, revenue
+       FROM uploads ORDER BY views DESC LIMIT $1`, [limit]
+    ),
+    pool.query(
+      `SELECT 'short' AS content_type, id, title, views, 0 AS minutes, 0 AS revenue
+       FROM shorts ORDER BY views DESC LIMIT $1`, [limit]
+    ),
+  ])
+  return [...shorts.rows, ...uploads.rows].sort((a, b) => b.views - a.views).slice(0, limit)
+}
+
+export async function getAdminSessionsCount() {
+  const { rows } = await pool.query('SELECT COUNT(*) AS n FROM active_sessions WHERE last_heartbeat > NOW() - INTERVAL \'5 minutes\'')
+  return Number(rows[0].n)
+}
+
+export async function adminListUploads({ search = '', status, limit = 100, offset = 0 }) {
+  const conds = []
+  const params = []
+  if (search) { params.push(`%${search}%`); conds.push(`(title ILIKE $${params.length} OR description ILIKE $${params.length})`) }
+  if (status) { params.push(status); conds.push(`status = $${params.length}`) }
+  params.push(limit)
+  params.push(offset)
+  const where = conds.length ? 'WHERE ' + conds.join(' AND ') : ''
+  const { rows } = await pool.query(
+    `SELECT uploads.*, u.name AS owner_name FROM uploads
+     JOIN users u ON u.id = uploads.user_id
+     ${where} ORDER BY uploads.created_at DESC LIMIT $${params.length-1} OFFSET $${params.length}`,
+    params
+  )
+  return rows
+}
+
+export async function adminUpdateUpload(id, fields) {
+  const allowed = ['status', 'title', 'description', 'genre', 'maturity_rating', 'language', 'cast_list', 'trailer_url', 'subtitle_url', 'audio_tracks', 'artwork']
+  const sets = []
+  const params = []
+  for (const k of allowed) {
+    if (fields[k] !== undefined) { params.push(fields[k]); sets.push(`${k} = $${params.length}`) }
+  }
+  if (!sets.length) return null
+  params.push(id)
+  const { rows } = await pool.query(`UPDATE uploads SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING *`, params)
+  return rows[0]
+}
+
+export async function getAllShorts({ search = '', limit = 100, offset = 0 }) {
+  const params = []
+  let where = ''
+  if (search) { params.push(`%${search}%`); where = `WHERE title ILIKE $${params.length} OR description ILIKE $${params.length}` }
+  params.push(limit, offset)
+  const { rows } = await pool.query(
+    `SELECT shorts.*, u.name AS owner_name FROM shorts JOIN users u ON u.id = shorts.user_id
+     ${where} ORDER BY shorts.created_at DESC LIMIT $${params.length-1} OFFSET $${params.length}`,
+    params
+  )
+  return rows
+}
+
+export async function getAllTransactions({ limit = 100, offset = 0, type } = {}) {
+  const params = []
+  let where = ''
+  if (type) { params.push(type); where = `WHERE type = $${params.length}` }
+  params.push(limit, offset)
+  const { rows } = await pool.query(
+    `SELECT tr.*, u.email, u.name FROM transactions tr JOIN users u ON u.id = tr.user_id
+     ${where} ORDER BY tr.created_at DESC LIMIT $${params.length-1} OFFSET $${params.length}`, params
+  )
+  return rows
+}
+
+export async function getAllSubscriptions() {
+  const { rows } = await pool.query(
+    `SELECT s.*, u.email, u.name FROM subscriptions s JOIN users u ON u.id = s.user_id
+     ORDER BY s.started_at DESC`
+  )
+  return rows
+}
+
+export async function createPromoCode({ code, plan = 'premium', discountPct = 0, maxUses = 0, expiresAt = null }) {
+  const { rows } = await pool.query(
+    `INSERT INTO promo_codes (code, plan, discount_pct, max_uses, expires_at)
+     VALUES ($1,$2,$3,$4,$5) ON CONFLICT (code) DO NOTHING RETURNING *`,
+    [code, plan, discountPct, maxUses, expiresAt]
+  )
+  return rows[0]
+}
+
+export async function listPromoCodes() {
+  const { rows } = await pool.query(`SELECT * FROM promo_codes ORDER BY created_at DESC`)
+  return rows
+}
+
+export async function listBanners() {
+  const { rows } = await pool.query(`SELECT * FROM banners ORDER BY active DESC, sort ASC, created_at DESC`)
+  return rows
+}
+
+export async function createBanner({ title, imageUrl, link, position = 'home', active = true, sort = 0 }) {
+  const { rows } = await pool.query(
+    `INSERT INTO banners (title, image_url, link, position, active, sort) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+    [title, imageUrl, link, position, active, sort]
+  )
+  return rows[0]
+}
+
+export async function listAudioLibrary() {
+  const { rows } = await pool.query(`SELECT * FROM audio_library ORDER BY created_at DESC`)
+  return rows
+}
+
+export async function createAudioTrack({ title, artist, url, license }) {
+  const { rows } = await pool.query(
+    `INSERT INTO audio_library (title, artist, url, license) VALUES ($1,$2,$3,$4) RETURNING *`,
+    [title, artist, url, license]
+  )
+  return rows[0]
+}
+
+export async function getFeedSettingsValue(key, fallback = {}) {
+  const { rows } = await pool.query(`SELECT value FROM feed_settings WHERE key = $1`, [key])
+  return rows[0] ? rows[0].value : fallback
+}
+
+export async function setFeedSettings(key, value) {
+  const { rows } = await pool.query(
+    `INSERT INTO feed_settings (key, value) VALUES ($1,$2)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW() RETURNING *`,
+    [key, value]
+  )
+  return rows[0]
+}
+
+export async function listCreatorApplications() {
+  const { rows } = await pool.query(
+    `SELECT ca.*, u.email, u.name FROM creator_applications ca JOIN users u ON u.id = ca.user_id ORDER BY ca.created_at DESC`
+  )
+  return rows
+}
+
+export async function getForumModerationItems() {
+  const { rows } = await pool.query(
+    `SELECT f.id, f.content, f.created_at, u.name AS author_name
+     FROM forum_replies f JOIN users u ON u.id = f.author_id ORDER BY f.created_at DESC LIMIT 50`
+  )
+  return rows
+}
+
+export async function updateReportStatus(id, status) {
+  const { rows } = await pool.query(
+    `UPDATE reports SET status = $1 WHERE id = $2 RETURNING *`, [status, id]
+  )
+  return rows[0]
+}
+
+export async function deleteReview(id) {
+  await pool.query(`DELETE FROM reviews WHERE id = $1`, [id])
+}
+
+export async function getFeedSettingsAll() {
+  const { rows } = await pool.query(`SELECT key, value FROM feed_settings`)
+  return rows
+}
+
+export async function getRevenueBySeries(days = 30) {
+  const { rows } = await pool.query(
+    `SELECT to_char(created_at, 'YYYY-MM-DD') AS day,
+            SUM(amount) AS revenue, COUNT(*) AS txns
+     FROM transactions
+     WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')
+     GROUP BY day ORDER BY day`, [days]
+  )
+  return rows.map(r => ({ day: r.day, revenue: Number(r.revenue || 0), txns: Number(r.txns) }))
+}
+
+export async function getTopViewsByType(limit = 10) {
+  const [movies, shorts] = await Promise.all([
+    pool.query(`SELECT 'movie' AS content_type, id, title, views, minutes_watched AS minutes, revenue FROM uploads ORDER BY views DESC LIMIT $1`, [limit]),
+    pool.query(`SELECT 'short' AS content_type, id, title, views, 0 AS minutes, 0 AS revenue FROM shorts ORDER BY views DESC LIMIT $1`, [limit]),
+  ])
+  return [...shorts.rows, ...movies.rows].sort((a, b) => b.views - a.views).slice(0, limit)
+}
+
+// ============ RBAC (Admin Roles & Permissions) ============
+
+export async function getAdminRoles() {
+  const { rows } = await pool.query(`SELECT * FROM admin_roles ORDER BY is_system DESC, created_at ASC`)
+  return rows
+}
+
+export async function getAdminRoleBySlug(slug) {
+  const { rows } = await pool.query(`SELECT * FROM admin_roles WHERE slug = $1`, [slug])
+  return rows[0]
+}
+
+export async function createAdminRole({ name, slug, description = '', permissions = [] }) {
+  const { rows } = await pool.query(
+    `INSERT INTO admin_roles (name, slug, description, permissions, is_system) VALUES ($1,$2,$3,$4,FALSE)
+     ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, permissions = EXCLUDED.permissions, updated_at = NOW()
+     RETURNING *`,
+    [name, slug, description, JSON.stringify(permissions)]
+  )
+  return rows[0]
+}
+
+export async function updateAdminRole(id, { name, description, permissions }) {
+  const { rows } = await pool.query(
+    `UPDATE admin_roles SET name = $1, description = $2, permissions = $3, updated_at = NOW()
+     WHERE id = $4 AND is_system = FALSE RETURNING *`,
+    [name, description, JSON.stringify(permissions), id]
+  )
+  return rows[0]
+}
+
+export async function deleteAdminRole(id) {
+  const { rows } = await pool.query(
+    `DELETE FROM admin_roles WHERE id = $1 AND is_system = FALSE
+     RETURNING id`,
+    [id]
+  )
+  return rows[0]
+}
+
+export async function getAdminRolePermissions(userId) {
+  if (!userId) return { slug: null, permissions: [] }
+  const { rows } = await pool.query(
+    `SELECT ar.slug, ar.permissions FROM users u
+     LEFT JOIN admin_roles ar ON ar.id = u.admin_role_id
+     WHERE u.id = $1`,
+    [userId]
+  )
+  const row = rows[0]
+  const perms = row?.permissions
+  return {
+    slug: row?.slug || null,
+    permissions: Array.isArray(perms) ? perms : [],
+  }
+}
+
+// Effective permission set for an admin: 'super-admin' slug bypasses everything.
+export async function hasAdminPermission(userId, key) {
+  if (!userId) return false
+  const { rows } = await pool.query(
+    `SELECT ar.slug, ar.permissions FROM users u
+     LEFT JOIN admin_roles ar ON ar.id = u.admin_role_id
+     WHERE u.id = $1`,
+    [userId]
+  )
+  const row = rows[0]
+  if (!row) return false
+  if (row.slug === 'super-admin') return true
+  return Array.isArray(row.permissions) ? row.permissions.includes(key) : false
+}
+
+export async function assignAdminRole(userId, adminRoleId) {
+  const { rows } = await pool.query(
+    `UPDATE users SET admin_role_id = $1 WHERE id = $2 RETURNING *`,
+    [adminRoleId, userId]
+  )
+  return rows[0]
+}
+
+export async function clearAdminRole(userId) {
+  const { rows } = await pool.query(`UPDATE users SET admin_role_id = NULL WHERE id = $1 RETURNING *`, [userId])
+  return rows[0]
+}
+
+export async function createAppeal({ userId, userEmail, userName, appealType, message, accountReason, accountUntil }) {
+  const { rows } = await pool.query(
+    `INSERT INTO appeals (user_id, user_email, user_name, appeal_type, message, account_reason, account_until)
+     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+    [userId, userEmail, userName || '', appealType || 'suspension', message, accountReason || '', accountUntil || null]
+  )
+  return rows[0]
+}
+
+export async function getAppeals(status) {
+  const cond = status && status !== 'all' ? `WHERE status = $1` : ''
+  const params = status && status !== 'all' ? [status] : []
+  const { rows } = await pool.query(
+    `SELECT * FROM appeals ${cond} ORDER BY created_at DESC LIMIT 300`,
+    params
+  )
+  return rows
+}
+
+export async function getAppealsByUser(userId) {
+  const { rows } = await pool.query(`SELECT * FROM appeals WHERE user_id = $1 ORDER BY created_at DESC`, [userId])
+  return rows
+}
+
+export async function resolveAppeal(id, { status, resolutionNote, reviewedBy }) {
+  const { rows } = await pool.query(
+    `UPDATE appeals SET status = $1, resolution_note = $2, reviewed_by = $3, reviewed_at = NOW()
+     WHERE id = $4 RETURNING *`,
+    [status, resolutionNote || '', reviewedBy || null, id]
+  )
+  return rows[0]
 }

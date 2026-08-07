@@ -3,9 +3,11 @@ import { useEffect, useState, useRef } from 'react'
 import Icon from '../components/ui/Icon'
 import { useStore } from '../store/useStore'
 import { useAuth } from '../lib/AuthContext'
-import { getMyAchievements, checkAchievements, uploadAvatar } from '../lib/auth'
+import { getMyAchievements, checkAchievements, uploadAvatar, getFollowStats, getFollowers, getFollowing, getGamification } from '../lib/auth'
 import Button from '../components/ui/Button'
 import PremiumBadge from '../components/ui/PremiumBadge'
+import FollowButton from '../components/ui/FollowButton'
+import Modal from '../components/ui/Modal'
 
 export default function Profile() {
   const navigate = useNavigate()
@@ -13,16 +15,40 @@ export default function Profile() {
   const watchlist = useStore((s) => s.watchlist)
   const continueWatching = useStore((s) => s.continueWatching)
   const [achievements, setAchievements] = useState<any[]>([])
+  const [gamification, setGamification] = useState<any>(null)
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const [stats, setStats] = useState<{ followers: number; following: number } | null>(null)
+  const [activeList, setActiveList] = useState<'followers' | 'following' | null>(null)
+  const [listUsers, setListUsers] = useState<any[]>([])
+  const [listLoading, setListLoading] = useState(false)
 
   useEffect(() => {
     (async () => {
       await checkAchievements()
       const res = await getMyAchievements()
       if (res.success) setAchievements(res.data)
+      const g = await getGamification()
+      if (g.success) setGamification(g.data)
     })()
   }, [])
+
+  useEffect(() => {
+    if (!user) return
+    getFollowStats(user.id).then((r) => {
+      if (r.success) setStats({ followers: r.followers, following: r.following })
+    })
+  }, [user])
+
+  const openList = async (list: 'followers' | 'following') => {
+    if (!user) return
+    setActiveList(list)
+    setListLoading(true)
+    setListUsers([])
+    const res = list === 'followers' ? await getFollowers(user.id) : await getFollowing(user.id)
+    if (res.success) setListUsers(res.users)
+    setListLoading(false)
+  }
 
   const movieCount = watchlist.filter((w) => w.type === 'movie').length
   const tvCount = watchlist.filter((w) => w.type === 'tv').length
@@ -132,6 +158,25 @@ export default function Profile() {
           </div>
         </div>
 
+        <div className="grid grid-cols-2 gap-gutter mb-10">
+          <button
+            onClick={() => openList('followers')}
+            className="bg-surface-container-high border border-white/5 rounded-xl p-5 text-left hover:border-white/15 transition-colors"
+          >
+            <Icon name="group" className="text-primary-container mb-3" />
+            <p className="text-2xl font-bold text-on-surface">{stats?.followers ?? '–'}</p>
+            <p className="text-on-surface-variant/60 text-sm">Followers</p>
+          </button>
+          <button
+            onClick={() => openList('following')}
+            className="bg-surface-container-high border border-white/5 rounded-xl p-5 text-left hover:border-white/15 transition-colors"
+          >
+            <Icon name="person_add" className="text-secondary mb-3" />
+            <p className="text-2xl font-bold text-on-surface">{stats?.following ?? '–'}</p>
+            <p className="text-on-surface-variant/60 text-sm">Following</p>
+          </button>
+        </div>
+
         {continueWatching.length > 0 && (
           <div className="mb-10">
             <h2 className="font-label-md text-label-md text-on-surface uppercase tracking-widest mb-4">Continue Watching</h2>
@@ -181,6 +226,36 @@ export default function Profile() {
           </div>
         )}
 
+        {gamification && (
+          <div className="bg-surface-container-high border border-white/5 rounded-xl p-5 mb-6">
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-primary-container/20 flex items-center justify-center">
+                  <span className="font-display text-headline-md text-primary-container">Lv {gamification.level}</span>
+                </div>
+                <div>
+                  <p className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest">Level {gamification.level}</p>
+                  <p className="text-on-surface font-label-md text-label-md">{gamification.xp} XP earned</p>
+                </div>
+              </div>
+              <p className="text-on-surface-variant text-sm">
+                <span className="text-primary-container font-semibold">{gamification.unlockedCount}</span> / {gamification.totalCount} achievements unlocked
+              </p>
+            </div>
+            <div className="w-full h-2 rounded-full bg-white/5 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-primary to-primary-container transition-all duration-700"
+                style={{ width: `${gamification.progressPct}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs text-on-surface-variant/60">
+              {gamification.nextLevelXp > 0
+                ? `${gamification.currentLevelXp} / ${gamification.nextLevelXp} XP to next level`
+                : 'Max level reached'}
+            </p>
+          </div>
+        )}
+
         <div className="mb-10">
           <h2 className="font-label-md text-label-md text-on-surface uppercase tracking-widest mb-4 flex items-center gap-2">
             <Icon name="emoji_events" className="text-primary-container" /> Achievements
@@ -224,6 +299,38 @@ export default function Profile() {
           </div>
         </div>
       </div>
+
+      <Modal
+        isOpen={activeList !== null}
+        onClose={() => setActiveList(null)}
+        title={activeList === 'followers' ? 'Followers' : 'Following'}
+      >
+        <div className="space-y-2 max-h-96 overflow-y-auto">
+          {listLoading ? (
+            <div className="py-8 text-center text-on-surface-variant/60 text-sm">Loading...</div>
+          ) : listUsers.length === 0 ? (
+            <div className="py-8 text-center text-on-surface-variant/60 text-sm">
+              {activeList === 'followers' ? 'No followers yet' : 'Not following anyone yet'}
+            </div>
+          ) : (
+            listUsers.map((u) => (
+              <div key={u.id} className="flex items-center gap-3 px-4 py-3 rounded-xl bg-surface-card border border-white/5">
+                <div className="w-9 h-9 rounded-full overflow-hidden bg-gradient-to-br from-primary-container to-secondary flex items-center justify-center shrink-0">
+                  {u.avatar ? (
+                    <img src={u.avatar} alt={u.name || ''} className="w-full h-full object-cover" />
+                  ) : (
+                    <Icon name="person" size="sm" className="text-on-surface-variant/70" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-on-surface truncate">{u.name || 'Anonymous'}</p>
+                </div>
+                {u.id !== user?.id && <FollowButton creatorId={u.id} />}
+              </div>
+            ))
+          )}
+        </div>
+      </Modal>
     </div>
   )
 }

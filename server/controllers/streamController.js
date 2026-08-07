@@ -12,14 +12,16 @@ const DOWNLOADS_DIR = path.join(__dirname, '..', 'download')
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 
-async function parseMasterManifest(masterUrl) {
+const PLAN_MAX_RES = { free: 480, student: 720, basic: 720, standard: 1080, premium: 2160 }
+
+async function parseMasterManifest(masterUrl, plan) {
   const response = await axios.get(masterUrl, {
     headers: { 'User-Agent': UA, Referer: 'https://nextgencloudfabric.com/' },
     timeout: 15000,
   })
   const body = response.data
   const baseUrl = masterUrl.substring(0, masterUrl.lastIndexOf('/') + 1)
-  const variants = []
+  let variants = []
   const lines = body.split('\n')
   let currentStreamInf = null
 
@@ -73,15 +75,19 @@ export async function source(req, res) {
   const { id, type, season, episode } = req.query
   if (!id) return res.status(400).json({ error: 'TMDB ID is required' })
 
-  // Concurrent screen enforcement
+  // Concurrent screen enforcement (fail-open: playback should never crash on this)
   const plan = req.user?.plan || 'free'
   const maxScreens = PLAN_FEATURES[plan]?.concurrentScreens || 1
-  const activeSessions = await getActiveSessionCount(req.userId)
-  if (activeSessions >= maxScreens) {
-    return res.status(429).json({
-      success: false,
-      error: `Your ${plan} plan allows ${maxScreens} concurrent screen${maxScreens > 1 ? 's' : ''}. You've reached this limit.`,
-    })
+  try {
+    const activeSessions = await getActiveSessionCount(req.userId)
+    if (activeSessions >= maxScreens) {
+      return res.status(429).json({
+        success: false,
+        error: `Your ${plan} plan allows ${maxScreens} concurrent screen${maxScreens > 1 ? 's' : ''}. You've reached this limit.`,
+      })
+    }
+  } catch (screenErr) {
+    console.error(`[api/source] session count check failed (allowing playback): ${screenErr.message}`)
   }
 
   try {
@@ -106,8 +112,6 @@ export async function source(req, res) {
   }
 }
 
-const PLAN_MAX_RES = { free: 480, student: 720, basic: 720, standard: 1080, premium: 2160 }
-
 export async function manifestInfo(req, res) {
   const { url, id, type, season, episode, plan } = req.query
   if (!url) return res.status(400).json({ error: 'URL is required' })
@@ -117,7 +121,7 @@ export async function manifestInfo(req, res) {
       ? 'https://' + url.replace('/api/proxy/', '')
       : url
 
-    const variants = await parseMasterManifest(cdnUrl)
+    const variants = await parseMasterManifest(cdnUrl, plan)
     let duration = 0
 
     if (id && type) {

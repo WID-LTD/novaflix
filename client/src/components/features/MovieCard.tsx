@@ -11,9 +11,10 @@ interface MovieCardProps {
   index?: number
   progress?: number
   duration?: number
+  className?: string
 }
 
-export default function MovieCard({ item, index = 0, progress, duration }: MovieCardProps) {
+export default function MovieCard({ item, index = 0, progress, duration, className }: MovieCardProps) {
   const [imgLoaded, setImgLoaded] = useState(false)
   const [imgError, setImgError] = useState(false)
 
@@ -25,10 +26,12 @@ export default function MovieCard({ item, index = 0, progress, duration }: Movie
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: index * 0.05 }}
-      className="group relative flex-shrink-0 w-[160px] md:w-[220px] snap-start"
+      className={`group relative snap-start ${
+        className ?? 'flex-shrink-0 w-[160px] md:w-[220px]'
+      }`}
     >
       <Link to={detailUrl} className="block">
-        <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-surface-container card-hover-effect shadow-lg">
+        <div className="relative aspect-[2/3] rounded-md overflow-hidden bg-surface-container card-hover-effect shadow-lg">
           {!imgLoaded && !imgError && (
             <div className="absolute inset-0 shimmer" />
           )}
@@ -101,13 +104,13 @@ export default function MovieCard({ item, index = 0, progress, duration }: Movie
           </div>
         </div>
 
-        <div className="mt-2.5 px-1">
+        <div className="mt-2.5 px-1 min-w-0">
           <h3 className="font-label-md text-label-md text-on-surface truncate group-hover:text-primary transition-colors">
             {item.title}
           </h3>
           <div className="flex items-center gap-2 mt-1">
-            <span className="text-xs text-on-surface-variant">{item.year}</span>
-            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+            <span className="text-xs text-on-surface-variant shrink-0">{item.year}</span>
+            <Badge variant="outline" className="shrink-0">
               {item.type === 'tv' ? 'TV' : 'Movie'}
             </Badge>
           </div>

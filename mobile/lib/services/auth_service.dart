@@ -24,9 +24,30 @@ class AuthService {
       throw AuthException('verify_email', data['message'] ?? 'Please verify your email');
     }
 
+    if (data['needsLoginVerification'] == true) {
+      throw AuthException(
+        'login_verify',
+        data['message'] ?? 'Please verify this sign-in',
+        userId: data['userId'] as int?,
+        reason: data['reason'] as String?,
+      );
+    }
+
     final token = data['token'] as String;
     await _api.saveToken(token);
 
+    final userData = data['user'] as Map<String, dynamic>;
+    return User.fromJson(userData, token: token);
+  }
+
+  Future<User> loginVerify(int userId, String code) async {
+    final res = await _api.loginVerify(userId, code);
+    final data = res.data as Map<String, dynamic>;
+
+    final token = data['token'] as String?;
+    if (token == null) throw AuthException('verify_failed', 'Verification failed');
+
+    await _api.saveToken(token);
     final userData = data['user'] as Map<String, dynamic>;
     return User.fromJson(userData, token: token);
   }
@@ -71,7 +92,9 @@ class AuthService {
 class AuthException implements Exception {
   final String code;
   final String message;
-  AuthException(this.code, this.message);
+  final int? userId;
+  final String? reason;
+  AuthException(this.code, this.message, {this.userId, this.reason});
 
   @override
   String toString() => message;

@@ -58,52 +58,69 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              const SizedBox(height: 20),
-              Icon(Icons.play_circle_fill, size: 50, color: AppColors.primary),
-              const SizedBox(height: 8),
-              Text('NOVAFLIX', style: AppTypography.headlineMd.copyWith(letterSpacing: 3, fontWeight: FontWeight.w900)),
-              const SizedBox(height: 24),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: _step / 3,
-                  backgroundColor: AppColors.surfaceContainerHighest,
-                  valueColor: AlwaysStoppedAnimation(AppColors.primary),
-                  minHeight: 4,
-                ),
-              ),
-              const SizedBox(height: 32),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                child: _step == 1 ? _step1() : (_step == 2 ? _step2() : _step3()),
-              ),
-              const SizedBox(height: 32),
-              Row(
+        child: Stack(
+          children: [
+            SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
                 children: [
-                  if (_step > 1)
-                    Expanded(
-                      child: AppButton(label: 'Back', onPressed: () => setState(() => _step--), outlined: true, fullWidth: true),
-                    ),
-                  if (_step > 1) const SizedBox(width: 12),
-                  Expanded(
-                    child: AppButton(
-                      label: _step == 3 ? 'Complete' : 'Continue',
-                      onPressed: _submit,
-                      loading: authState.status == AuthStatus.loading,
+                  const SizedBox(height: 20),
+                  Icon(Icons.play_circle_fill, size: 50, color: AppColors.primary),
+                  const SizedBox(height: 8),
+                  Text('NOVAFLIX', style: AppTypography.headlineMd.copyWith(letterSpacing: 3, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 24),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: _step / 3,
+                      backgroundColor: AppColors.surfaceContainerHighest,
+                      valueColor: AlwaysStoppedAnimation(AppColors.primary),
+                      minHeight: 4,
                     ),
                   ),
+                  const SizedBox(height: 32),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    child: _step == 1 ? _step1() : (_step == 2 ? _step2() : _step3()),
+                  ),
+                  const SizedBox(height: 32),
+                  Row(
+                    children: [
+                      if (_step > 1)
+                        Expanded(
+                          child: AppButton(label: 'Back', onPressed: () => setState(() => _step--), outlined: true, fullWidth: true),
+                        ),
+                      if (_step > 1) const SizedBox(width: 12),
+                      Expanded(
+                        child: AppButton(
+                          label: _step == 3 ? 'Complete' : 'Continue',
+                          onPressed: _submit,
+                          loading: authState.status == AuthStatus.loading,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (authState.error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(authState.error!, style: const TextStyle(color: AppColors.error, fontSize: 13)),
+                  ],
                 ],
               ),
-              if (authState.error != null) ...[
-                const SizedBox(height: 12),
-                Text(authState.error!, style: const TextStyle(color: AppColors.error, fontSize: 13)),
-              ],
-            ],
-          ),
+            ),
+            Positioned(
+              top: 8,
+              left: 12,
+              child: AppBackButton(
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go('/home');
+                  }
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );

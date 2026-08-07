@@ -194,6 +194,9 @@ export default function WatchParty() {
           case 'joined':
             setConnectedUsers(msg.users || [])
             break
+          case 'chat-history':
+            setMessages(msg.messages || [])
+            break
           case 'user-joined':
             setConnectedUsers((prev) => [...prev, msg.userId])
             break

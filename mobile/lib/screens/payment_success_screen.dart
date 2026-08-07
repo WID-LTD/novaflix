@@ -5,6 +5,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../services/api_service.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/ui/index.dart';
 
 class PaymentSuccessScreen extends ConsumerWidget {
   const PaymentSuccessScreen({super.key});
@@ -78,7 +79,7 @@ class PaymentSuccessScreen extends ConsumerWidget {
             loading: () => Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const CircularProgressIndicator(),
+                const LoadingSpinner(logo: true),
                 const SizedBox(height: 24),
                 Text('Verifying Payment...', style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant)),
               ],

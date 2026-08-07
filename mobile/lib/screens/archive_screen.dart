@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../services/api_service.dart';
+import '../widgets/ui/index.dart';
 
 final _archiveProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final api = ref.read(apiServiceProvider);
@@ -70,7 +71,7 @@ class ArchiveScreen extends ConsumerWidget {
               );
             },
           ),
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const LoadingSpinner(logo: true),
         error: (e, _) => Center(child: Text('Error: $e', style: TextStyle(color: AppColors.error))),
       ),
     );

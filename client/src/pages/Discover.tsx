@@ -59,10 +59,16 @@ export default function Discover() {
   const [sort, setSort] = useState(initialSort)
   const [genre, setGenre] = useState('')
   const [type, setType] = useState<'all' | 'movie' | 'tv'>(initialType as any)
+  const [searchInput, setSearchInput] = useState('')
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<MediaItem[]>([])
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(searchInput.trim()), 300)
+    return () => clearTimeout(t)
+  }, [searchInput])
 
   useEffect(() => {
     async function load() {
@@ -104,8 +110,8 @@ export default function Discover() {
         <div className="mb-6">
           <SearchInput
             placeholder="Search within discover..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             onSubmit={handleSearch}
           />
         </div>
@@ -158,7 +164,7 @@ export default function Discover() {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-gutter">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-7">
             {Array.from({ length: 12 }).map((_, i) => (
               <div key={i}>
                 <Skeleton variant="poster" className="w-full" />
@@ -179,7 +185,7 @@ export default function Discover() {
           <div
             className={
               viewMode === 'grid'
-                ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-gutter'
+                ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-7'
                 : 'flex flex-col gap-3'
             }
           >
