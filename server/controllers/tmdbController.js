@@ -37,6 +37,44 @@ export function details(req, res) {
   const { id, type } = req.query
   if (!id) return res.status(400).json({ error: 'TMDB ID is required' })
 
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+
+  if (isUuid || type === 'creator') {
+    pool.query(
+      `SELECT * FROM uploads WHERE id = $1::uuid OR id::text = $1`,
+      [id]
+    )
+      .then(({ rows }) => {
+        const upload = rows[0]
+        if (!upload) {
+          return res.json({ success: false, error: 'Content not found' })
+        }
+        const base = {
+          id: upload.id,
+          title: upload.title,
+          year: upload.created_at ? new Date(upload.created_at).getFullYear().toString() : '',
+          releaseDate: upload.created_at || null,
+          poster: upload.thumbnail_url || null,
+          backdrop: upload.thumbnail_url || null,
+          overview: upload.description || '',
+          rating: 0,
+          genres: upload.genre ? [upload.genre] : [],
+          trailerKey: null,
+          type: 'movie',
+          premium: false,
+          runtime: upload.duration_seconds || null,
+          source: 'creator',
+          creatorViewCount: upload.views || 0,
+        }
+        res.json({ success: true, data: base })
+      })
+      .catch((err) => {
+        console.error(err.message)
+        res.json({ success: false, error: 'Failed to fetch details' })
+      })
+    return
+  }
+
   const mediaType = type === 'tv' ? 'tv' : 'movie'
   const tmdb = req.app.locals.tmdb
 

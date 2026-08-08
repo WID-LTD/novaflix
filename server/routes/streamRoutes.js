@@ -5,6 +5,7 @@ import * as streamController from '../controllers/streamController.js'
 const router = Router()
 
 router.get('/source', authMiddleware, streamController.source)
+router.get('/stream/creator/:file', streamController.streamCreatorUpload)
 router.get('/manifest-info', authMiddleware, streamController.manifestInfo)
 router.get('/download', authMiddleware, streamController.download)
 router.get('/proxy/*', streamController.proxy)

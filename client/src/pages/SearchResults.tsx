@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useSearchParams, Link } from 'react-router-dom'
+import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import Icon from '../components/ui/Icon'
 import { searchAll } from '../lib/api'
 import { API_BASE } from '../lib/config'
@@ -19,6 +19,7 @@ const tabs = [
 
 export default function SearchResults() {
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const query = searchParams.get('q') || ''
   const typeParam = searchParams.get('type') || 'all'
   const [results, setResults] = useState<MediaItem[]>([])
@@ -89,8 +90,11 @@ export default function SearchResults() {
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
                 {filtered.map((item, i) => {
                   if (item.source === 'creator' || item.source === 'archive') {
+                    const open = () => navigate(`/watch?id=${item.id}&type=movie`)
                     return (
-                      <div key={`${item.source}-${item.id}`} className="min-w-0 bg-surface-container-high rounded-xl overflow-hidden border border-white/5">
+                      <div key={`${item.source}-${item.id}`} onClick={open} role="button" tabIndex={0}
+                        onKeyDown={(e) => { if (e.key === 'Enter') open() }}
+                        className="min-w-0 bg-surface-container-high rounded-xl overflow-hidden border border-white/5 cursor-pointer hover:border-primary-container/40 transition-colors">
                         <div className="aspect-[2/3] bg-surface-container relative">
                           {item.poster ? (
                             <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
@@ -103,6 +107,11 @@ export default function SearchResults() {
                             <span className="px-2 py-0.5 rounded-full bg-primary-container/80 text-on-primary-container text-[10px] font-bold uppercase tracking-wider">
                               {item.source === 'creator' ? 'Creator' : 'Archive'}
                             </span>
+                          </div>
+                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity">
+                            <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center backdrop-blur-sm">
+                              <Icon name="play_circle" className="w-7 h-7 text-on-surface" />
+                            </div>
                           </div>
                         </div>
                         <div className="p-3">

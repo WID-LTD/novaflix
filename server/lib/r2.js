@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
+import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
 
 const R2_ENDPOINT = process.env.R2_ENDPOINT
 const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID
@@ -57,6 +57,30 @@ export async function deleteFile(key) {
     return { success: true }
   } catch (err) {
     console.error('[r2] Delete error:', err.message)
+    return { success: false, error: err.message }
+  }
+}
+
+// Stream an object supporting HTTP Range requests (for video seeking).
+export async function streamFile(key, rangeHeader) {
+  const client = getClient()
+  if (!client) return { success: false, error: 'Storage not configured' }
+  try {
+    const command = new GetObjectCommand({
+      Bucket: R2_BUCKET,
+      Key: key,
+      Range: rangeHeader,
+    })
+    const { Body, ContentLength, ContentType, ContentRange } = await client.send(command)
+    return {
+      success: true,
+      stream: Body,
+      contentLength: ContentLength,
+      contentType: ContentType,
+      contentRange: ContentRange,
+    }
+  } catch (err) {
+    console.error('[r2] Read error:', err.message)
     return { success: false, error: err.message }
   }
 }

@@ -5,7 +5,8 @@ import { fileURLToPath } from 'url'
 import { spawn } from 'child_process'
 import { getStreamUrl } from '../scraper.mjs'
 import { cacheClear, cacheStats } from '../providers/cache.js'
-import { getActiveSessionCount } from '../db.js'
+import { getActiveSessionCount, getUploadById } from '../db.js'
+import { streamFile } from '../lib/r2.js'
 import { PLAN_FEATURES } from './planUtils.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -94,6 +95,25 @@ function formatSize(bytes) {
 export async function source(req, res) {
   const { id, type, season, episode } = req.query
   if (!id) return res.status(400).json({ error: 'TMDB ID is required' })
+
+  // Creator uploads: a UUID resolves to a direct R2/S3 file. Serve it directly.
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+  if (isUuid || (type === 'creator')) {
+    const upload = await getUploadById(id)
+    if (upload && upload.filename && upload.status === 'active') {
+      return res.json({
+        success: true,
+        streamUrl: `/api/stream/creator/${id}.mp4`,
+        directUrl: `/api/stream/creator/${id}.mp4`,
+        embedUrl: null,
+        provider: 'creator',
+        providerMode: 'file',
+        subtitles: [],
+        backups: [],
+        source: 'creator',
+      })
+    }
+  }
 
   // Concurrent screen enforcement (skip for anonymous/unauthed)
   if (req.userId && req.userId !== 'anonymous') {
@@ -466,6 +486,33 @@ async function tryFfmpegFetch(url, ffmpegPath) {
     })
     proc.on('error', reject)
   })
+}
+
+export async function streamCreatorUpload(req, res) {
+  const id = (req.params.file || '').replace(/\.mp4$/i, '')
+  try {
+    const upload = await getUploadById(id)
+    if (!upload || !upload.filename || upload.status !== 'active') {
+      return res.status(404).json({ error: 'Upload not found' })
+    }
+    const parsed = new URL(upload.filename)
+    const key = parsed.pathname.replace(/^\//, '').split('/').slice(1).join('/')
+    const range = req.headers.range
+    const result = await streamFile(key, range)
+    if (!result.success) return res.status(500).json({ error: result.error })
+    if (range) res.status(206)
+    res.set({
+      'Content-Type': result.contentType || 'video/mp4',
+      'Accept-Ranges': 'bytes',
+      'Cache-Control': 'public, max-age=31536000',
+    })
+    if (result.contentLength) res.set('Content-Length', range ? undefined : String(result.contentLength))
+    if (result.contentRange) res.set('Content-Range', result.contentRange)
+    result.stream.pipe(res)
+  } catch (err) {
+    console.error('[stream-creator] Error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
 }
 
 export async function proxy(req, res) {

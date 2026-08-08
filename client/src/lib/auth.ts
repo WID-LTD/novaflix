@@ -370,6 +370,68 @@ export async function getCreatorUploads(token: string): Promise<any> {
   }
 }
 
+export async function youtubePreview(token: string, url: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/creator/youtube/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ url }),
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function startYoutubeImport(
+  token: string,
+  data: { url: string; height: number; title?: string; description?: string; genre?: string }
+): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/creator/youtube/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function getYoutubeImportStatus(token: string, jobId: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/creator/youtube/imports/${jobId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function updateCreatorUpload(
+  token: string,
+  uploadId: string,
+  data: { title?: string; description?: string; genre?: string; posterFile?: File }
+): Promise<any> {
+  try {
+    const formData = new FormData()
+    if (data.title) formData.append('title', data.title)
+    if (data.description !== undefined) formData.append('description', data.description)
+    if (data.genre) formData.append('genre', data.genre)
+    if (data.posterFile) formData.append('thumbnail', data.posterFile)
+    const res = await fetch(`${BASE}/creator/uploads/${uploadId}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
 export async function sendTip(token: string, creatorId: string, amount: number, message?: string): Promise<any> {
   try {
     const res = await fetch(`${BASE}/tips`, {

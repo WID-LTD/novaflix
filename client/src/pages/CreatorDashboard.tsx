@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import Icon from '../components/ui/Icon'
-import { getToken, getCreatorDashboard, getCreatorComments, getPayoutHistory, requestWithdraw, createPayoutRecipient, getArtistGraph, getCreatorEarnings, getMyGlowGifts } from '../lib/auth'
+import { getToken, getCreatorDashboard, getCreatorComments, getPayoutHistory, requestWithdraw, createPayoutRecipient, getArtistGraph, getCreatorEarnings, getMyGlowGifts, updateCreatorUpload } from '../lib/auth'
 import Skeleton from '../components/ui/Skeleton'
+import Button from '../components/ui/Button'
+import Input from '../components/ui/Input'
+import Modal from '../components/ui/Modal'
+import { useToast } from '../components/ui/Toast'
 
 const tabs = ['Overview', 'Content', 'Audience', 'Engagement', 'Payouts', 'Network', 'Analytics']
 
@@ -34,6 +38,42 @@ export default function CreatorDashboard() {
   const [accountName, setAccountName] = useState('')
   const [withdrawAmount, setWithdrawAmount] = useState('')
   const [payoutMsg, setPayoutMsg] = useState('')
+
+  const [editingUpload, setEditingUpload] = useState<any>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editDesc, setEditDesc] = useState('')
+  const [editGenre, setEditGenre] = useState('')
+  const [editPoster, setEditPoster] = useState<File | null>(null)
+  const [editSaving, setEditSaving] = useState(false)
+  const toast = useToast()
+
+  const openEdit = (u: any) => {
+    setEditingUpload(u)
+    setEditTitle(u.title || '')
+    setEditDesc(u.description || '')
+    setEditGenre(u.genre || '')
+    setEditPoster(null)
+  }
+
+  const saveEdit = async () => {
+    const token = getToken()
+    if (!token || !editingUpload) return
+    setEditSaving(true)
+    const res = await updateCreatorUpload(token, editingUpload.id, {
+      title: editTitle,
+      description: editDesc,
+      genre: editGenre,
+      posterFile: editPoster || undefined,
+    })
+    setEditSaving(false)
+    if (res.success) {
+      toast.success('Movie details updated')
+      setEditingUpload(null)
+      getCreatorDashboard(token).then((d) => { if (d.success) setData(d.dashboard) })
+    } else {
+      toast.error(res.error || 'Failed to update')
+    }
+  }
 
   useEffect(() => {
     const token = getToken()
@@ -152,6 +192,9 @@ export default function CreatorDashboard() {
                       <p className="text-on-surface-variant/60 text-xs">{u.views || 0} views · {Math.round((u.minutes_watched || 0) / 60)}h watched</p>
                     </div>
                     <div className="flex items-center gap-3 text-xs text-on-surface-variant/60">
+                      <button onClick={() => openEdit(u)} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-colors">
+                        <Icon name="edit" size="sm" /> Edit
+                      </button>
                       <span>${parseFloat(u.revenue || 0).toFixed(2)}</span>
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
                         u.status === 'published' ? 'bg-primary-container/10 text-primary-container' : 'bg-white/10 text-on-surface-variant'
@@ -477,6 +520,62 @@ export default function CreatorDashboard() {
           renderTabContent()
         )}
       </div>
+
+      <Modal isOpen={!!editingUpload} onClose={() => setEditingUpload(null)} title="Edit Movie Details">
+        {editingUpload && (
+          <div className="space-y-4">
+            <div>
+              <label className="text-on-surface-variant text-sm mb-1.5 block">Title</label>
+              <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="Movie title" />
+            </div>
+            <div>
+              <label className="text-on-surface-variant text-sm mb-1.5 block">Genre</label>
+              <select
+                value={editGenre}
+                onChange={(e) => setEditGenre(e.target.value)}
+                className="w-full bg-surface-variant/20 border border-outline/30 rounded-xl px-4 py-3 text-sm on-surface focus:outline-none focus:border-primary-container"
+              >
+                <option value="">Select genre</option>
+                <option value="action">Action</option>
+                <option value="comedy">Comedy</option>
+                <option value="drama">Drama</option>
+                <option value="horror">Horror</option>
+                <option value="sci-fi">Sci-Fi</option>
+                <option value="documentary">Documentary</option>
+                <option value="animation">Animation</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-on-surface-variant text-sm mb-1.5 block">Description</label>
+              <textarea
+                value={editDesc}
+                onChange={(e) => setEditDesc(e.target.value)}
+                rows={4}
+                placeholder="Tell users about your movie..."
+                className="w-full bg-surface-variant/20 border border-outline/30 rounded-xl px-4 py-3 text-sm on-surface placeholder-on-surface-variant/50 focus:outline-none focus:border-primary-container resize-none"
+              />
+            </div>
+            <div>
+              <label className="text-on-surface-variant text-sm mb-1.5 block">Poster</label>
+              <div className="flex items-center gap-3">
+                <label className="cursor-pointer px-4 py-2.5 bg-surface-variant/20 border border-outline/30 rounded-xl text-sm on-surface hover:bg-surface-variant/40 transition-colors">
+                  Choose Image
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => setEditPoster(e.target.files?.[0] || null)}
+                  />
+                </label>
+                {editPoster && <span className="text-on-surface-variant text-sm">{editPoster.name}</span>}
+              </div>
+            </div>
+            <Button onClick={saveEdit} size="lg" className="w-full" loading={editSaving}>
+              Save Changes
+            </Button>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

@@ -1,0 +1,27 @@
+# Codemagic configuration for NovaFlix Flutter app.
+# Builds a debug APK that can be sideloaded. See https://docs.codemagic.io/yaml-quick-start/building-a-flutter-app/
+workflows:
+  android-debug-apk:
+    name: NovaFlix Android (Debug APK)
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+      java: 17
+    scripts:
+      - name: Enter app directory
+        script: cd mobile
+      - name: Set up local.properties
+        script: echo "flutter.sdk=$HOME/programs/flutter" > android/local.properties
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Build APK
+        script: flutter build apk --debug
+    artifacts:
+      - mobile/build/app/outputs/flutter-apk/**/*.apk
+      - mobile/build/**/app-debug.apk
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      email:
+        recipients:
+          - successchukwu@gmail.com

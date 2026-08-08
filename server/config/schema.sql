@@ -48,8 +48,19 @@ CREATE TABLE IF NOT EXISTS uploads (
   views BIGINT DEFAULT 0,
   minutes_watched BIGINT DEFAULT 0,
   revenue DECIMAL(10,2) DEFAULT 0,
+  source_type VARCHAR(20) DEFAULT 'file',
+  youtube_id VARCHAR(100) DEFAULT '',
+  youtube_url VARCHAR(500) DEFAULT '',
+  quality VARCHAR(20) DEFAULT '',
+  duration_seconds INT DEFAULT 0,
   created_at TIMESTAMP DEFAULT NOW()
 );
+
+ALTER TABLE uploads ADD COLUMN IF NOT EXISTS source_type VARCHAR(20) DEFAULT 'file';
+ALTER TABLE uploads ADD COLUMN IF NOT EXISTS youtube_id VARCHAR(100) DEFAULT '';
+ALTER TABLE uploads ADD COLUMN IF NOT EXISTS youtube_url VARCHAR(500) DEFAULT '';
+ALTER TABLE uploads ADD COLUMN IF NOT EXISTS quality VARCHAR(20) DEFAULT '';
+ALTER TABLE uploads ADD COLUMN IF NOT EXISTS duration_seconds INT DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS shorts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

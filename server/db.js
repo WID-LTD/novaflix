@@ -70,11 +70,31 @@ export async function updateUser(id, updates) {
 
 export async function addUpload(upload) {
   const { rows } = await pool.query(
-    `INSERT INTO uploads (id, user_id, title, description, genre, filename, thumbnail_url, filesize, status, views, minutes_watched, revenue)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
-    [upload.id, upload.userId, upload.title, upload.description || '', upload.genre, upload.filename, upload.thumbnailUrl || '', upload.filesize, upload.status || 'pending', upload.views || 0, upload.minutesWatched || 0, upload.revenue || 0]
+    `INSERT INTO uploads (id, user_id, title, description, genre, filename, thumbnail_url, filesize, status, views, minutes_watched, revenue, source_type, youtube_id, youtube_url, quality, duration_seconds)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING *`,
+    [upload.id, upload.userId, upload.title, upload.description || '', upload.genre, upload.filename, upload.thumbnailUrl || '', upload.filesize, upload.status || 'pending', upload.views || 0, upload.minutesWatched || 0, upload.revenue || 0, upload.sourceType || 'file', upload.youtubeId || '', upload.youtubeUrl || '', upload.quality || '', upload.durationSeconds || 0]
   )
   return rows[0]
+}
+
+export async function updateUpload(id, fields) {
+  const allowed = ['title', 'description', 'genre', 'thumbnail_url', 'filename', 'status', 'quality']
+  const cols = []
+  const vals = []
+  let i = 1
+  for (const key of allowed) {
+    if (fields[key] !== undefined) {
+      cols.push(`${key} = $${i++}`)
+      vals.push(fields[key])
+    }
+  }
+  if (cols.length === 0) return null
+  vals.push(id)
+  const { rows } = await pool.query(
+    `UPDATE uploads SET ${cols.join(', ')} WHERE id = $${i} RETURNING *`,
+    vals
+  )
+  return rows[0] || null
 }
 
 export async function getUploadsByUserId(userId) {

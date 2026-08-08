@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import Icon from '../components/ui/Icon'
 import { useAuth } from '../lib/AuthContext'
-import { uploadFilm, createEgg } from '../lib/auth'
+import { uploadFilm, createEgg, youtubePreview, startYoutubeImport, getYoutubeImportStatus } from '../lib/auth'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Modal from '../components/ui/Modal'
@@ -33,6 +33,16 @@ export default function Upload() {
   const navigate = useNavigate()
   const toast = useToast()
 
+  const [mode, setMode] = useState<'file' | 'youtube'>('file')
+  const [ytUrl, setYtUrl] = useState('')
+  const [ytInfo, setYtInfo] = useState<any>(null)
+  const [ytPreviewing, setYtPreviewing] = useState(false)
+  const [ytQuality, setYtQuality] = useState<number | null>(null)
+  const [ytJobId, setYtJobId] = useState<string | null>(null)
+  const [ytProgress, setYtProgress] = useState(0)
+  const [ytImporting, setYtImporting] = useState(false)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
   useEffect(() => {
     if (!showEggModal) return
     const t = setTimeout(() => {
@@ -41,6 +51,106 @@ export default function Upload() {
     }, 200)
     return () => clearTimeout(t)
   }, [showEggModal])
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current)
+    }
+  }, [])
+
+  const handleYoutubePreview = async () => {
+    const url = ytUrl.trim()
+    if (!url) {
+      toast.error('Paste a YouTube link first')
+      return
+    }
+    if (!user) {
+      navigate('/login')
+      return
+    }
+    setYtPreviewing(true)
+    setYtInfo(null)
+    setYtQuality(null)
+    const token = localStorage.getItem('novaflix-token') || ''
+    const res = await youtubePreview(token, url)
+    setYtPreviewing(false)
+    if (res.success) {
+      setYtInfo(res.info)
+      if (res.info.heights?.length) setYtQuality(res.info.heights[0])
+      setTitle(res.info.title || title)
+    } else {
+      toast.error(res.error || 'Could not read that video')
+    }
+  }
+
+  const handleYoutubeImport = async () => {
+    if (!user) {
+      navigate('/login')
+      return
+    }
+    if (!ytInfo || !ytQuality) {
+      toast.error('Choose a quality first')
+      return
+    }
+    setYtImporting(true)
+    setYtProgress(0)
+    const token = localStorage.getItem('novaflix-token') || ''
+    const res = await startYoutubeImport(token, {
+      url: ytUrl.trim(),
+      height: ytQuality,
+      title: title || ytInfo.title,
+      description,
+      genre,
+    })
+    if (res.success) {
+      setYtJobId(res.jobId)
+      pollRef.current = setInterval(async () => {
+        const status = await getYoutubeImportStatus(token, res.jobId)
+        if (status.success && status.job) {
+          setYtProgress(status.job.progress || 0)
+          if (status.job.status === 'done') {
+            stopPolling()
+            setYtImporting(false)
+            setUploadId(status.job.uploadId || '')
+            setUploaded(true)
+          } else if (status.job.status === 'error') {
+            stopPolling()
+            setYtImporting(false)
+            toast.error(status.job.error || 'Import failed')
+          }
+        }
+      }, 2500)
+    } else {
+      setYtImporting(false)
+      toast.error(res.error || 'Import failed')
+    }
+  }
+
+  const stopPolling = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current)
+      pollRef.current = null
+    }
+  }
+
+  const resetYoutube = () => {
+    stopPolling()
+    setYtUrl('')
+    setYtInfo(null)
+    setYtQuality(null)
+    setYtJobId(null)
+    setYtProgress(0)
+    setYtImporting(false)
+  }
+
+  const handleMode = (m: 'file' | 'youtube') => {
+    stopPolling()
+    setMode(m)
+    setYtInfo(null)
+    setYtQuality(null)
+    setYtProgress(0)
+    setYtImporting(false)
+  }
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -150,7 +260,7 @@ export default function Upload() {
   return (
     <div className="min-h-screen px-margin-mobile md:px-margin-desktop pt-6 md:pt-10 pb-nav">
       <div className="max-w-2xl mx-auto">
-        <div className="flex items-center gap-3 mb-8">
+        <div className="flex items-center gap-3 mb-6">
           <Icon name="cloud_upload" className="w-8 h-8 text-primary-container" />
           <div>
             <h1 className="text-headline-md font-bold">Upload Your Film</h1>
@@ -158,7 +268,29 @@ export default function Upload() {
           </div>
         </div>
 
+        <div className="grid grid-cols-2 gap-1 p-1 bg-surface-container-high rounded-xl border border-white/5 mb-6">
+          <button
+            type="button"
+            onClick={() => handleMode('file')}
+            className={`flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              mode === 'file' ? 'bg-primary-container/20 text-on-surface' : 'text-on-surface-variant/60 hover:text-on-surface'
+            }`}
+          >
+            <Icon name="upload_file" size="sm" /> Upload File
+          </button>
+          <button
+            type="button"
+            onClick={() => handleMode('youtube')}
+            className={`flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              mode === 'youtube' ? 'bg-primary-container/20 text-on-surface' : 'text-on-surface-variant/60 hover:text-on-surface'
+            }`}
+          >
+            <Icon name="play_circle" size="sm" /> From YouTube
+          </button>
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-6">
+          {mode === 'file' && (
           <div
             onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
             onDragLeave={() => setDragOver(false)}
@@ -208,7 +340,97 @@ export default function Upload() {
               </div>
             )}
           </div>
+          )}
 
+          {mode === 'youtube' && (
+            <div className="border-2 border-dashed border-white/10 rounded-xl p-6 text-center">
+              <Icon name="play_circle" className="w-10 h-10 text-red-400 mx-auto mb-3" />
+              <p className="text-on-surface-variant text-sm mb-1">
+                Paste a YouTube link and we&rsquo;ll import it into a quality you choose.
+              </p>
+              <p className="text-on-surface-variant/60 text-xs mb-4">
+                The video is fetched on our servers and stored to NovaFlix storage.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+                <Input
+                  placeholder="https://youtube.com/watch?v=..."
+                  value={ytUrl}
+                  onChange={(e) => setYtUrl(e.target.value)}
+                  readOnly={ytImporting}
+                />
+                <Button
+                  type="button"
+                  onClick={handleYoutubePreview}
+                  loading={ytPreviewing}
+                  disabled={ytImporting}
+                >
+                  Preview
+                </Button>
+              </div>
+
+              {ytInfo && !ytImporting && (
+                <div className="mt-6 space-y-4 text-left max-w-md mx-auto">
+                  <div className="flex items-center gap-4">
+                    {ytInfo.thumbnail && (
+                      <img
+                        src={ytInfo.thumbnail}
+                        alt={ytInfo.title}
+                        className="w-28 aspect-video object-cover rounded-lg bg-black"
+                      />
+                    )}
+                    <div className="min-w-0">
+                      <p className="font-label-md text-label-md text-on-surface truncate">{ytInfo.title}</p>
+                      <p className="text-on-surface-variant/60 text-xs mt-1">
+                        {ytInfo.durationLabel || `${Math.round(ytInfo.duration / 60)} min`}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-on-surface-variant text-sm mb-2">Choose quality</p>
+                    <div className="flex flex-wrap gap-2">
+                      {ytInfo.heights.map((h: number) => (
+                        <button
+                          key={h}
+                          type="button"
+                          onClick={() => setYtQuality(h)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                            ytQuality === h
+                              ? 'border-primary-container bg-primary-container/10 text-on-surface'
+                              : 'border-outline/30 text-on-surface-variant hover:border-outline/60'
+                          }`}
+                        >
+                          {h}p
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {ytImporting && (
+                <div className="mt-6 max-w-md mx-auto">
+                  <div className="flex justify-between text-sm mb-2">
+                    <span className="text-on-surface-variant">Importing from YouTube{ytProgress > 0 ? '…' : ''}</span>
+                    <span className="text-primary-container font-mono">{ytProgress}%</span>
+                  </div>
+                  <div className="h-2.5 rounded-full bg-white/10 overflow-hidden">
+                    <div
+                      className="h-full bg-primary-container rounded-full transition-all duration-500"
+                      style={{ width: `${Math.max(ytProgress, 2)}%` }}
+                    />
+                  </div>
+                  {ytProgress >= 99 ? (
+                    <p className="text-xs text-on-surface-variant/60 mt-3">Merging & storing your video…</p>
+                  ) : (
+                    <p className="text-xs text-on-surface-variant/60 mt-3">
+                      {ytProgress === 0 ? 'Starting download…' : `Downloaded ${ytProgress}%`}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           <div className="grid md:grid-cols-2 gap-gutter">
             <div>
               <label className="text-on-surface-variant text-sm mb-1.5 block">
@@ -277,15 +499,28 @@ export default function Upload() {
             </div>
           </div>
 
-          <Button
-            type="submit"
-            size="lg"
-            className="w-full"
-            loading={uploading}
-            disabled={!title || !videoFile || !genre || !description}
-          >
-            {uploading ? 'Uploading...' : 'Upload Film'}
-          </Button>
+          {mode === 'file' ? (
+            <Button
+              type="submit"
+              size="lg"
+              className="w-full"
+              loading={uploading}
+              disabled={!title || !videoFile || !genre || !description}
+            >
+              {uploading ? 'Uploading...' : 'Upload Film'}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="lg"
+              className="w-full"
+              onClick={handleYoutubeImport}
+              loading={ytImporting}
+              disabled={!title || !genre || !ytInfo || !ytQuality || ytImporting}
+            >
+              {ytImporting ? `Importing… ${ytProgress}%` : 'Import Film from YouTube'}
+            </Button>
+          )}
 
           <p className="text-on-surface-variant/40 text-xs text-center">
             By uploading, you agree to our Content Guidelines and Terms of Service.

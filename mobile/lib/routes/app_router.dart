@@ -53,6 +53,12 @@ import '../screens/archive_detail_screen.dart';
 import '../screens/red_carpet_screen.dart';
 import '../screens/referrals_screen.dart';
 import '../screens/payment_success_screen.dart';
+import '../screens/news_screen.dart';
+import '../screens/trivia_screen.dart';
+import '../screens/notifications_screen.dart';
+import '../screens/public_profile_screen.dart';
+import '../screens/chat_screen.dart';
+import '../screens/forum_screen.dart';
 import '../widgets/layout/index.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -71,38 +77,90 @@ class AuthNotifier extends ChangeNotifier {
 final routerRefreshNotifier = AuthNotifier();
 
 final _publicRoutes = <String>{
-  '/', '/home', '/splash', '/landing', '/login', '/register', '/verify-email',
-  '/profiles', '/creator/login',
-  '/search', '/search-results', '/tv-shows', '/discover',
-  '/category', '/category/:slug',
-  '/movie/:id', '/tv/:id',
-  '/settings', '/pricing', '/store', '/learn',
+  '/',
+  '/home',
+  '/splash',
+  '/landing',
+  '/login',
+  '/register',
+  '/verify-email',
+  '/profiles',
+  '/creator/login',
+  '/search',
+  '/search-results',
+  '/tv-shows',
+  '/discover',
+  '/category',
+  '/category/:slug',
+  '/movie/:id',
+  '/tv/:id',
+  '/settings',
+  '/pricing',
+  '/store',
+  '/learn',
   '/creators',
-  '/events', '/event/:id', '/red-carpet',
+  '/events',
+  '/event/:id',
+  '/red-carpet',
+  '/news',
+  '/news-article',
 };
 
 bool _isPublicRoute(String location) {
   if (_publicRoutes.contains(location)) return true;
-  if (location.startsWith('/category/') || location.startsWith('/movie/') ||
-      location.startsWith('/tv/') || location.startsWith('/event/') ||
-      location.startsWith('/archive/')) return true;
+  if (location.startsWith('/category/') ||
+      location.startsWith('/movie/') ||
+      location.startsWith('/tv/') ||
+      location.startsWith('/event/') ||
+      location.startsWith('/archive/') ||
+      location.startsWith('/news-article'))
+    return true;
   return false;
 }
 
 final _protectedRoutes = <String>{
-  '/profile', '/watchlist', '/watch', '/upload', '/downloads', '/community',
-  '/hooks', '/archive', '/referrals', '/payment-success', '/watch-party',
-  '/creator', '/creator/analytics', '/creator/catalog', '/creator/products',
-  '/creator/courses', '/creator/events', '/creator/memberships',
-  '/creator/plan-picker', '/creator/campaigns', '/creator/profile',
-  '/admin', '/admin/asset-qc', '/admin/filters', '/admin/localization',
+  '/profile',
+  '/watchlist',
+  '/watch',
+  '/upload',
+  '/downloads',
+  '/community',
+  '/hooks',
+  '/archive',
+  '/referrals',
+  '/payment-success',
+  '/watch-party',
+  '/creator',
+  '/creator/analytics',
+  '/creator/catalog',
+  '/creator/products',
+  '/creator/courses',
+  '/creator/events',
+  '/creator/memberships',
+  '/creator/plan-picker',
+  '/creator/campaigns',
+  '/creator/profile',
+  '/admin',
+  '/admin/asset-qc',
+  '/admin/filters',
+  '/admin/localization',
   '/admin/campaigns',
+  '/trivia',
+  '/notifications',
+  '/chat',
+  '/forum',
 };
 
 bool _isProtectedRoute(String location) {
   if (_protectedRoutes.contains(location)) return true;
-  if (location.startsWith('/creator') || location.startsWith('/admin') ||
-      location.startsWith('/archive/') || location.startsWith('/community')) {
+  if (location.startsWith('/creator') ||
+      location.startsWith('/admin') ||
+      location.startsWith('/archive/') ||
+      location.startsWith('/community') ||
+      location.startsWith('/chat') ||
+      location.startsWith('/forum') ||
+      location.startsWith('/trivia') ||
+      location.startsWith('/user/')) {
     return true;
   }
   return false;
@@ -144,65 +202,309 @@ GoRouter appRouter(WidgetRef ref) {
       GoRoute(path: '/landing', builder: (_, __) => const LandingScreen()),
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
-      GoRoute(path: '/verify-email', builder: (_, __) => const VerifyEmailScreen()),
-      GoRoute(path: '/profiles', builder: (_, __) => const ProfileGatewayScreen()),
-      GoRoute(path: '/creator/login', builder: (_, __) => const CreatorLoginScreen()),
-      GoRoute(path: '/watch', builder: (ctx, state) => WatchScreen(
-        movieId: int.tryParse(state.uri.queryParameters['id'] ?? ''),
-        mediaType: state.uri.queryParameters['type'],
-        streamUrl: state.uri.queryParameters['url'],
-      )),
+      GoRoute(
+        path: '/verify-email',
+        builder: (_, __) => const VerifyEmailScreen(),
+      ),
+      GoRoute(
+        path: '/profiles',
+        builder: (_, __) => const ProfileGatewayScreen(),
+      ),
+      GoRoute(
+        path: '/creator/login',
+        builder: (_, __) => const CreatorLoginScreen(),
+      ),
+      GoRoute(
+        path: '/watch',
+        builder: (ctx, state) => WatchScreen(
+          movieId: int.tryParse(state.uri.queryParameters['id'] ?? ''),
+          mediaType: state.uri.queryParameters['type'],
+          streamUrl: state.uri.queryParameters['url'],
+        ),
+      ),
 
       ShellRoute(
         navigatorKey: _shellNavigatorKey,
         builder: (context, state, child) => AppShell(child: child),
         routes: [
-          GoRoute(path: '/', pageBuilder: (_, s) => NoTransitionPage(child: HomeScreen(key: s.pageKey))),
-          GoRoute(path: '/home', pageBuilder: (_, s) => NoTransitionPage(child: HomeScreen(key: s.pageKey))),
-          GoRoute(path: '/search', pageBuilder: (_, s) => NoTransitionPage(child: const SearchScreen())),
-          GoRoute(path: '/search-results', pageBuilder: (_, s) => NoTransitionPage(child: SearchResultsScreen(query: s.uri.queryParameters['q']))),
-          GoRoute(path: '/tv-shows', pageBuilder: (_, s) => NoTransitionPage(child: const TVShowsScreen())),
-          GoRoute(path: '/discover', pageBuilder: (_, s) => NoTransitionPage(child: const DiscoverScreen())),
-          GoRoute(path: '/category', pageBuilder: (_, s) => NoTransitionPage(child: const CategoryScreen())),
-          GoRoute(path: '/category/:slug', pageBuilder: (_, s) => NoTransitionPage(child: CategoryScreen(slug: s.pathParameters['slug']))),
-          GoRoute(path: '/movie/:id', pageBuilder: (_, s) => NoTransitionPage(child: MovieDetailScreen(movieId: int.parse(s.pathParameters['id']!)))),
-          GoRoute(path: '/tv/:id', pageBuilder: (_, s) => NoTransitionPage(child: MovieDetailScreen(movieId: int.parse(s.pathParameters['id']!)))),
-          GoRoute(path: '/watchlist', pageBuilder: (_, s) => NoTransitionPage(child: const WatchlistScreen())),
-          GoRoute(path: '/profile', pageBuilder: (_, s) => NoTransitionPage(child: const ProfileScreen())),
-          GoRoute(path: '/settings', pageBuilder: (_, s) => NoTransitionPage(child: const SettingsScreen())),
-          GoRoute(path: '/pricing', pageBuilder: (_, s) => NoTransitionPage(child: const PricingScreen())),
-          GoRoute(path: '/upload', pageBuilder: (_, s) => NoTransitionPage(child: const UploadScreen())),
-          GoRoute(path: '/store', pageBuilder: (_, s) => NoTransitionPage(child: const StoreScreen())),
-          GoRoute(path: '/learn', pageBuilder: (_, s) => NoTransitionPage(child: const LearnScreen())),
-          GoRoute(path: '/hooks', pageBuilder: (_, s) => NoTransitionPage(child: const HooksFeedScreen())),
-          GoRoute(path: '/watch-party', pageBuilder: (_, s) => NoTransitionPage(child: const WatchPartyScreen())),
-          GoRoute(path: '/creators', pageBuilder: (_, s) => NoTransitionPage(child: const CreatorsScreen())),
-          GoRoute(path: '/community', pageBuilder: (_, s) => NoTransitionPage(child: const CommunityScreen())),
-          GoRoute(path: '/events', pageBuilder: (_, s) => NoTransitionPage(child: const LiveEventsScreen())),
-          GoRoute(path: '/event/:id', pageBuilder: (_, s) => NoTransitionPage(child: EventDetailScreen(eventId: s.pathParameters['id']))),
-          GoRoute(path: '/downloads', pageBuilder: (_, s) => NoTransitionPage(child: const DownloadsScreen())),
-          GoRoute(path: '/archive', pageBuilder: (_, s) => NoTransitionPage(child: const ArchiveScreen())),
-          GoRoute(path: '/archive/:genre', pageBuilder: (_, s) => NoTransitionPage(child: ArchiveDetailScreen(genre: s.pathParameters['genre']))),
-          GoRoute(path: '/red-carpet', pageBuilder: (_, s) => NoTransitionPage(child: const RedCarpetScreen())),
-          GoRoute(path: '/referrals', pageBuilder: (_, s) => NoTransitionPage(child: const ReferralsScreen())),
-          GoRoute(path: '/payment-success', pageBuilder: (_, s) => NoTransitionPage(child: const PaymentSuccessScreen())),
+          GoRoute(
+            path: '/',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: HomeScreen(key: s.pageKey)),
+          ),
+          GoRoute(
+            path: '/home',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: HomeScreen(key: s.pageKey)),
+          ),
+          GoRoute(
+            path: '/search',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const SearchScreen()),
+          ),
+          GoRoute(
+            path: '/search-results',
+            pageBuilder: (_, s) => NoTransitionPage(
+              child: SearchResultsScreen(query: s.uri.queryParameters['q']),
+            ),
+          ),
+          GoRoute(
+            path: '/tv-shows',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const TVShowsScreen()),
+          ),
+          GoRoute(
+            path: '/discover',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const DiscoverScreen()),
+          ),
+          GoRoute(
+            path: '/category',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const CategoryScreen()),
+          ),
+          GoRoute(
+            path: '/category/:slug',
+            pageBuilder: (_, s) => NoTransitionPage(
+              child: CategoryScreen(slug: s.pathParameters['slug']),
+            ),
+          ),
+          GoRoute(
+            path: '/movie/:id',
+            pageBuilder: (_, s) => NoTransitionPage(
+              child: MovieDetailScreen(
+                movieId: int.parse(s.pathParameters['id']!),
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/tv/:id',
+            pageBuilder: (_, s) => NoTransitionPage(
+              child: MovieDetailScreen(
+                movieId: int.parse(s.pathParameters['id']!),
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/watchlist',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const WatchlistScreen()),
+          ),
+          GoRoute(
+            path: '/profile',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const ProfileScreen()),
+          ),
+          GoRoute(
+            path: '/settings',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const SettingsScreen()),
+          ),
+          GoRoute(
+            path: '/pricing',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const PricingScreen()),
+          ),
+          GoRoute(
+            path: '/upload',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const UploadScreen()),
+          ),
+          GoRoute(
+            path: '/store',
+            pageBuilder: (_, s) => NoTransitionPage(child: const StoreScreen()),
+          ),
+          GoRoute(
+            path: '/learn',
+            pageBuilder: (_, s) => NoTransitionPage(child: const LearnScreen()),
+          ),
+          GoRoute(
+            path: '/hooks',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const HooksFeedScreen()),
+          ),
+          GoRoute(
+            path: '/watch-party',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const WatchPartyScreen()),
+          ),
+          GoRoute(
+            path: '/creators',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const CreatorsScreen()),
+          ),
+          GoRoute(
+            path: '/community',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const CommunityScreen()),
+          ),
+          GoRoute(
+            path: '/events',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const LiveEventsScreen()),
+          ),
+          GoRoute(
+            path: '/event/:id',
+            pageBuilder: (_, s) => NoTransitionPage(
+              child: EventDetailScreen(eventId: s.pathParameters['id']),
+            ),
+          ),
+          GoRoute(
+            path: '/downloads',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const DownloadsScreen()),
+          ),
+          GoRoute(
+            path: '/archive',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const ArchiveScreen()),
+          ),
+          GoRoute(
+            path: '/archive/:genre',
+            pageBuilder: (_, s) => NoTransitionPage(
+              child: ArchiveDetailScreen(genre: s.pathParameters['genre']),
+            ),
+          ),
+          GoRoute(
+            path: '/red-carpet',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const RedCarpetScreen()),
+          ),
+          GoRoute(
+            path: '/referrals',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const ReferralsScreen()),
+          ),
+          GoRoute(
+            path: '/payment-success',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const PaymentSuccessScreen()),
+          ),
+          GoRoute(
+            path: '/news',
+            pageBuilder: (_, s) => NoTransitionPage(child: const NewsScreen()),
+          ),
+          GoRoute(
+            path: '/news-article',
+            pageBuilder: (_, s) => NoTransitionPage(
+              child: NewsScreen(articleUrl: s.uri.queryParameters['url']),
+            ),
+          ),
+          GoRoute(
+            path: '/trivia',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const TriviaScreen()),
+          ),
+          GoRoute(
+            path: '/notifications',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const NotificationsScreen()),
+          ),
+          GoRoute(
+            path: '/chat',
+            pageBuilder: (_, s) => NoTransitionPage(
+              child: ChatScreen(
+                otherUserId: int.tryParse(s.uri.queryParameters['with'] ?? ''),
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/forum',
+            pageBuilder: (_, s) => NoTransitionPage(child: const ForumScreen()),
+          ),
+          GoRoute(
+            path: '/forum/:topicId',
+            pageBuilder: (_, s) => NoTransitionPage(
+              child: ForumScreen(
+                topicId: int.tryParse(s.pathParameters['topicId'] ?? ''),
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/user/:id',
+            pageBuilder: (_, s) => NoTransitionPage(
+              child: PublicProfileScreen(
+                userId: int.tryParse(s.pathParameters['id'] ?? '0') ?? 0,
+              ),
+            ),
+          ),
 
-          GoRoute(path: '/creator', pageBuilder: (_, s) => NoTransitionPage(child: const CreatorDashboardScreen())),
-          GoRoute(path: '/creator/analytics', pageBuilder: (_, s) => NoTransitionPage(child: const CreatorAnalyticsScreen())),
-          GoRoute(path: '/creator/catalog', pageBuilder: (_, s) => NoTransitionPage(child: const CreatorCatalogScreen())),
-          GoRoute(path: '/creator/products', pageBuilder: (_, s) => NoTransitionPage(child: const CreatorProductsScreen())),
-          GoRoute(path: '/creator/courses', pageBuilder: (_, s) => NoTransitionPage(child: const CreatorCoursesScreen())),
-          GoRoute(path: '/creator/events', pageBuilder: (_, s) => NoTransitionPage(child: const CreatorEventsManagerScreen())),
-          GoRoute(path: '/creator/memberships', pageBuilder: (_, s) => NoTransitionPage(child: const CreatorMembershipManagerScreen())),
-          GoRoute(path: '/creator/plan-picker', pageBuilder: (_, s) => NoTransitionPage(child: const CreatorPlanPickerScreen())),
-          GoRoute(path: '/creator/campaigns', pageBuilder: (_, s) => NoTransitionPage(child: const CreatorCampaignsScreen())),
-          GoRoute(path: '/creator/profile', pageBuilder: (_, s) => NoTransitionPage(child: const CreatorProfileHubScreen())),
+          GoRoute(
+            path: '/creator',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const CreatorDashboardScreen()),
+          ),
+          GoRoute(
+            path: '/creator/analytics',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const CreatorAnalyticsScreen()),
+          ),
+          GoRoute(
+            path: '/creator/catalog',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const CreatorCatalogScreen()),
+          ),
+          GoRoute(
+            path: '/creator/products',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const CreatorProductsScreen()),
+          ),
+          GoRoute(
+            path: '/creator/courses',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const CreatorCoursesScreen()),
+          ),
+          GoRoute(
+            path: '/creator/events',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const CreatorEventsManagerScreen()),
+          ),
+          GoRoute(
+            path: '/creator/memberships',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const CreatorMembershipManagerScreen()),
+          ),
+          GoRoute(
+            path: '/creator/plan-picker',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const CreatorPlanPickerScreen()),
+          ),
+          GoRoute(
+            path: '/creator/campaigns',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const CreatorCampaignsScreen()),
+          ),
+          GoRoute(
+            path: '/creator/profile',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const CreatorProfileHubScreen()),
+          ),
 
-          GoRoute(path: '/admin', pageBuilder: (_, s) => NoTransitionPage(child: const AdminDashboardScreen())),
-          GoRoute(path: '/admin/asset-qc', pageBuilder: (_, s) => NoTransitionPage(child: const AdminAssetQCScreen())),
-          GoRoute(path: '/admin/filters', pageBuilder: (_, s) => NoTransitionPage(child: const AdminFiltersScreen())),
-          GoRoute(path: '/admin/localization', pageBuilder: (_, s) => NoTransitionPage(child: const AdminLocalizationScreen())),
-          GoRoute(path: '/admin/campaigns', pageBuilder: (_, s) => NoTransitionPage(child: const AdminCampaignsScreen())),
+          GoRoute(
+            path: '/admin',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const AdminDashboardScreen()),
+          ),
+          GoRoute(
+            path: '/admin/asset-qc',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const AdminAssetQCScreen()),
+          ),
+          GoRoute(
+            path: '/admin/filters',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const AdminFiltersScreen()),
+          ),
+          GoRoute(
+            path: '/admin/localization',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const AdminLocalizationScreen()),
+          ),
+          GoRoute(
+            path: '/admin/campaigns',
+            pageBuilder: (_, s) =>
+                NoTransitionPage(child: const AdminCampaignsScreen()),
+          ),
         ],
       ),
       GoRoute(path: '/:path(.*)', builder: (_, __) => const NotFoundScreen()),

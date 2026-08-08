@@ -130,7 +130,10 @@ export default function VideoPlayer({
     setLoading(true)
     setError(null)
 
-    if (Hls.isSupported()) {
+    // Creator uploads are served as direct mp4 files from storage — no HLS.
+    const isDirectFile = /\.(mp4|webm|mov|m4v|mkv)(\?.*)?$/i.test(streamUrl)
+
+    if (!isDirectFile && Hls.isSupported()) {
       if (hlsRef.current) hlsRef.current.destroy()
       const hls = new Hls({
         maxBufferLength: 60,
@@ -164,6 +167,12 @@ export default function VideoPlayer({
               setLoading(false)
           }
         }
+      })
+    } else if (isDirectFile) {
+      video.src = streamUrl
+      video.addEventListener('loadedmetadata', () => {
+        setLoading(false)
+        video.play().catch(() => setPlaying(false))
       })
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = streamUrl

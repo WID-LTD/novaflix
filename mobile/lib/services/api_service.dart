@@ -17,43 +17,49 @@ class ApiService {
   late final Dio _dio;
 
   ApiService() {
-    _dio = Dio(BaseOptions(
-      baseUrl: baseUrl,
-      connectTimeout: const Duration(seconds: 15),
-      receiveTimeout: const Duration(seconds: 15),
-      headers: {'Content-Type': 'application/json'},
-    ));
+    _dio = Dio(
+      BaseOptions(
+        baseUrl: baseUrl,
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 15),
+        headers: {'Content-Type': 'application/json'},
+      ),
+    );
 
-    _dio.interceptors.add(InterceptorsWrapper(
-      onRequest: (options, handler) async {
-        final token = await _storage.read(key: _tokenKey);
-        if (token != null) {
-          options.headers['Authorization'] = 'Bearer $token';
-        } else {
-          final cToken = await _storage.read(key: _creatorTokenKey);
-          if (cToken != null) {
-            options.headers['Authorization'] = 'Bearer $cToken';
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) async {
+          final token = await _storage.read(key: _tokenKey);
+          if (token != null) {
+            options.headers['Authorization'] = 'Bearer $token';
+          } else {
+            final cToken = await _storage.read(key: _creatorTokenKey);
+            if (cToken != null) {
+              options.headers['Authorization'] = 'Bearer $cToken';
+            }
           }
-        }
-        handler.next(options);
-      },
-      onError: (error, handler) {
-        if (error.response?.statusCode == 401) {
-          _storage.delete(key: _tokenKey);
-          _storage.delete(key: _creatorTokenKey);
-        }
-        handler.next(error);
-      },
-    ));
+          handler.next(options);
+        },
+        onError: (error, handler) {
+          if (error.response?.statusCode == 401) {
+            _storage.delete(key: _tokenKey);
+            _storage.delete(key: _creatorTokenKey);
+          }
+          handler.next(error);
+        },
+      ),
+    );
   }
 
   Dio get dio => _dio;
 
   Future<String?> getToken() => _storage.read(key: _tokenKey);
-  Future<void> saveToken(String token) => _storage.write(key: _tokenKey, value: token);
+  Future<void> saveToken(String token) =>
+      _storage.write(key: _tokenKey, value: token);
   Future<void> deleteToken() => _storage.delete(key: _tokenKey);
   Future<String?> getCreatorToken() => _storage.read(key: _creatorTokenKey);
-  Future<void> saveCreatorToken(String token) => _storage.write(key: _creatorTokenKey, value: token);
+  Future<void> saveCreatorToken(String token) =>
+      _storage.write(key: _creatorTokenKey, value: token);
   Future<void> deleteCreatorToken() => _storage.delete(key: _creatorTokenKey);
 
   static const _deviceIdKey = 'novaflix-device-id';
@@ -68,7 +74,10 @@ class ApiService {
   String _randomHex(int length) {
     const chars = '0123456789abcdef';
     final rnd = Random();
-    return List.generate(length, (_) => chars[rnd.nextInt(chars.length)]).join();
+    return List.generate(
+      length,
+      (_) => chars[rnd.nextInt(chars.length)],
+    ).join();
   }
 
   Future<Response> get(String path, {Map<String, dynamic>? params}) =>
@@ -80,19 +89,33 @@ class ApiService {
   Future<Response> delete(String path) => _dio.delete(path);
   Future<Response> patch(String path, {Map<String, dynamic>? data}) =>
       _dio.patch(path, data: data);
-  Future<Response> uploadFile(String path, FormData data) => _dio.post(path, data: data);
+  Future<Response> uploadFile(String path, FormData data) =>
+      _dio.post(path, data: data);
 
   Future<Response> register(String email, String password, String? name) =>
-      post('/auth/register', data: {'email': email, 'password': password, if (name != null) 'name': name});
+      post(
+        '/auth/register',
+        data: {
+          'email': email,
+          'password': password,
+          if (name != null) 'name': name,
+        },
+      );
 
   Future<Response> login(String email, String password) async {
     final deviceId = await getDeviceId();
-    return post('/auth/login', data: {'email': email, 'password': password, 'deviceId': deviceId});
+    return post(
+      '/auth/login',
+      data: {'email': email, 'password': password, 'deviceId': deviceId},
+    );
   }
 
   Future<Response> loginVerify(int userId, String code) async {
     final deviceId = await getDeviceId();
-    return post('/auth/login/verify', data: {'userId': userId, 'code': code, 'deviceId': deviceId});
+    return post(
+      '/auth/login/verify',
+      data: {'userId': userId, 'code': code, 'deviceId': deviceId},
+    );
   }
 
   Future<Response> verifyEmail(int userId, String code) =>
@@ -102,24 +125,42 @@ class ApiService {
       post('/auth/resend-verification', data: {'userId': userId});
 
   Future<Response> getMe() => get('/auth/me');
-  Future<Response> updateProfile(Map<String, dynamic> data) => put('/user/profile', data: data);
+  Future<Response> updateProfile(Map<String, dynamic> data) =>
+      put('/user/profile', data: data);
   Future<Response> getUserStats() => get('/user/stats');
-  Future<Response> uploadAvatar(FormData data) => uploadFile('/user/avatar', data);
-  Future<Response> changePassword(String current, String newPw) =>
-      post('/user/change-password', data: {'currentPassword': current, 'newPassword': newPw});
+  Future<Response> uploadAvatar(FormData data) =>
+      uploadFile('/user/avatar', data);
+  Future<Response> changePassword(String current, String newPw) => post(
+    '/user/change-password',
+    data: {'currentPassword': current, 'newPassword': newPw},
+  );
   Future<Response> deleteAccount() => delete('/user/account');
-  Future<Response> recordWatch(Map<String, dynamic> data) => post('/user/watch-history', data: data);
+  Future<Response> recordWatch(Map<String, dynamic> data) =>
+      post('/user/watch-history', data: data);
   Future<Response> getWatchHistory() => get('/user/watch-history');
 
-  Future<Response> creatorRegister(String email, String password, String? name) =>
-      post('/creator/auth/register', data: {'email': email, 'password': password, 'name': name});
+  Future<Response> creatorRegister(
+    String email,
+    String password,
+    String? name,
+  ) => post(
+    '/creator/auth/register',
+    data: {'email': email, 'password': password, 'name': name},
+  );
   Future<Response> creatorLogin(String email, String password) async {
     final deviceId = await getDeviceId();
-    return post('/creator/auth/login', data: {'email': email, 'password': password, 'deviceId': deviceId});
+    return post(
+      '/creator/auth/login',
+      data: {'email': email, 'password': password, 'deviceId': deviceId},
+    );
   }
+
   Future<Response> creatorLoginVerify(int userId, String code) async {
     final deviceId = await getDeviceId();
-    return post('/creator/auth/login/verify', data: {'userId': userId, 'code': code, 'deviceId': deviceId});
+    return post(
+      '/creator/auth/login/verify',
+      data: {'userId': userId, 'code': code, 'deviceId': deviceId},
+    );
   }
 
   Future<Response> getTrending() => get('/trending');
@@ -132,48 +173,145 @@ class ApiService {
       get('/details', params: {'id': id, 'type': type});
   Future<Response> getTVSeason(int id, int season) =>
       get('/tv-season', params: {'id': id, 'season': season});
-  Future<Response> getStreamSource(int id, String type, {int? season, int? episode}) =>
-      get('/source', params: {'id': id, 'type': type, if (season != null) 'season': season, if (episode != null) 'episode': episode});
-  Future<Response> getManifestInfo(String url, {int? id, String? type, int? season, int? episode, String? plan}) =>
-      get('/manifest-info', params: {'url': url, if (id != null) 'id': id, if (type != null) 'type': type, if (season != null) 'season': season, if (episode != null) 'episode': episode, if (plan != null) 'plan': plan});
-  Future<Response> getGenres({String? type}) => get('/genres', params: {if (type != null) 'type': type});
+  Future<Response> getStreamSource(
+    int id,
+    String type, {
+    int? season,
+    int? episode,
+  }) => get(
+    '/source',
+    params: {
+      'id': id,
+      'type': type,
+      if (season != null) 'season': season,
+      if (episode != null) 'episode': episode,
+    },
+  );
+  Future<Response> getManifestInfo(
+    String url, {
+    int? id,
+    String? type,
+    int? season,
+    int? episode,
+    String? plan,
+  }) => get(
+    '/manifest-info',
+    params: {
+      'url': url,
+      if (id != null) 'id': id,
+      if (type != null) 'type': type,
+      if (season != null) 'season': season,
+      if (episode != null) 'episode': episode,
+      if (plan != null) 'plan': plan,
+    },
+  );
+  Future<Response> getGenres({String? type}) =>
+      get('/genres', params: {if (type != null) 'type': type});
   Future<Response> getCategoryMovies(int genreId, {String? type, int? page}) =>
-      get('/category', params: {'id': genreId, if (type != null) 'type': type, if (page != null) 'page': page});
-  Future<Response> getDiscover({int? genreId, String? type, String? sortBy, int? page, int? minVotes}) =>
-      get('/discover', params: {if (genreId != null) 'genre_id': genreId, if (type != null) 'type': type, if (sortBy != null) 'sort_by': sortBy, if (page != null) 'page': page, if (minVotes != null) 'min_votes': minVotes});
-  Future<Response> getHooksFeed({int? page}) => get('/hooks', params: {if (page != null) 'page': page});
+      get(
+        '/category',
+        params: {
+          'id': genreId,
+          if (type != null) 'type': type,
+          if (page != null) 'page': page,
+        },
+      );
+  Future<Response> getDiscover({
+    int? genreId,
+    String? type,
+    String? sortBy,
+    int? page,
+    int? minVotes,
+  }) => get(
+    '/discover',
+    params: {
+      if (genreId != null) 'genre_id': genreId,
+      if (type != null) 'type': type,
+      if (sortBy != null) 'sort_by': sortBy,
+      if (page != null) 'page': page,
+      if (minVotes != null) 'min_votes': minVotes,
+    },
+  );
+  Future<Response> getHooksFeed({int? page}) =>
+      get('/hooks', params: {if (page != null) 'page': page});
 
-  Future<Response> toggleLike(int contentId, String contentType, {int? creatorId}) =>
-      post('/interactions/like', data: {'contentId': contentId, 'contentType': contentType, if (creatorId != null) 'creatorId': creatorId});
-  Future<Response> checkLike(int contentId, String contentType) =>
-      get('/interactions/like', params: {'contentId': contentId, 'contentType': contentType});
-  Future<Response> getComments(int contentId, String contentType) =>
-      get('/interactions/comments', params: {'contentId': contentId, 'contentType': contentType});
-  Future<Response> postComment(int contentId, String contentType, String text, {int? creatorId}) =>
-      post('/interactions/comment', data: {'contentId': contentId, 'contentType': contentType, 'text': text, if (creatorId != null) 'creatorId': creatorId});
+  Future<Response> toggleLike(
+    int contentId,
+    String contentType, {
+    int? creatorId,
+  }) => post(
+    '/interactions/like',
+    data: {
+      'contentId': contentId,
+      'contentType': contentType,
+      if (creatorId != null) 'creatorId': creatorId,
+    },
+  );
+  Future<Response> checkLike(int contentId, String contentType) => get(
+    '/interactions/like',
+    params: {'contentId': contentId, 'contentType': contentType},
+  );
+  Future<Response> getComments(int contentId, String contentType) => get(
+    '/interactions/comments',
+    params: {'contentId': contentId, 'contentType': contentType},
+  );
+  Future<Response> postComment(
+    int contentId,
+    String contentType,
+    String text, {
+    int? creatorId,
+  }) => post(
+    '/interactions/comment',
+    data: {
+      'contentId': contentId,
+      'contentType': contentType,
+      'text': text,
+      if (creatorId != null) 'creatorId': creatorId,
+    },
+  );
   Future<Response> deleteComment(int id) => delete('/interactions/comment/$id');
   Future<Response> toggleFollow(int followingId) =>
       post('/interactions/follow', data: {'followingId': followingId});
   Future<Response> checkFollow(int followingId) =>
       get('/interactions/follow', params: {'followingId': followingId});
 
-  Future<Response> getForYouRecommendations() => get('/recommendations/for-you');
-  Future<Response> getTrendingRecommendations() => get('/recommendations/trending');
-  Future<Response> getSimilarRecommendations(int id, {String? type}) =>
-      get('/recommendations/similar/$id', params: {if (type != null) 'type': type});
+  Future<Response> getForYouRecommendations() =>
+      get('/recommendations/for-you');
+  Future<Response> getTrendingRecommendations() =>
+      get('/recommendations/trending');
+  Future<Response> getSimilarRecommendations(int id, {String? type}) => get(
+    '/recommendations/similar/$id',
+    params: {if (type != null) 'type': type},
+  );
 
   Future<Response> getNextAd({int? contentId}) =>
       get('/ads/next', params: {if (contentId != null) 'contentId': contentId});
-  Future<Response> recordAdImpression(String placementId, {bool? completed, int? watchedSeconds}) =>
-      post('/ads/impression', data: {'placementId': placementId, if (completed != null) 'completed': completed, if (watchedSeconds != null) 'watchedSeconds': watchedSeconds});
-  Future<Response> grantBingePass({int? contentId, int? minutes}) =>
-      post('/ads/binge-pass', data: {if (contentId != null) 'contentId': contentId, if (minutes != null) 'minutes': minutes});
+  Future<Response> recordAdImpression(
+    String placementId, {
+    bool? completed,
+    int? watchedSeconds,
+  }) => post(
+    '/ads/impression',
+    data: {
+      'placementId': placementId,
+      if (completed != null) 'completed': completed,
+      if (watchedSeconds != null) 'watchedSeconds': watchedSeconds,
+    },
+  );
+  Future<Response> grantBingePass({int? contentId, int? minutes}) => post(
+    '/ads/binge-pass',
+    data: {
+      if (contentId != null) 'contentId': contentId,
+      if (minutes != null) 'minutes': minutes,
+    },
+  );
   Future<Response> getSkipLimit() => get('/ads/skip-limit');
   Future<Response> incrementSkip() => post('/ads/skip');
 
   Future<Response> getCreatorStats() => get('/creator/stats');
   Future<Response> getCreatorUploads() => get('/creator/uploads');
-  Future<Response> uploadFilm(FormData data) => uploadFile('/creator/upload', data);
+  Future<Response> uploadFilm(FormData data) =>
+      uploadFile('/creator/upload', data);
   Future<Response> getCreatorDashboard() => get('/creator/dashboard');
   Future<Response> getCreatorComments() => get('/creator/comments');
   Future<Response> getArtistGraph() => get('/payouts/graph');
@@ -187,7 +325,14 @@ class ApiService {
   Future<Response> getGatewayInfo() => get('/payment/gateway-info');
 
   Future<Response> sendTip(int creatorId, double amount, {String? message}) =>
-      post('/tips', data: {'creatorId': creatorId, 'amount': amount, if (message != null) 'message': message});
+      post(
+        '/tips',
+        data: {
+          'creatorId': creatorId,
+          'amount': amount,
+          if (message != null) 'message': message,
+        },
+      );
   Future<Response> createPayoutRecipient(Map<String, dynamic> data) =>
       post('/payouts/recipient', data: data);
   Future<Response> requestWithdraw(double amount) =>
@@ -195,7 +340,8 @@ class ApiService {
   Future<Response> getPayoutHistory() => get('/payouts/history');
   Future<Response> getBalance() => get('/payouts/balance');
 
-  Future<Response> createTier(Map<String, dynamic> data) => post('/memberships/tiers', data: data);
+  Future<Response> createTier(Map<String, dynamic> data) =>
+      post('/memberships/tiers', data: data);
   Future<Response> updateTier(int id, Map<String, dynamic> data) =>
       put('/memberships/tiers/$id', data: data);
   Future<Response> getCreatorTiers(int creatorId) =>
@@ -206,15 +352,17 @@ class ApiService {
   Future<Response> verifyMembershipPayment(String reference) =>
       get('/memberships/verify', params: {'reference': reference});
   Future<Response> getMyMemberships() => get('/memberships/my-memberships');
-  Future<Response> cancelMembership(int id) =>
-      post('/memberships/$id/cancel');
+  Future<Response> cancelMembership(int id) => post('/memberships/$id/cancel');
   Future<Response> getMySubscribers() => get('/memberships/my-subscribers');
 
-  Future<Response> createEvent(Map<String, dynamic> data) => post('/events', data: data);
+  Future<Response> createEvent(Map<String, dynamic> data) =>
+      post('/events', data: data);
   Future<Response> updateEvent(int id, Map<String, dynamic> data) =>
       put('/events/$id', data: data);
-  Future<Response> getEvents({bool? includePast}) =>
-      get('/events', params: {if (includePast != null) 'includePast': includePast});
+  Future<Response> getEvents({bool? includePast}) => get(
+    '/events',
+    params: {if (includePast != null) 'includePast': includePast},
+  );
   Future<Response> getEvent(int id) => get('/events/$id');
   Future<Response> getMyEvents() => get('/events/mine');
   Future<Response> purchaseTicket(int eventId) =>
@@ -226,8 +374,7 @@ class ApiService {
   Future<Response> getProducts({String? category}) =>
       get('/store', params: {if (category != null) 'category': category});
   Future<Response> getProduct(int id) => get('/store/$id');
-  Future<Response> createProduct(FormData data) =>
-      uploadFile('/store', data);
+  Future<Response> createProduct(FormData data) => uploadFile('/store', data);
   Future<Response> updateProduct(int id, FormData data) =>
       uploadFile('/store/$id', data);
   Future<Response> getMyProducts() => get('/store/mine');
@@ -240,8 +387,7 @@ class ApiService {
   Future<Response> getCourses({String? category}) =>
       get('/courses', params: {if (category != null) 'category': category});
   Future<Response> getCourse(int id) => get('/courses/$id');
-  Future<Response> createCourse(FormData data) =>
-      uploadFile('/courses', data);
+  Future<Response> createCourse(FormData data) => uploadFile('/courses', data);
   Future<Response> updateCourse(int id, FormData data) =>
       uploadFile('/courses/$id', data);
   Future<Response> getMyCourses() => get('/courses/mine');
@@ -250,8 +396,10 @@ class ApiService {
   Future<Response> verifyCoursePayment(String reference) =>
       get('/courses/enroll/verify', params: {'reference': reference});
   Future<Response> getMyEnrollments() => get('/courses/enrollments/mine');
-  Future<Response> updateCourseProgress(int courseId, double progress) =>
-      post('/courses/progress', data: {'courseId': courseId, 'progress': progress});
+  Future<Response> updateCourseProgress(int courseId, double progress) => post(
+    '/courses/progress',
+    data: {'courseId': courseId, 'progress': progress},
+  );
 
   Future<Response> getCommunities({String? search}) =>
       get('/community', params: {if (search != null) 'search': search});
@@ -266,7 +414,8 @@ class ApiService {
   Future<Response> deleteCommunityPost(int communityId, int postId) =>
       delete('/community/$communityId/posts/$postId');
 
-  Future<Response> createArchive(Map<String, dynamic> data) => post('/archive', data: data);
+  Future<Response> createArchive(Map<String, dynamic> data) =>
+      post('/archive', data: data);
   Future<Response> updateArchive(int id, Map<String, dynamic> data) =>
       put('/archive/$id', data: data);
   Future<Response> getArchiveItems() => get('/archive');
@@ -324,12 +473,18 @@ class ApiService {
   Future<Response> updateCampaign(int id, Map<String, dynamic> data) =>
       patch('/campaigns/$id', data: data);
 
-  Future<Response> startSession({String? deviceId}) =>
-      post('/sessions/start', data: {if (deviceId != null) 'device_id': deviceId});
-  Future<Response> sessionHeartbeat({String? deviceId}) =>
-      post('/sessions/heartbeat', data: {if (deviceId != null) 'device_id': deviceId});
-  Future<Response> endSession({String? deviceId}) =>
-      post('/sessions/end', data: {if (deviceId != null) 'device_id': deviceId});
+  Future<Response> startSession({String? deviceId}) => post(
+    '/sessions/start',
+    data: {if (deviceId != null) 'device_id': deviceId},
+  );
+  Future<Response> sessionHeartbeat({String? deviceId}) => post(
+    '/sessions/heartbeat',
+    data: {if (deviceId != null) 'device_id': deviceId},
+  );
+  Future<Response> endSession({String? deviceId}) => post(
+    '/sessions/end',
+    data: {if (deviceId != null) 'device_id': deviceId},
+  );
 
   Future<Response> adminGetUsers() => get('/admin/users');
   Future<Response> adminGetStats() => get('/admin/stats');
@@ -337,10 +492,108 @@ class ApiService {
   Future<Response> adminGetCreators() => get('/admin/creators');
   Future<Response> adminUpdateUserRole(int userId, String role) =>
       put('/admin/users/$userId/role', data: {'role': role});
-  Future<Response> adminBanUser(int userId) =>
-      post('/admin/users/$userId/ban');
-  Future<Response> adminSendNewsletter(String subject, String content) =>
-      post('/admin/newsletter/send', data: {'subject': subject, 'content': content});
+  Future<Response> adminBanUser(int userId) => post('/admin/users/$userId/ban');
+  Future<Response> adminSendNewsletter(String subject, String content) => post(
+    '/admin/newsletter/send',
+    data: {'subject': subject, 'content': content},
+  );
   Future<Response> adminGetNewsletterSubscribers() =>
       get('/admin/newsletter/subscribers');
+
+  // ---------- News / Blog ----------
+  Future<Response> getNews({
+    String? category,
+    String? q,
+    int? page,
+    bool? refresh,
+  }) => get(
+    '/news',
+    params: {
+      if (category != null) 'category': category,
+      if (q != null) 'q': q,
+      if (page != null) 'page': page,
+      if (refresh != null) 'refresh': refresh,
+    },
+  );
+  Future<Response> getHomeNews() => get('/news/home');
+  Future<Response> getIndustryNews() => get('/news/industry');
+  Future<Response> getNewsArticle(String url) =>
+      get('/news/article', params: {'url': url});
+  Future<Response> fetchDeepDive(String title, List<String> keywords) => get(
+    '/news/fetch-deep-dive',
+    params: {'title': title, 'keywords': keywords.join(',')},
+  );
+
+  // ---------- Trivia & Rewards ----------
+  Future<Response> getDailyTrivia() => get('/trivia/today');
+  Future<Response> submitDailyTrivia(Map<String, dynamic> answers) =>
+      post('/trivia/submit', data: {'answers': answers});
+  Future<Response> getTriviaStreak() => get('/trivia/streak');
+  Future<Response> getTriviaLeaderboard() => get('/trivia/leaderboard');
+  Future<Response> getGuessMovie() => get('/trivia/guess');
+  Future<Response> submitGuess(String answer) =>
+      post('/trivia/guess/submit', data: {'answer': answer});
+  Future<Response> getCoinsBalance() => get('/trivia/coins');
+  Future<Response> getCosmetics() => get('/trivia/cosmetics');
+  Future<Response> purchaseCosmetic(int id) =>
+      post('/trivia/cosmetics/$id/purchase');
+  Future<Response> equipCosmetic(int id) => post('/trivia/cosmetics/$id/equip');
+
+  // ---------- Notifications ----------
+  Future<Response> getNotifications({int? limit}) =>
+      get('/notifications', params: {if (limit != null) 'limit': limit});
+  Future<Response> getUnreadNotifications() =>
+      get('/notifications/unread-count');
+  Future<Response> markNotificationRead(int id) =>
+      post('/notifications/$id/read');
+  Future<Response> markAllNotificationsRead() =>
+      post('/notifications/read-all');
+
+  // ---------- Push notifications ----------
+  Future<Response> getPushStatus() => get('/push/status');
+  Future<Response> subscribePush(Map<String, dynamic> data) =>
+      post('/push/subscribe', data: data);
+  Future<Response> unsubscribePush() => post('/push/unsubscribe');
+
+  // ---------- Chat / DM ----------
+  Future<Response> getConversations() => get('/chat/conversations');
+  Future<Response> getDirectMessages(int userId, {int? limit}) => get(
+    '/chat/messages',
+    params: {'with': userId, if (limit != null) 'limit': limit},
+  );
+
+  // ---------- Forum / Hot Takes ----------
+  Future<Response> getForumCategories() => get('/forum/categories');
+  Future<Response> getForumTopics({
+    String? category,
+    int? limit,
+    int? offset,
+    String? sort,
+  }) => get(
+    '/forum/topics',
+    params: {
+      if (category != null) 'category': category,
+      if (limit != null) 'limit': limit,
+      if (offset != null) 'offset': offset,
+      if (sort != null) 'sort': sort,
+    },
+  );
+  Future<Response> getForumTopic(int id) => get('/forum/topics/$id');
+  Future<Response> createForumTopic(Map<String, dynamic> data) =>
+      post('/forum/topics', data: data);
+  Future<Response> voteForumTopic(int id, int value) =>
+      post('/forum/topics/$id/vote', data: {'value': value});
+  Future<Response> addForumReply(int id, String content) =>
+      post('/forum/topics/$id/replies', data: {'content': content});
+
+  // ---------- Public profiles / fan ----------
+  Future<Response> getFollowStats(int userId) =>
+      get('/interactions/follow-stats', params: {'userId': userId});
+  Future<Response> getFollowers(int userId) =>
+      get('/interactions/followers', params: {'userId': userId});
+  Future<Response> getFollowing(int userId) =>
+      get('/interactions/following', params: {'userId': userId});
+  Future<Response> getFanLeaderboard(int creatorId) =>
+      get('/fan/$creatorId/leaderboard');
+  Future<Response> getFanStatus(int creatorId) => get('/fan/$creatorId/status');
 }

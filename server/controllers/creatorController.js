@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid'
 import pool from '../config/database.js'
-import { addUpload, getUploadsByUserId, getTipsForCreator, getCommentsForCreator, getTotalLikesForCreator, getCreatorDashboardStats } from '../db.js'
+import { addUpload, getUploadsByUserId, getTipsForCreator, getCommentsForCreator, getTotalLikesForCreator, getCreatorDashboardStats, updateUpload, getUploadById } from '../db.js'
 import { uploadFile } from '../lib/r2.js'
 
 export async function addUploadHandler(req, res) {
@@ -53,6 +53,37 @@ export async function getUploads(req, res) {
   try {
     const uploads = await getUploadsByUserId(req.userId)
     res.json({ success: true, uploads })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+export async function updateUploadHandler(req, res) {
+  try {
+    const { id } = req.params
+    const { title, description, genre } = req.body
+
+    const thumbFile = req.file
+
+    let thumbnailUrl
+    if (thumbFile) {
+      const thumbKey = `movies/${req.userId}/${id}-thumb.jpg`
+      const result = await uploadFile({ buffer: thumbFile.buffer, key: thumbKey, contentType: thumbFile.mimetype })
+      if (result.success) thumbnailUrl = result.url
+    }
+
+    const fields = {}
+    if (title) fields.title = title
+    if (description !== undefined) fields.description = description
+    if (genre) fields.genre = genre
+    if (thumbnailUrl) fields.thumbnail_url = thumbnailUrl
+
+    if (Object.keys(fields).length === 0) {
+      return res.status(400).json({ error: 'Nothing to update' })
+    }
+
+    const updated = await updateUpload(id, fields)
+    res.json({ success: true, upload: updated })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

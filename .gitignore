@@ -9,3 +9,4 @@ data.json
 dist/
 client/dist/
 data/
+server/bin/

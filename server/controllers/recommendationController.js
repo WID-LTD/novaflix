@@ -1,9 +1,78 @@
 import { getWatchHistory } from '../db.js'
+import pool from '../config/database.js'
 
 const TMDB_BASE = 'https://api.themoviedb.org/3'
 
 function getTmdbClient(req) {
   return req.app.locals.tmdb
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// Genres of creator uploads the user has watched.
+async function getWatchedCreatorUploads(history) {
+  const uploadIds = history
+    .map((e) => e.content_id)
+    .filter((id) => id && UUID_RE.test(id))
+    .slice(0, 20)
+  if (uploadIds.length === 0) return []
+  try {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT genre FROM uploads WHERE id::text = ANY($1) AND genre IS NOT NULL AND genre != ''`,
+      [uploadIds]
+    )
+    return rows.map((r) => r.genre)
+  } catch {
+    return []
+  }
+}
+
+// Active creator uploads whose genre matches the user's interest genres.
+async function getCreatorUploadsForGenres(genres, excludedIds) {
+  try {
+    if (!genres || genres.length === 0) return []
+    const genreStrings = genres.map((g) => g.toLowerCase())
+    const excl = excludedIds.length > 0 ? excludedIds : ['00000000-0000-0000-0000-000000000000']
+    const { rows } = await pool.query(
+      `SELECT id, title, description, genre, thumbnail_url, views, created_at
+       FROM uploads
+       WHERE status = 'active'
+         AND genre IS NOT NULL AND genre != ''
+         AND LOWER(genre) = ANY($1)
+         AND NOT (id::text = ANY($2))
+       ORDER BY views DESC
+       LIMIT 8`,
+      [genreStrings, excl]
+    )
+    return rows
+  } catch {
+    return []
+  }
+}
+
+function normalizeMovie(m, type) {
+  return {
+    id: m.id,
+    title: m.title || m.name,
+    year: (m.release_date || m.first_air_date || '').split('-')[0] || 'N/A',
+    poster: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : null,
+    overview: m.overview || '',
+    type,
+    rating: m.vote_average || 0,
+  }
+}
+
+function normalizeUpload(u) {
+  return {
+    id: u.id,
+    title: u.title,
+    year: u.created_at ? new Date(u.created_at).getFullYear().toString() : '',
+    poster: u.thumbnail_url || null,
+    overview: u.description || '',
+    type: 'movie',
+    rating: 0,
+    source: 'creator',
+  }
 }
 
 export async function getRecommendations(req, res) {
@@ -45,6 +114,20 @@ export async function getRecommendations(req, res) {
       }
     }
 
+    // Creator uploads based on the genres the user has watched.
+    const interestGenres = await getWatchedUploadGenres(history)
+    if (interestGenres.length > 0) {
+      const uploads = await getCreatorUploadsForGenres(interestGenres, [...watchedIds])
+      let added = 0
+      for (const u of uploads) {
+        if (!watchedIds.has(u.id)) {
+          results.splice(3 + added, 0, normalizeUpload(u))
+          added++
+          if (results.length >= 10) break
+        }
+      }
+    }
+
     if (results.length < 6) {
       const { data } = await tmdb.get('/trending/movie/week', { params: { language: 'en-US' } })
       for (const item of data.results || []) {
@@ -59,6 +142,24 @@ export async function getRecommendations(req, res) {
   } catch (err) {
     console.error('[recommendations] Error:', err.message)
     res.json({ success: false, data: [], error: err.message })
+  }
+}
+
+// Genres of creator uploads the user has watched (interest signal).
+async function getWatchedUploadGenres(history) {
+  const uploadIds = history
+    .map((e) => e.content_id)
+    .filter((id) => id && UUID_RE.test(id))
+    .slice(0, 20)
+  if (uploadIds.length === 0) return []
+  try {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT genre FROM uploads WHERE id::text = ANY($1) AND genre IS NOT NULL AND genre != ''`,
+      [uploadIds]
+    )
+    return rows.map((r) => r.genre)
+  } catch {
+    return []
   }
 }
 
@@ -87,17 +188,5 @@ export async function getSimilar(req, res) {
     res.json({ success: true, data: results.slice(0, 10) })
   } catch (err) {
     res.json({ success: false, error: err.message })
-  }
-}
-
-function normalizeMovie(m, type) {
-  return {
-    id: m.id,
-    title: m.title || m.name,
-    year: (m.release_date || m.first_air_date || '').split('-')[0] || 'N/A',
-    poster: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : null,
-    overview: m.overview || '',
-    type,
-    rating: m.vote_average || 0,
   }
 }
