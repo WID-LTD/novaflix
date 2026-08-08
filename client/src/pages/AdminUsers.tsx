@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getToken } from '../lib/auth'
+import { API_BASE } from '../lib/config'
 import PageHeader from '../components/admin/PageHeader'
 import StatusBadge from '../components/admin/StatusBadge'
 import StatCard from '../components/admin/StatCard'
@@ -11,7 +12,7 @@ export default function AdminUsers() {
   useEffect(() => {
     const token = getToken()
     if (!token) return
-    fetch(`/api/admin/users`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_BASE}/admin/users`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
       .then((r) => { if (r.success) setUsers(r.users || []); setLoading(false) })
       .catch(() => setLoading(false))
@@ -19,7 +20,7 @@ export default function AdminUsers() {
 
   const changeRole = async (id: string, role: string) => {
     const token = getToken()
-    const r = await fetch(`/api/admin/users/${id}/role`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ role }) }).then((x) => x.json())
+    const r = await fetch(`${API_BASE}/admin/users/${id}/role`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ role }) }).then((x) => x.json())
     if (r.success) setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, role } : u)))
   }
 

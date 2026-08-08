@@ -7,6 +7,7 @@ import ContentRow from '../components/features/ContentRow'
 import NewsRow from '../components/features/NewsRow'
 import HoverCard from '../components/features/HoverCard'
 import Icon from '../components/ui/Icon'
+import OnboardingTour from '../components/ui/OnboardingTour'
 import type { MediaItem, MediaDetails } from '../types'
 import type { NewsArticle } from '../lib/api'
 
@@ -254,6 +255,18 @@ export default function Home() {
           <ContentRow title="Classic Movies" items={classicMovies} />
         )}
       </main>
+
+      <OnboardingTour
+        storageKey="novaflix-onboarding-home"
+        steps={[
+          {
+            targetSelector: '.flex.gap-4.overflow-x-auto',
+            title: 'Browse & Discover',
+            description: 'Click any movie or TV show card to explore details, ratings, trailers, and similar recommendations.',
+            placement: 'top',
+          },
+        ]}
+      />
     </div>
   )
 }

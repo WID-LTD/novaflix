@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 import Icon from '../components/ui/Icon'
 import { useAuth } from '../lib/AuthContext'
 import { getConversations, getDirectMessages } from '../lib/auth'
+import { WS_ORIGIN } from '../lib/config'
 
 interface ChatMsg {
   id: string
@@ -40,7 +41,7 @@ export default function Chat() {
   const connect = useCallback((withUserId: string) => {
     const token = localStorage.getItem('novaflix-token') || ''
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.host
+    const host = WS_ORIGIN ? new URL(WS_ORIGIN).host : window.location.host
     if (wsRef.current) wsRef.current.close()
     const ws = new WebSocket(`${protocol}//${host}/ws?token=${encodeURIComponent(token)}`)
 

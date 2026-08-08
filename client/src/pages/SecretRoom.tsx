@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { getSecretRoom } from '../lib/auth'
+import { WS_ORIGIN } from '../lib/config'
 import Button from '../components/ui/Button'
 import Icon from '../components/ui/Icon'
 import Skeleton from '../components/ui/Skeleton'
@@ -46,7 +47,7 @@ export default function SecretRoom() {
     if (!room) return
     const token = localStorage.getItem('novaflix-token') || ''
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.host
+    const host = WS_ORIGIN ? new URL(WS_ORIGIN).host : window.location.host
     const roomCode = `secret:${room.id}`
     const ws = new WebSocket(`${protocol}//${host}/ws?token=${encodeURIComponent(token)}`)
 

@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import Icon from '../components/ui/Icon'
 import { useAuth } from '../lib/AuthContext'
 import { useNavigate, useParams } from 'react-router-dom'
+import { WS_ORIGIN } from '../lib/config'
 import {
   getForumTopics, getForumTopic, createForumTopic, voteForumTopic,
   addForumReply, voteForumReply, getForumCategories,
@@ -182,7 +183,7 @@ export default function Forum() {
     if (!topicId || !user) return
     const token = localStorage.getItem('novaflix-token') || ''
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.host
+    const host = WS_ORIGIN ? new URL(WS_ORIGIN).host : window.location.host
     const ws = new WebSocket(`${protocol}//${host}/ws?token=${encodeURIComponent(token)}`)
     ws.onopen = () => {
       ws.send(JSON.stringify({ type: 'topic-join', payload: { topicId } }))

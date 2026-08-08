@@ -4,6 +4,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { spawn } from 'child_process'
 import { getStreamUrl } from '../scraper.mjs'
+import { cacheClear, cacheStats } from '../providers/cache.js'
 import { getActiveSessionCount } from '../db.js'
 import { PLAN_FEATURES } from './planUtils.js'
 
@@ -12,16 +13,35 @@ const DOWNLOADS_DIR = path.join(__dirname, '..', 'download')
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 
-const PLAN_MAX_RES = { free: 480, student: 720, basic: 720, standard: 1080, premium: 2160 }
+// LRU segment cache
+const segmentCache = new Map()
+const SEGMENT_CACHE_MAX = 500
+const SEGMENT_CACHE_TTL = 60_000
+function cacheSegment(key, data, contentType) {
+  if (segmentCache.size >= SEGMENT_CACHE_MAX) {
+    const oldest = segmentCache.keys().next().value
+    segmentCache.delete(oldest)
+  }
+  segmentCache.set(key, { data, contentType, time: Date.now() })
+}
+function getCachedSegment(key) {
+  const entry = segmentCache.get(key)
+  if (!entry) return null
+  if (Date.now() - entry.time > SEGMENT_CACHE_TTL) {
+    segmentCache.delete(key)
+    return null
+  }
+  return entry
+}
 
-async function parseMasterManifest(masterUrl, plan) {
+async function parseMasterManifest(masterUrl) {
   const response = await axios.get(masterUrl, {
     headers: { 'User-Agent': UA, Referer: 'https://nextgencloudfabric.com/' },
     timeout: 15000,
   })
   const body = response.data
   const baseUrl = masterUrl.substring(0, masterUrl.lastIndexOf('/') + 1)
-  let variants = []
+  const variants = []
   const lines = body.split('\n')
   let currentStreamInf = null
 
@@ -75,29 +95,93 @@ export async function source(req, res) {
   const { id, type, season, episode } = req.query
   if (!id) return res.status(400).json({ error: 'TMDB ID is required' })
 
-  // Concurrent screen enforcement (fail-open: playback should never crash on this)
-  const plan = req.user?.plan || 'free'
-  const maxScreens = PLAN_FEATURES[plan]?.concurrentScreens || 1
-  try {
-    const activeSessions = await getActiveSessionCount(req.userId)
-    if (activeSessions >= maxScreens) {
-      return res.status(429).json({
-        success: false,
-        error: `Your ${plan} plan allows ${maxScreens} concurrent screen${maxScreens > 1 ? 's' : ''}. You've reached this limit.`,
-      })
+  // Concurrent screen enforcement (skip for anonymous/unauthed)
+  if (req.userId && req.userId !== 'anonymous') {
+    const plan = req.user?.plan || 'free'
+    const maxScreens = PLAN_FEATURES[plan]?.concurrentScreens || 1
+    try {
+      const activeSessions = await getActiveSessionCount(req.userId)
+      if (activeSessions >= maxScreens) {
+        return res.status(429).json({
+          success: false,
+          error: `Your ${plan} plan allows ${maxScreens} concurrent screen${maxScreens > 1 ? 's' : ''}. You've reached this limit.`,
+        })
+      }
+    } catch (e) {
+      console.warn('[source] screen check failed:', e.message)
     }
-  } catch (screenErr) {
-    console.error(`[api/source] session count check failed (allowing playback): ${screenErr.message}`)
   }
 
   try {
-    const result = await getStreamUrl(id, type || 'movie', season || null, episode || null)
-    const proxyUrl = `/api/proxy/${result.streamUrl.replace('https://', '')}`
+    let result
+    try {
+      result = await Promise.race([
+        getStreamUrl(id, type || 'movie', season || null, episode || null),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout of 18000ms exceeded')), 18000)),
+      ])
+    } catch (e) {
+      return res.json({ success: false, error: e.message })
+    }
+
+    if (result.streamUrl) {
+      try {
+        const headCheck = await axios({
+          url: result.streamUrl,
+          method: 'HEAD',
+          timeout: 5000,
+          validateStatus: () => true,
+          headers: { 'User-Agent': UA, Referer: 'https://play.xpass.top/' },
+        })
+        const ct = (headCheck.headers['content-type'] || '').toLowerCase()
+        if (ct.includes('text/html')) {
+          console.log(`[source] HLS blocked by CDN (HTML), falling back to embed for ${id}`)
+          result.streamUrl = null
+          result.providerMode = 'embed'
+        }
+      } catch {
+        // HEAD failed — proceed anyway
+      }
+    }
+
+    const toProxy = (url) => {
+      if (!url) return url
+      if (url.startsWith('http://') || url.startsWith('https://')) return url.replace('https://', '/api/proxy/')
+      return url
+    }
+
+    const streamProxy = result.streamUrl ? `/api/proxy/${result.streamUrl.replace('https://', '')}` : null
+    const embedProxy = result.embedUrl ? `/api/proxy-embed?url=${encodeURIComponent(result.embedUrl)}` : null
     const subtitles = (result.subtitles || []).map((s) => ({
       label: s.label,
-      file: s.file.replace('https://', '/api/proxy/'),
+      file: toProxy(s.file),
     }))
-    res.json({ success: true, streamUrl: proxyUrl, directUrl: result.streamUrl, subtitles })
+
+    const backups = (result.backups || []).slice(0, 5).map((b) => ({
+      streamUrl: b.streamUrl,
+      embedUrl: b.embedUrl,
+      provider: b.provider,
+      subtitles: (b.subtitles || []).map((s) => ({
+        label: s.label,
+        file: toProxy(s.file),
+      })),
+    }))
+
+    const response = {
+      success: true,
+      streamUrl: streamProxy,
+      embedUrl: embedProxy,
+      directUrl: result.streamUrl,
+      subtitles,
+      provider: result.provider,
+      providerMode: result.providerMode || (result.streamUrl ? 'hls' : 'embed'),
+      backups,
+      fromCache: result.fromCache || false,
+      elapsed: result.elapsed || 0,
+      attempted: result.attempted || 0,
+      totalProviders: result.totalProviders || 0,
+    }
+
+    res.json(response)
   } catch (err) {
     console.error(`[api/source] id=${id} type=${type || 'movie'} season=${season || '-'} episode=${episode || '-'}: ${err.message}`)
     let releaseDate = null
@@ -112,6 +196,8 @@ export async function source(req, res) {
   }
 }
 
+const PLAN_MAX_RES = { free: 480, student: 720, basic: 720, standard: 1080, premium: 2160 }
+
 export async function manifestInfo(req, res) {
   const { url, id, type, season, episode, plan } = req.query
   if (!url) return res.status(400).json({ error: 'URL is required' })
@@ -121,7 +207,7 @@ export async function manifestInfo(req, res) {
       ? 'https://' + url.replace('/api/proxy/', '')
       : url
 
-    const variants = await parseMasterManifest(cdnUrl, plan)
+    const variants = await parseMasterManifest(cdnUrl)
     let duration = 0
 
     if (id && type) {
@@ -350,28 +436,74 @@ export async function serveDownloadedFile(req, res) {
   stream.pipe(res)
 }
 
+function isValidVideoContentType(ct) {
+  if (!ct) return false
+  const t = ct.toLowerCase()
+  return t.startsWith('video/') || t.startsWith('audio/') ||
+    t.includes('octet-stream') || t.includes('binary') ||
+    t.includes('mpegurl') || t.includes('mp4') ||
+    t.includes('m2ts') || t.includes('m3u8')
+}
+
+function isSegmentUrl(url) {
+  return !url.endsWith('.m3u8') && !url.endsWith('.m3u')
+}
+
+async function tryFfmpegFetch(url, ffmpegPath) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(ffmpegPath, [
+      '-i', url, '-c', 'copy', '-f', 'mpegts', '-loglevel', 'error', 'pipe:1'
+    ], { windowsHide: true, timeout: 30000 })
+    const chunks = []
+    let timedOut = false
+    const timer = setTimeout(() => { timedOut = true; proc.kill(); reject(new Error('ffmpeg timeout')) }, 25000)
+    proc.stdout.on('data', (c) => { if (!timedOut) chunks.push(c) })
+    proc.on('close', (code) => {
+      clearTimeout(timer)
+      if (timedOut) return
+      if (code === 0 && chunks.length > 0) resolve(Buffer.concat(chunks))
+      else reject(new Error('ffmpeg failed'))
+    })
+    proc.on('error', reject)
+  })
+}
+
 export async function proxy(req, res) {
   const fullPath = req.params[0]
   if (!fullPath) return res.status(400).send('path required')
 
   const url = 'https://' + fullPath
-  const hostname = new URL(url).hostname
+  let hostname = ''
+  try { hostname = new URL(url).hostname } catch { return res.status(502).send('Invalid URL') }
+
+  // Check segment cache for non-m3u8 URLs
+  const isM3u8 = url.endsWith('.m3u8') || url.endsWith('.m3u')
+  if (!isM3u8) {
+    const cached = getCachedSegment(url)
+    if (cached) {
+      res.setHeader('Content-Type', cached.contentType)
+      res.setHeader('Access-Control-Allow-Origin', '*')
+      res.setHeader('Access-Control-Allow-Headers', '*')
+      return res.send(cached.data)
+    }
+  }
 
   const referers = [
-    'https://tik.1x2.space/',
     'https://nextgencloudfabric.com/',
     'https://play.xpass.top/',
+    'https://tik.1x2.space/',
     'https://p16-sg.tiktokcdn.com/',
   ]
 
   const tryFetch = async (ref) => {
+    console.log(`[proxy] FETCH ${url.substring(0,120)}... ref=${ref || 'none'}`)
     return axios({
       url,
       method: 'GET',
       responseType: 'stream',
-      timeout: 15000,
+      timeout: url.endsWith('.m3u8') ? 15000 : 10000,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': UA,
         Referer: ref,
         Origin: ref.replace(/\/$/, ''),
       },
@@ -379,15 +511,69 @@ export async function proxy(req, res) {
   }
 
   let response = null
-  for (const ref of referers) {
+  let usedReferer = ''
+
+  // Retry loop: up to 2 attempts for segment requests
+  const MAX_ATTEMPTS = isM3u8 ? 1 : 2
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    if (attempt > 1) console.log(`[proxy] retry ${attempt} for ${hostname}`)
+
     try {
-      response = await tryFetch(ref)
-      if (response.status === 200) break
+      const bareResp = await axios({ url, method: 'GET', responseType: 'stream', timeout: 5000 })
+      const bct = bareResp.headers['content-type'] || ''
+      if (bareResp.status === 200 && (isValidVideoContentType(bct) || bct.includes('text/plain') || (isSegmentUrl(url) && !bct.includes('text/html')))) {
+        response = bareResp
+        usedReferer = 'bare'
+        console.log('[proxy] bare curl-style fetch succeeded for', hostname)
+        break
+      } else { if (bareResp.data) bareResp.data.destroy() }
     } catch {}
+
+    if (!response) for (const ref of referers) {
+      try {
+        const resp = await tryFetch(ref)
+        console.log(`[proxy] RESP ${resp.status} ${resp.headers['content-type']} ref=${ref || 'none'}`)
+        if (resp.status === 200) {
+          const ct = resp.headers['content-type'] || ''
+          if (isValidVideoContentType(ct) || ct.includes('text/plain') || (isSegmentUrl(url) && !ct.includes('text/html'))) {
+            response = resp
+            usedReferer = ref
+            break
+          }
+          if (ct.includes('text/html')) {
+            let snippet = ''
+            resp.data.on('data', (c) => { snippet += c.toString().substring(0, 200); resp.data.destroy() })
+            resp.data.on('end', () => console.log(`[proxy] ${hostname} returned HTML from ${ref}: ${snippet.substring(0, 100)}...`))
+            resp.data.resume()
+          } else {
+            console.log(`[proxy] bad content-type ${ct} from ${ref} for ${hostname}`)
+            resp.data.destroy()
+          }
+        }
+      } catch (e) {
+        console.log(`[proxy] fetch error from ${ref}: ${e.message}`)
+      }
+    }
+
+    if (response) break
+    if (attempt < MAX_ATTEMPTS) await new Promise(r => setTimeout(r, 1000))
   }
 
-  if (!response || response.status !== 200) {
-    console.error('[proxy] failed all referers for', hostname)
+  if (!response) {
+    console.log('[proxy] trying ffmpeg fallback for', hostname)
+    try {
+      const ffmpegData = await tryFfmpegFetch(url, req.app.locals.ffmpegPath)
+      res.setHeader('Content-Type', 'video/mp2t')
+      res.setHeader('Access-Control-Allow-Origin', '*')
+      res.setHeader('Access-Control-Allow-Headers', '*')
+      return res.send(ffmpegData)
+    } catch (ffErr) {
+      console.error('[proxy] ffmpeg fallback also failed for', hostname)
+    }
+  }
+
+  if (!response) {
+    console.error(`[proxy] All proxy strategies failed for ${hostname} url=${url.substring(0,100)}`)
     return res.status(502).send('Proxy failed')
   }
 
@@ -414,10 +600,98 @@ export async function proxy(req, res) {
         res.send(rewritten)
       })
     } else {
-      response.data.pipe(res)
+      // Buffer segment for caching
+      const chunks = []
+      response.data.on('data', (c) => chunks.push(c))
+      response.data.on('end', () => {
+        const buf = Buffer.concat(chunks)
+        cacheSegment(url, buf, contentType)
+        res.send(buf)
+      })
+      response.data.on('error', (err) => {
+        console.error('[proxy] segment stream error:', err.message)
+        if (!res.headersSent) res.status(502).send('Segment fetch failed')
+      })
     }
   } catch (err) {
     console.error('[proxy] stream error:', err.message)
     if (!res.headersSent) res.status(500).send('Proxy stream failed')
+  }
+}
+
+const AD_PATTERNS = [
+  'doubleclick.net', 'googleadservices.com', 'googlesyndication.com',
+  'popads.net', 'propellerads.com', 'adsterra.com', 'exoclick.com',
+  'adf.ly', 'adfly', 'adserver', 'adnxs.com', 'rubiconproject.com',
+  'criteo.com', 'outbrain.com', 'taboola.com', 'revcontent.com',
+  'popcash.net', 'pushcrew.com', 'onesignal.com',
+  'advertising', 'ad-plus', 'ad_', '-ad.', '/ads/',
+  'pagead2.googlesyndication',
+]
+
+function stripAds(html) {
+  let cleaned = html
+
+  cleaned = cleaned.replace(/<script[^>]*>[\s\S]*?<\/script\s*>/gi, (match) => {
+    const lower = match.toLowerCase()
+    for (const ad of AD_PATTERNS) {
+      if (lower.includes(ad)) return ''
+    }
+    if (lower.includes('window.open') || lower.includes('popup') || lower.includes('open.new')) return ''
+    return match
+  })
+
+  cleaned = cleaned.replace(/<iframe[^>]*>[\s\S]*?<\/iframe\s*>/gi, (match) => {
+    const lower = match.toLowerCase()
+    for (const ad of AD_PATTERNS) {
+      if (lower.includes(ad)) return ''
+    }
+    if (lower.includes('window.open') || lower.match(/src\s*=\s*["'][^"']*about:/i)) return ''
+    return match
+  })
+
+  cleaned = cleaned.replace(/\s+onclick\s*=\s*["'][^"']*["']/gi, '')
+  cleaned = cleaned.replace(/\s+onload\s*=\s*["'][^"']*["']/gi, '')
+  cleaned = cleaned.replace(/\s+onerror\s*=\s*["'][^"']*["']/gi, '')
+  cleaned = cleaned.replace(/\s+onmouseover\s*=\s*["'][^"']*["']/gi, '')
+  cleaned = cleaned.replace(/\s+onmousedown\s*=\s*["'][^"']*["']/gi, '')
+
+  cleaned = cleaned.replace(/<div[^>]*id="[^"]*"?[^>]*style="[^"]*display:\s*none[^"]*"[^>]*>[\s\S]*?<\/div\s*>/gi, '')
+  cleaned = cleaned.replace(/<ins\s+class="adsbygoogle"[\s\S]*?<\/ins\s*>/gi, '')
+  cleaned = cleaned.replace(/<script[^>]*data-ad-[\s\S]*?<\/script\s*>/gi, '')
+
+  return cleaned
+}
+
+export async function proxyEmbed(req, res) {
+  const { url: embedUrl } = req.query
+  if (!embedUrl) return res.status(400).json({ error: 'embedUrl required' })
+
+  try {
+    const pageRes = await axios.get(embedUrl, {
+      headers: {
+        'User-Agent': UA,
+        Referer: embedUrl,
+        Accept: 'text/html,application/xhtml+xml',
+      },
+      timeout: 10000,
+      validateStatus: () => true,
+      responseType: 'text',
+    })
+
+    if (pageRes.status !== 200) {
+      return res.status(502).json({ error: `Embed returned ${pageRes.status}` })
+    }
+
+    const cleaned = stripAds(pageRes.data)
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8')
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow')
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN')
+    res.send(cleaned)
+  } catch (err) {
+    console.error('[proxy-embed] error:', err.message)
+    res.status(502).json({ error: 'Failed to fetch embed' })
   }
 }

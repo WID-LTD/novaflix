@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuth } from '../lib/AuthContext'
+import { API_BASE } from '../lib/config'
 import Icon from '../components/ui/Icon'
 import ObliqueColumnsBackdrop from '../components/features/ObliqueColumnsBackdrop'
 
@@ -70,7 +71,7 @@ export default function Register() {
         try {
           const token = localStorage.getItem('novaflix-token')
           if (token) {
-            await fetch('/api/affiliate/redeem', {
+            await fetch(`${API_BASE}/affiliate/redeem`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
               body: JSON.stringify({ code: refCode }),

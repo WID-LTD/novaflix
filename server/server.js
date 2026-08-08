@@ -43,6 +43,11 @@ function isAllowedOrigin(origin) {
     const host = new URL(origin).hostname;
     if (host === 'onrender.com' || host.endsWith('.onrender.com')) return true;
   } catch {}
+  // Accept Vercel preview + production domains for the web client.
+  try {
+    const host = new URL(origin).hostname;
+    if (host === 'vercel.app' || host.endsWith('.vercel.app')) return true;
+  } catch {}
   return false;
 }
 
@@ -178,28 +183,24 @@ wss.on('connection', (ws, req) => {
           userId = roomUserId
           if (userId) registerSocket(userId, ws)
           currentRoom = room
-          if (!rooms.has(room)) rooms.set(room, new Map())
-          const roomUsers = rooms.get(room)
-          roomUsers.set(userId, { ws, name: user?.name || 'Anonymous', id: userId })
-          ws.send(JSON.stringify({ type: 'joined', userId, room, users: [...roomUsers.keys()] }))
-          // Replay persisted chat history for the room
-          try {
-            const { getRoomMessages } = await import('./db.js')
-            const history = await getRoomMessages(room, 50)
-            if (history.length > 0) {
-              ws.send(JSON.stringify({ type: 'chat-history', messages: history.map((m) => ({
-                userId: m.user_id,
-                name: m.user_name || 'Anonymous',
-                message: m.message,
-                timestamp: new Date(m.created_at).getTime(),
-              })) }))
-            }
-          } catch (err) {
-            console.warn('[ws] chat history unavailable:', err.message)
+          if (!rooms.has(room)) {
+            rooms.set(room, { users: new Map(), hostId: null, metadata: null, suggestions: [] })
           }
-          // Send current room metadata to the new joiner
-          if (roomUsers.metadata) {
-            ws.send(JSON.stringify({ type: 'content-selected', payload: roomUsers.metadata }))
+          const roomObj = rooms.get(room)
+          const isHost = roomObj.hostId === null
+          if (isHost) roomObj.hostId = userId
+          roomObj.users.set(userId, { ws, name: user?.name || 'Anonymous', id: userId })
+          ws.send(JSON.stringify({
+            type: 'joined',
+            userId,
+            room,
+            isHost,
+            hostId: roomObj.hostId,
+            users: [...roomObj.users.keys()],
+            suggestions: roomObj.suggestions,
+          }))
+          if (roomObj.metadata) {
+            ws.send(JSON.stringify({ type: 'content-selected', payload: roomObj.metadata }))
           }
           broadcast(room, { type: 'user-joined', userId, name: user?.name || 'Anonymous' }, userId)
           break
@@ -223,6 +224,42 @@ wss.on('connection', (ws, req) => {
           }
           break
         }
+        case 'suggest': {
+          if (currentRoom && rooms.has(currentRoom)) {
+            const roomObj = rooms.get(currentRoom)
+            const suggestion = { ...payload, suggesterId: userId, suggesterName: user?.name || 'Anonymous' }
+            roomObj.suggestions.push(suggestion)
+            // Send to host only
+            const hostClient = roomObj.users.get(roomObj.hostId)
+            if (hostClient && hostClient.ws.readyState === 1) {
+              hostClient.ws.send(JSON.stringify({ type: 'suggestion', payload: suggestion }))
+            }
+          }
+          break
+        }
+        case 'suggest-accept': {
+          if (currentRoom && rooms.has(currentRoom)) {
+            const roomObj = rooms.get(currentRoom)
+            const suggesterId = payload?.suggesterId
+            const suggesterClient = roomObj.users.get(suggesterId)
+            if (suggesterClient && suggesterClient.ws.readyState === 1) {
+              suggesterClient.ws.send(JSON.stringify({ type: 'suggest-accepted', payload: { id: payload?.id, type: payload?.type } }))
+            }
+            broadcast(currentRoom, { type: 'suggest-accepted-broadcast', payload: { id: payload?.id, type: payload?.type, title: payload?.title } }, userId)
+          }
+          break
+        }
+        case 'suggest-decline': {
+          if (currentRoom && rooms.has(currentRoom)) {
+            const roomObj = rooms.get(currentRoom)
+            const suggesterId = payload?.suggesterId
+            const suggesterClient = roomObj.users.get(suggesterId)
+            if (suggesterClient && suggesterClient.ws.readyState === 1) {
+              suggesterClient.ws.send(JSON.stringify({ type: 'suggest-declined', payload: { id: payload?.id, type: payload?.type } }))
+            }
+          }
+          break
+        }
         case 'sync': {
           if (currentRoom) {
             broadcast(currentRoom, { type: 'sync', userId, action: payload?.action, currentTime: payload?.currentTime, playing: payload?.playing }, userId)
@@ -231,9 +268,16 @@ wss.on('connection', (ws, req) => {
         }
         case 'leave': {
           if (currentRoom && rooms.has(currentRoom)) {
-            rooms.get(currentRoom).delete(userId)
+            const roomObj = rooms.get(currentRoom)
+            roomObj.users.delete(userId)
+            // If host leaves, assign new host
+            if (roomObj.hostId === userId && roomObj.users.size > 0) {
+              const firstKey = roomObj.users.keys().next().value
+              roomObj.hostId = firstKey
+              broadcast(currentRoom, { type: 'host-changed', hostId: firstKey })
+            }
             broadcast(currentRoom, { type: 'user-left', userId })
-            if (rooms.get(currentRoom).size === 0) rooms.delete(currentRoom)
+            if (roomObj.users.size === 0) rooms.delete(currentRoom)
           }
           break
         }
@@ -352,9 +396,15 @@ wss.on('connection', (ws, req) => {
     if (userId) deregisterSocket(userId, ws)
     leaveAllTopicRooms(ws)
     if (currentRoom && rooms.has(currentRoom)) {
-      rooms.get(currentRoom).delete(userId)
+      const roomObj = rooms.get(currentRoom)
+      roomObj.users.delete(userId)
+      if (roomObj.hostId === userId && roomObj.users.size > 0) {
+        const firstKey = roomObj.users.keys().next().value
+        roomObj.hostId = firstKey
+        broadcast(currentRoom, { type: 'host-changed', hostId: firstKey })
+      }
       broadcast(currentRoom, { type: 'user-left', userId })
-      if (rooms.get(currentRoom).size === 0) rooms.delete(currentRoom)
+      if (roomObj.users.size === 0) rooms.delete(currentRoom)
     }
     if (currentPresenceContent && presence.has(currentPresenceContent)) {
       presence.get(currentPresenceContent).delete(userId)
@@ -366,7 +416,8 @@ wss.on('connection', (ws, req) => {
 
   function broadcast(room, msg, excludeId) {
     if (!rooms.has(room)) return
-    for (const [id, client] of rooms.get(room)) {
+    const roomObj = rooms.get(room)
+    for (const [id, client] of roomObj.users) {
       if (id !== excludeId && client.ws.readyState === 1) {
         client.ws.send(JSON.stringify(msg))
       }

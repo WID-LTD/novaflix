@@ -132,7 +132,15 @@ export default function VideoPlayer({
 
     if (Hls.isSupported()) {
       if (hlsRef.current) hlsRef.current.destroy()
-      const hls = new Hls()
+      const hls = new Hls({
+        maxBufferLength: 60,
+        maxMaxBufferLength: 120,
+        maxBufferSize: 60 * 1000 * 1000,
+        startLevel: -1,
+        manifestLoadingTimeOut: 15000,
+        levelLoadingTimeOut: 20000,
+        fragLoadingTimeOut: 20000,
+      })
       hlsRef.current = hls
       hls.loadSource(streamUrl)
       hls.attachMedia(video)
@@ -142,8 +150,19 @@ export default function VideoPlayer({
       })
       hls.on(Hls.Events.ERROR, (_, data) => {
         if (data.fatal) {
-          setError('Failed to load video stream')
-          setLoading(false)
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              console.warn('[hls] network error, trying to recover...')
+              hls.startLoad()
+              break
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              console.warn('[hls] media error, trying to recover...')
+              hls.recoverMediaError()
+              break
+            default:
+              setError('Failed to load video stream')
+              setLoading(false)
+          }
         }
       })
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -385,6 +404,7 @@ export default function VideoPlayer({
   return (
     <div
       ref={containerRef}
+      id="tour-player"
       className="relative bg-black rounded-2xl overflow-hidden group"
       onMouseMove={resetControlsTimer}
       onMouseLeave={() => playing && setShowControls(false)}

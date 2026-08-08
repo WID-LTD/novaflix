@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/auth_provider.dart';
 import '../screens/splash_screen.dart';
-import '../screens/onboarding_screen.dart';
 import '../screens/landing_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/register_screen.dart';
@@ -49,7 +48,6 @@ import '../screens/community_screen.dart';
 import '../screens/live_events_screen.dart';
 import '../screens/event_detail_screen.dart';
 import '../screens/downloads_screen.dart';
-import '../screens/offline_play_screen.dart';
 import '../screens/archive_screen.dart';
 import '../screens/archive_detail_screen.dart';
 import '../screens/red_carpet_screen.dart';
@@ -60,36 +58,89 @@ import '../widgets/layout/index.dart';
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
 
-final routerProvider = Provider<GoRouter>((ref) {
-  final refreshNotifier = ValueNotifier(0);
-  ref.listen<AuthState>(authProvider, (_, _) => refreshNotifier.value++);
+class AuthNotifier extends ChangeNotifier {
+  AuthStatus status = AuthStatus.unknown;
+  void update(AuthStatus s) {
+    if (status != s) {
+      status = s;
+      notifyListeners();
+    }
+  }
+}
 
-  return GoRouter(
+final routerRefreshNotifier = AuthNotifier();
+
+final _publicRoutes = <String>{
+  '/', '/home', '/splash', '/landing', '/login', '/register', '/verify-email',
+  '/profiles', '/creator/login',
+  '/search', '/search-results', '/tv-shows', '/discover',
+  '/category', '/category/:slug',
+  '/movie/:id', '/tv/:id',
+  '/settings', '/pricing', '/store', '/learn',
+  '/creators',
+  '/events', '/event/:id', '/red-carpet',
+};
+
+bool _isPublicRoute(String location) {
+  if (_publicRoutes.contains(location)) return true;
+  if (location.startsWith('/category/') || location.startsWith('/movie/') ||
+      location.startsWith('/tv/') || location.startsWith('/event/') ||
+      location.startsWith('/archive/')) return true;
+  return false;
+}
+
+final _protectedRoutes = <String>{
+  '/profile', '/watchlist', '/watch', '/upload', '/downloads', '/community',
+  '/hooks', '/archive', '/referrals', '/payment-success', '/watch-party',
+  '/creator', '/creator/analytics', '/creator/catalog', '/creator/products',
+  '/creator/courses', '/creator/events', '/creator/memberships',
+  '/creator/plan-picker', '/creator/campaigns', '/creator/profile',
+  '/admin', '/admin/asset-qc', '/admin/filters', '/admin/localization',
+  '/admin/campaigns',
+};
+
+bool _isProtectedRoute(String location) {
+  if (_protectedRoutes.contains(location)) return true;
+  if (location.startsWith('/creator') || location.startsWith('/admin') ||
+      location.startsWith('/archive/') || location.startsWith('/community')) {
+    return true;
+  }
+  return false;
+}
+
+GoRouter? _router;
+GoRouter appRouter(WidgetRef ref) {
+  if (_router != null) return _router!;
+
+  _router = GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/splash',
-    refreshListenable: refreshNotifier,
+    refreshListenable: routerRefreshNotifier,
     redirect: (context, state) {
-      final isAuth = ref.read(authProvider).status == AuthStatus.authenticated;
+      final isAuth = routerRefreshNotifier.status == AuthStatus.authenticated;
       final location = state.matchedLocation;
-      final isGuestBrowseable = location == '/home' ||
-          location == '/search' ||
-          location == '/discover' ||
-          location == '/tv-shows' ||
-          location.startsWith('/movie/') ||
-          location.startsWith('/tv/') ||
-          location == '/news' ||
-          location == '/pricing';
 
-      if (isAuth && (location == '/login' || location == '/register' || location == '/verify-email')) {
-        return '/home';
+      if (location == '/splash') return null;
+
+      if (location.startsWith('/creator') && location != '/creator/login') {
+        if (!isAuth) return '/login?redirect=${Uri.encodeComponent(location)}';
+        return null;
       }
-      if (isGuestBrowseable) return null;
-      if (isAuth) return null;
+
+      if (location.startsWith('/admin')) {
+        if (!isAuth) return '/login?redirect=${Uri.encodeComponent(location)}';
+        return null;
+      }
+
+      if (_isPublicRoute(location)) return null;
+      if (!isAuth) {
+        return '/login?redirect=${Uri.encodeComponent(location)}';
+      }
+
       return null;
     },
     routes: [
       GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
-      GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
       GoRoute(path: '/landing', builder: (_, __) => const LandingScreen()),
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
@@ -100,10 +151,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         movieId: int.tryParse(state.uri.queryParameters['id'] ?? ''),
         mediaType: state.uri.queryParameters['type'],
         streamUrl: state.uri.queryParameters['url'],
-        season: state.uri.queryParameters['season'],
-        episode: state.uri.queryParameters['episode'],
       )),
-      GoRoute(path: '/downloads/play', builder: (_, __) => const OfflinePlayScreen()),
 
       ShellRoute(
         navigatorKey: _shellNavigatorKey,
@@ -160,4 +208,5 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/:path(.*)', builder: (_, __) => const NotFoundScreen()),
     ],
   );
-});
+  return _router!;
+}

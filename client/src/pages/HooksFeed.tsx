@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { getHooksFeed } from '../lib/api'
 import { uploadShort, getShortComments, postShortComment, getToken } from '../lib/auth'
+import { WS_ORIGIN } from '../lib/config'
 import Icon from '../components/ui/Icon'
 import Modal from '../components/ui/Modal'
 import HooksCard from '../components/features/HooksCard'
@@ -48,7 +49,8 @@ export default function HooksFeed() {
   useEffect(() => {
     const token = getToken()
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token || '')}`)
+    const host = WS_ORIGIN ? new URL(WS_ORIGIN).host : window.location.host
+    const ws = new WebSocket(`${protocol}//${host}/ws?token=${encodeURIComponent(token || '')}`)
     ws.onmessage = (ev) => {
       try {
         const data = JSON.parse(ev.data)

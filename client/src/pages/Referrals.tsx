@@ -5,6 +5,7 @@ import Button from '../components/ui/Button'
 import Skeleton from '../components/ui/Skeleton'
 import { useToast } from '../components/ui/Toast'
 import { useAuth } from '../lib/AuthContext'
+import { API_BASE } from '../lib/config'
 
 interface ReferralStat {
   total: number
@@ -36,11 +37,11 @@ export default function Referrals() {
     if (!token) { setLoading(false); return }
 
     Promise.all([
-      fetch('/api/affiliate/generate', {
+      fetch(`${API_BASE}/affiliate/generate`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       }).then(r => r.json()),
-      fetch('/api/affiliate/stats', {
+      fetch(`${API_BASE}/affiliate/stats`, {
         headers: { Authorization: `Bearer ${token}` },
       }).then(r => r.json()),
     ]).then(([genRes, statsRes]) => {

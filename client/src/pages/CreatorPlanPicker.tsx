@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import Icon from '../components/ui/Icon'
 import { useAuth } from '../lib/AuthContext'
+import { API_BASE } from '../lib/config'
 
 const CREATOR_PLANS = [
   {
@@ -50,7 +51,7 @@ export default function CreatorPlanPicker() {
     setLoading(planId)
     setError('')
     try {
-      const res = await fetch('/api/payment/initialize', {
+      const res = await fetch(`${API_BASE}/payment/initialize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify({ plan: planId }),

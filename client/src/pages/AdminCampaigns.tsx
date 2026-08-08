@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import Icon from '../components/ui/Icon'
 import Button from '../components/ui/Button'
+import { API_BASE } from '../lib/config'
 
 interface Campaign {
   id: string
@@ -27,7 +28,7 @@ export default function AdminCampaigns() {
 
   const fetchCampaigns = async () => {
     const token = localStorage.getItem('novaflix-token')
-    const res = await fetch('/api/campaigns', {
+    const res = await fetch(`${API_BASE}/campaigns`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     const data = await res.json()
@@ -39,7 +40,7 @@ export default function AdminCampaigns() {
 
   const updateCampaign = async (id: string, updates: Record<string, any>) => {
     const token = localStorage.getItem('novaflix-token')
-    await fetch(`/api/campaigns/${id}`, {
+    await fetch(`${API_BASE}/campaigns/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(updates),

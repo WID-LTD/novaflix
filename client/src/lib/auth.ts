@@ -1,4 +1,6 @@
-const BASE = '/api'
+import { API_BASE } from './config'
+
+const BASE = API_BASE
 
 interface AuthResponse {
   success: boolean

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../lib/AuthContext'
+import { API_BASE } from '../lib/config'
 import Icon from '../components/ui/Icon'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
@@ -41,7 +42,7 @@ export default function CreatorCampaigns() {
 
   const fetchCampaigns = async () => {
     const token = localStorage.getItem('novaflix-token')
-    const res = await fetch('/api/campaigns', {
+    const res = await fetch(`${API_BASE}/campaigns`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     const data = await res.json()
@@ -55,7 +56,7 @@ export default function CreatorCampaigns() {
     e.preventDefault()
     setSubmitting(true)
     const token = localStorage.getItem('novaflix-token')
-    const res = await fetch('/api/campaigns', {
+    const res = await fetch(`${API_BASE}/campaigns`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(form),
@@ -71,7 +72,7 @@ export default function CreatorCampaigns() {
 
   const toggleActive = async (id: string, current: boolean) => {
     const token = localStorage.getItem('novaflix-token')
-    await fetch(`/api/campaigns/${id}`, {
+    await fetch(`${API_BASE}/campaigns/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ active: !current }),

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getToken } from './auth'
+import { WS_ORIGIN } from './config'
 
 const BASE = '/api'
 
@@ -50,7 +51,7 @@ export function useNotifications(enabled: boolean) {
     refresh()
     const token = getToken()
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.host
+    const host = WS_ORIGIN ? new URL(WS_ORIGIN).host : window.location.host
     const ws = new WebSocket(`${protocol}//${host}/ws?token=${encodeURIComponent(token || '')}`)
     wsRef.current = ws
     ws.onmessage = (ev) => {

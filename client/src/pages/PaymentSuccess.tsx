@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 import { verifyPayment } from '../lib/auth'
 import { useAuth } from '../lib/AuthContext'
 import Icon from '../components/ui/Icon'
+import OnboardingTour from '../components/ui/OnboardingTour'
 
 export default function PaymentSuccess() {
   const [searchParams] = useSearchParams()
@@ -49,12 +50,24 @@ export default function PaymentSuccess() {
             <h1 className="text-headline-lg mb-2">Payment Successful!</h1>
             <p className="text-on-surface-variant mb-8">Your plan has been upgraded. Welcome to <img src="/leter-mark-logo.png" alt="" className="h-4 w-auto inline align-middle" />!</p>
             <button
+              id="tour-start-watching"
               onClick={() => navigate('/')}
               className="inline-flex items-center gap-2 px-8 py-3 bg-primary-container text-on-primary-container rounded-lg font-bold hover:brightness-110"
             >
               Start Watching
               <Icon name="arrow_forward" />
             </button>
+            <OnboardingTour
+              storageKey="novaflix-onboarding-purchase"
+              steps={[
+                {
+                  targetSelector: '#tour-start-watching',
+                  title: 'You\'re All Set!',
+                  description: 'Your premium plan is active. Click here to start exploring ad-free streaming, higher quality, and exclusive content.',
+                  placement: 'top',
+                },
+              ]}
+            />
           </>
         )}
 

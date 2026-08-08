@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import Icon from '../components/ui/Icon'
 import { searchAll } from '../lib/api'
+import { API_BASE } from '../lib/config'
 import { useAuth } from '../lib/AuthContext'
 import HoverCard from '../components/features/HoverCard'
 import RecommendationGrid from '../components/features/RecommendationGrid'
@@ -34,7 +35,7 @@ export default function SearchResults() {
     Promise.all([
       searchAll(query),
       user
-        ? fetch(`/api/recommendations/for-you`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
+        ? fetch(`${API_BASE}/recommendations/for-you`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
         : Promise.resolve({ data: [] }),
     ]).then(([searchRes, recRes]) => {
       if (searchRes.success) setResults(searchRes.data)

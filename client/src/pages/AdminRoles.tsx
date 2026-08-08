@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getToken, adminRoles, adminPermissions, adminCreateRole, adminUpdateRole, adminDeleteRole, adminAssignRole } from '../lib/auth'
+import { API_BASE } from '../lib/config'
 import PageHeader from '../components/admin/PageHeader'
 import StatusBadge from '../components/admin/StatusBadge'
 import StatCard from '../components/admin/StatCard'
@@ -51,7 +52,7 @@ export default function AdminRoles() {
   useEffect(() => {
     const token = getToken()
     if (!token) return
-    fetch('/api/admin/users', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_BASE}/admin/users`, { headers: { Authorization: `Bearer ${token}` } })
       .then((x) => x.json())
       .then((x) => { if (x.success) setUsers(x.users || []) })
       .catch(() => {})

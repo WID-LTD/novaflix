@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getToken } from '../lib/auth'
+import { API_BASE } from '../lib/config'
 import PageHeader from '../components/admin/PageHeader'
 import StatusBadge from '../components/admin/StatusBadge'
 import StatCard from '../components/admin/StatCard'
@@ -11,7 +12,7 @@ export default function AdminCreators() {
   useEffect(() => {
     const token = getToken()
     if (!token) return
-    fetch(`/api/admin/creator-studio`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_BASE}/admin/creator-studio`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
       .then((r) => { if (r.success) setCreators(r.creators || []); setLoading(false) })
       .catch(() => setLoading(false))
