@@ -1,6 +1,6 @@
 # NovaFlix
 
-A self-hosted streaming platform that lets you search, watch, and download movies and TV shows via HLS streams. Built with Node.js (Express) on the backend and vanilla JavaScript on the frontend.
+A self-hosted streaming platform that lets you search, watch, and download movies and TV shows via HLS streams. Built with Node.js (Express) on the backend and vanilla JavaScript on the frontend
 
 ```
 novaflix/
