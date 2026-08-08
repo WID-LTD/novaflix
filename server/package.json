@@ -12,6 +12,8 @@
     "seed:communities": "node seedCommunities.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1093.0",
+    "@sendinblue/client": "^3.3.1",
     "axios": "^1.6.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
@@ -21,6 +23,7 @@
     "flutterwave-node-v3": "^1.4.1",
     "jsonwebtoken": "^9.0.3",
     "lowdb": "^5.1.0",
+    "multer": "^2.2.0",
     "paystack-api": "^2.0.6",
     "pg": "^8.22.0",
     "stripe": "^22.3.1",
