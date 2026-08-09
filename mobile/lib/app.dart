@@ -13,15 +13,10 @@ class NovaflixApp extends ConsumerStatefulWidget {
 
 class _NovaflixAppState extends ConsumerState<NovaflixApp> {
   @override
-  void initState() {
-    super.initState();
+  Widget build(BuildContext context) {
     ref.listen(authProvider, (_, next) {
       routerRefreshNotifier.update(next.status);
     });
-  }
-
-  @override
-  Widget build(BuildContext context) {
     return MaterialApp.router(
       title: 'NovaFlix',
       debugShowCheckedModeBanner: false,
