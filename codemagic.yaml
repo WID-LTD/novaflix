@@ -13,7 +13,11 @@ workflows:
       - name: Get Flutter packages
         script: flutter pub get
       - name: Build release APK against production backend
-        script: flutter build apk --release --dart-define=BASE_URL=https://novaflix-ecz9.onrender.com/api
+        script: |
+          flutter build apk --release --dart-define=BASE_URL=https://novaflix-ecz9.onrender.com/api
+          # The Flutter Gradle plugin always names the output app-release.apk,
+          # so copy it to novaflix.apk for a stable artifact name.
+          cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/novaflix.apk
     artifacts:
       - build/app/outputs/flutter-apk/novaflix.apk
     publishing:
