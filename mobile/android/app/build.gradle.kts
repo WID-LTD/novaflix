@@ -37,11 +37,13 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
-}
 
-base {
-    // Name the produced artifact novaflix.apk (instead of app-release.apk).
-    archivesName = "novaflix"
+    applicationVariants.all {
+        outputs.all {
+            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName =
+                "novaflix.apk"
+        }
+    }
 }
 
 flutter {
