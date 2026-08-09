@@ -12,10 +12,10 @@ workflows:
     scripts:
       - name: Get Flutter packages
         script: flutter pub get
-      - name: Build APK
-        script: flutter build apk --debug
+      - name: Build release APK against production backend
+        script: flutter build apk --release --dart-define=BASE_URL=https://novaflix-ecz9.onrender.com/api
     artifacts:
-      - build/app/outputs/flutter-apk/**/*.apk
+      - build/app/outputs/flutter-apk/novaflix.apk
     publishing:
       email:
         recipients:

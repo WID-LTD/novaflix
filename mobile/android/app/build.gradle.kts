@@ -39,6 +39,11 @@ android {
     }
 }
 
+base {
+    // Name the produced artifact novaflix.apk (instead of app-release.apk).
+    archivesName = "novaflix"
+}
+
 flutter {
     source = "../.."
 }
