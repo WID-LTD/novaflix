@@ -30,6 +30,7 @@ const allowedOrigins = [
   'http://localhost:3030',
   'http://localhost:5173',
   'https://novaflix-ecz9.onrender.com',
+  'https://novaflix-web.vercel.app',
 ];
 
 const renderSiteUrl = process.env.RENDER_EXTERNAL_URL;
