@@ -6,6 +6,10 @@ const fromName = process.env.BREVO_NAME || 'NovaFlix'
 
 let apiInstance = null
 
+export function isEmailConfigured() {
+  return !!apiKey
+}
+
 function getClient() {
   if (!apiKey) return null
   if (!apiInstance) {

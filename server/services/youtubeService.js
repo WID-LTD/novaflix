@@ -140,13 +140,16 @@ export async function startYoutubeImport({ url, height, title, description, genr
 }
 
 async function downloadAndStore({ jobId, uploadId, url, height, title, description, genre, userId, filePath, info }) {
-  await new Promise((resolve, reject) => {
+  const attemptDownload = () => new Promise((resolve, reject) => {
     const args = [
       '-f', `bv*[height<=${height}]+ba/b[height<=${height}]/b`,
       '--max-filesize', `${Math.floor(MAX_IMPORT_BYTES / 1024 / 1024)}M`,
       '--merge-output-format', 'mp4',
       '--no-playlist',
       '--no-warnings',
+      '--retries', '5',
+      '--fragment-retries', '10',
+      '--socket-timeout', '30',
       '-o', filePath,
       url,
     ]
@@ -173,9 +176,74 @@ async function downloadAndStore({ jobId, uploadId, url, height, title, descripti
     child.on('error', reject)
     child.on('close', (code) => {
       if (code === 0 && fs.existsSync(filePath)) resolve()
-      else reject(new Error(`yt-dlp exited with code ${code}: ${buf.slice(-300)}`))
+      else reject(new Error(`yt-dlp exited with code ${code}: ${buf.slice(-400)}`))
     })
   })
+
+  // Fallback for videos that don't expose separate audio+video streams:
+  // grab the best single-file (muxed) stream at or below the requested height.
+  const attemptDownloadSingle = () => new Promise((resolve, reject) => {
+    const args = [
+      '-f', `best[height<=${height}]/best`,
+      '--max-filesize', `${Math.floor(MAX_IMPORT_BYTES / 1024 / 1024)}M`,
+      '--no-playlist',
+      '--no-warnings',
+      '--retries', '5',
+      '--fragment-retries', '10',
+      '--socket-timeout', '30',
+      '-o', filePath,
+      url,
+    ]
+    const child = spawn(YT_DLP, args, { cwd: WORK_DIR })
+    let buf = ''
+    child.stdout.on('data', (d) => { buf += d.toString() })
+    child.stderr.on('data', (d) => {
+      buf += d.toString()
+      const lines = buf.split('\r')
+      buf = lines.pop() || ''
+      for (const line of lines) {
+        const m = line.match(/(\d+(?:\.\d+)?)%(?: of| \()/)
+        if (m) {
+          const job = jobs.get(jobId)
+          if (job) job.progress = Math.round(parseFloat(m[1]))
+        }
+      }
+    })
+    child.on('error', reject)
+    child.on('close', (code) => {
+      if (code === 0 && fs.existsSync(filePath)) resolve()
+      else reject(new Error(`yt-dlp exited with code ${code}: ${buf.slice(-400)}`))
+    })
+  })
+
+  // YouTube frequently rate-limits/errors transiently — retry the download,
+  // falling back to the single-file format on persistent failure.
+  let lastErr
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      await attemptDownload()
+      lastErr = null
+      break
+    } catch (err) {
+      lastErr = err
+      if (fs.existsSync(filePath)) fs.unlink(filePath, () => {})
+      await new Promise((r) => setTimeout(r, attempt * 3000))
+    }
+  }
+  if (lastErr) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        await attemptDownloadSingle()
+        lastErr = null
+        break
+      } catch (err) {
+        lastErr = err
+        if (fs.existsSync(filePath)) fs.unlink(filePath, () => {})
+        await new Promise((r) => setTimeout(r, attempt * 3000))
+      }
+    }
+  }
+  if (lastErr) throw lastErr
 
   // Push the file to storage.
   const buffer = fs.readFileSync(filePath)

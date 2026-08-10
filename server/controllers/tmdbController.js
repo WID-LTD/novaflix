@@ -41,7 +41,7 @@ export function details(req, res) {
 
   if (isUuid || type === 'creator') {
     pool.query(
-      `SELECT * FROM uploads WHERE id = $1::uuid OR id::text = $1`,
+      `SELECT * FROM uploads WHERE id::text = $1`,
       [id]
     )
       .then(({ rows }) => {
@@ -54,8 +54,8 @@ export function details(req, res) {
           title: upload.title,
           year: upload.created_at ? new Date(upload.created_at).getFullYear().toString() : '',
           releaseDate: upload.created_at || null,
-          poster: upload.thumbnail_url || null,
-          backdrop: upload.thumbnail_url || null,
+          poster: upload.thumbnail_url ? `/api/stream/creator/${upload.id}-thumb.jpg` : null,
+          backdrop: upload.thumbnail_url ? `/api/stream/creator/${upload.id}-thumb.jpg` : null,
           overview: upload.description || '',
           rating: 0,
           genres: upload.genre ? [upload.genre] : [],
@@ -389,12 +389,12 @@ export async function searchAll(req, res) {
           id: r.id,
           title: r.title,
           year: r.created_at ? new Date(r.created_at).getFullYear().toString() : '',
-          poster: r.thumbnail_url || null,
+          poster: r.thumbnail_url ? `/api/stream/creator/${r.id}-thumb.jpg` : null,
           type: 'movie',
           rating: 0,
           overview: r.description || '',
           source: 'creator',
-          url: r.filename,
+          url: `/api/stream/creator/${r.id}.mp4`,
         })
       }
     } catch {}

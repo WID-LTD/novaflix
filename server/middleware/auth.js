@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken'
+import { resolveJwtSecret } from '../config/jwtSecret.js'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'novaflix-secret-key-change-in-production'
+const JWT_SECRET = resolveJwtSecret()
 
 export function authMiddleware(req, res, next) {
   const header = req.headers.authorization

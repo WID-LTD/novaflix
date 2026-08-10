@@ -25,6 +25,10 @@ ALTER TABLE users ADD CONSTRAINT users_plan_check CHECK (plan IN ('free', 'stude
 ALTER TABLE users ADD COLUMN IF NOT EXISTS xp INTEGER DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS level INTEGER DEFAULT 1;
 
+-- Google OAuth support: Google-linked accounts may have no password
+ALTER TABLE users ALTER COLUMN password DROP NOT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(255) UNIQUE;
+
 CREATE TABLE IF NOT EXISTS creator_profiles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID UNIQUE REFERENCES users(id) ON DELETE CASCADE,

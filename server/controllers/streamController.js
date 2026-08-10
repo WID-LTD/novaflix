@@ -489,20 +489,22 @@ async function tryFfmpegFetch(url, ffmpegPath) {
 }
 
 export async function streamCreatorUpload(req, res) {
-  const id = (req.params.file || '').replace(/\.mp4$/i, '')
+  const isThumb = /-thumb\.(jpg|jpeg|png|webp)$/i.test(req.params.file || '')
+  const id = (req.params.file || '').replace(/\.(mp4|webm|mov|m4v)$/i, '').replace(/-thumb\.(jpg|jpeg|png|webp)$/i, '')
   try {
     const upload = await getUploadById(id)
-    if (!upload || !upload.filename || upload.status !== 'active') {
+    const rawUrl = isThumb ? upload?.thumbnail_url : upload?.filename
+    if (!upload || !rawUrl || upload.status !== 'active') {
       return res.status(404).json({ error: 'Upload not found' })
     }
-    const parsed = new URL(upload.filename)
+    const parsed = new URL(rawUrl)
     const key = parsed.pathname.replace(/^\//, '').split('/').slice(1).join('/')
     const range = req.headers.range
     const result = await streamFile(key, range)
     if (!result.success) return res.status(500).json({ error: result.error })
     if (range) res.status(206)
     res.set({
-      'Content-Type': result.contentType || 'video/mp4',
+      'Content-Type': result.contentType || (isThumb ? 'image/jpeg' : 'video/mp4'),
       'Accept-Ranges': 'bytes',
       'Cache-Control': 'public, max-age=31536000',
     })

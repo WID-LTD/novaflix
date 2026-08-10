@@ -11,6 +11,8 @@ router.post('/forgot-password', authController.forgotPassword)
 router.post('/reset-password', authController.resetPassword)
 router.post('/verify-email', authController.verifyEmail)
 router.post('/resend-verification', authController.resendVerification)
+router.get('/google', authController.startGoogleAuth)
+router.get('/google/callback', authController.googleCallback)
 router.get('/me', authMiddleware, authController.getMe)
 
 export default router

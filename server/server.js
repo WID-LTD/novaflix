@@ -16,13 +16,14 @@ import { initDatabase } from './config/database.js';
 import apiRoutes from './routes/index.js';
 import { getPlanRank } from './controllers/planUtils.js';
 import { joinTopicRoom, leaveTopicRoom, leaveAllTopicRooms } from './lib/realtime.js';
+import { resolveJwtSecret } from './config/jwtSecret.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3030;
-const JWT_SECRET = process.env.JWT_SECRET || 'novaflix-secret-key-change-in-production';
+const JWT_SECRET = resolveJwtSecret();
 const TMDB_ACCESS_TOKEN = process.env.TMDB_ACCESS_TOKEN;
 
 const allowedOrigins = [

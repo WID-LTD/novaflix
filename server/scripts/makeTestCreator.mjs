@@ -5,6 +5,7 @@ dotenv.config({ path: path.join(path.dirname(fileURLToPath(import.meta.url)), '.
 import jwt from 'jsonwebtoken'
 import { v4 as uuidv4 } from 'uuid'
 import { createUser, findUserByEmail } from '../db.js'
+import { resolveJwtSecret } from '../config/jwtSecret.js'
 
 // The db module's pool initializes asynchronously.
 await new Promise((r) => setTimeout(r, 2500))
@@ -31,6 +32,6 @@ if (!user) {
 
 const token = jwt.sign(
   { id: user.id, email: user.email, role: user.role, plan: user.plan },
-  process.env.JWT_SECRET || 'novaflix-secret-key-change-in-production'
+  resolveJwtSecret()
 )
 console.log(JSON.stringify({ email, userId: user.id, token }))
