@@ -4,9 +4,10 @@ import { createHash } from 'crypto'
 import { v4 as uuidv4 } from 'uuid'
 import pool from '../config/database.js'
 import { findUserByEmail, findUserById, createUser, updateUser, saveVerificationCode, verifyCode, updateLastLogin, findDevice, upsertDevice, findKnownLocation, recordLocation } from '../db.js'
-import { sendVerificationCode, sendWelcomeEmail, sendLoginVerificationCode, sendPasswordResetEmail } from '../services/emailService.js'
+import { sendVerificationCode, sendWelcomeEmail, sendLoginVerificationCode, sendPasswordResetEmail, isEmailConfigured } from '../services/emailService.js'
+import { resolveJwtSecret } from '../config/jwtSecret.js'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'novaflix-secret-key-change-in-production'
+const JWT_SECRET = resolveJwtSecret()
 const INACTIVITY_DAYS = 14
 const LOCATION_RADIUS_KM = 150
 
@@ -63,6 +64,10 @@ export async function register(req, res) {
     const { email, password, name, displayName } = req.body
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' })
 
+    if (!isEmailConfigured()) {
+      return res.status(503).json({ error: 'Email verification is temporarily unavailable. Please try again later.' })
+    }
+
     const existing = await findUserByEmail(email)
     if (existing) return res.status(409).json({ error: 'Email already registered' })
 
@@ -113,6 +118,9 @@ export async function login(req, res) {
     if (!match) return res.status(401).json({ error: 'Invalid credentials' })
 
     if (!user.email_verified) {
+      if (!isEmailConfigured()) {
+        return res.status(503).json({ error: 'Email verification is temporarily unavailable. Please try again later.' })
+      }
       const code = generateCode()
       await saveVerificationCode(user.id, code)
       try { await sendVerificationCode(email, code, user.name) } catch {}
@@ -125,6 +133,9 @@ export async function login(req, res) {
 
     const reason = await needsLoginVerification(user, { devId, ip, lat, lng })
     if (reason) {
+      if (!isEmailConfigured()) {
+        return res.status(503).json({ error: 'Security verification is temporarily unavailable. Please try again later.' })
+      }
       const code = generateCode()
       await saveVerificationCode(user.id, code)
       try {
@@ -180,6 +191,10 @@ export async function forgotPassword(req, res) {
   try {
     const { email } = req.body
     if (!email) return res.status(400).json({ error: 'Email required' })
+
+    if (!isEmailConfigured()) {
+      return res.status(503).json({ error: 'Password reset is temporarily unavailable. Please try again later.' })
+    }
 
     const user = await findUserByEmail(email)
     if (user && (user.role === 'creator' || user.role === 'admin')) {

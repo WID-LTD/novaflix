@@ -12,6 +12,7 @@ function rowToUser(row) {
     avatar: row.avatar,
     bio: row.bio || '',
     email_verified: row.email_verified,
+    google_id: row.google_id,
     last_login_at: row.last_login_at,
     createdAt: row.created_at,
     verified: row.verified,
@@ -39,12 +40,17 @@ export async function findUserById(id) {
   return rowToUser(rows[0])
 }
 
+export async function findUserByGoogleId(googleId) {
+  const { rows } = await pool.query('SELECT * FROM users WHERE google_id = $1', [googleId])
+  return rowToUser(rows[0])
+}
+
 export async function createUser(user) {
   const { rows } = await pool.query(
-    `INSERT INTO users (id, email, password, name, role, plan, avatar, bio, email_verified)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `INSERT INTO users (id, email, password, name, role, plan, avatar, bio, email_verified, google_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING *`,
-    [user.id, user.email, user.password, user.name, user.role || 'user', user.plan || 'free', user.avatar, user.bio || '', user.email_verified || false]
+    [user.id, user.email, user.password, user.name, user.role || 'user', user.plan || 'free', user.avatar, user.bio || '', user.email_verified || false, user.google_id || null]
   )
   return rowToUser(rows[0])
 }

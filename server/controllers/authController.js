@@ -1,12 +1,14 @@
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
+import axios from 'axios'
 import { createHash } from 'crypto'
 import { v4 as uuidv4 } from 'uuid'
 import pool from '../config/database.js'
-import { findUserByEmail, findUserById, createUser, saveVerificationCode, verifyCode, updateUser, updateLastLogin, findDevice, upsertDevice, findKnownLocation, recordLocation } from '../db.js'
-import { sendVerificationCode, sendWelcomeEmail, sendLoginVerificationCode, sendPasswordResetEmail } from '../services/emailService.js'
+import { findUserByEmail, findUserById, findUserByGoogleId, createUser, saveVerificationCode, verifyCode, updateUser, updateLastLogin, findDevice, upsertDevice, findKnownLocation, recordLocation } from '../db.js'
+import { sendVerificationCode, sendWelcomeEmail, sendLoginVerificationCode, sendPasswordResetEmail, isEmailConfigured } from '../services/emailService.js'
+import { resolveJwtSecret } from '../config/jwtSecret.js'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'novaflix-secret-key-change-in-production'
+const JWT_SECRET = resolveJwtSecret()
 const INACTIVITY_DAYS = 14
 const LOCATION_RADIUS_KM = 150
 
@@ -63,6 +65,10 @@ export async function register(req, res) {
     const { email, password, name } = req.body
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' })
 
+    if (!isEmailConfigured()) {
+      return res.status(503).json({ error: 'Email verification is temporarily unavailable. Please try again later.' })
+    }
+
     const existing = await findUserByEmail(email)
     if (existing) return res.status(409).json({ error: 'Email already registered' })
 
@@ -103,6 +109,10 @@ export async function login(req, res) {
     const user = await findUserByEmail(email)
     if (!user) return res.status(401).json({ error: 'Invalid credentials' })
 
+    if (!user.password) {
+      return res.status(401).json({ error: 'This account uses Google Sign-In. Please sign in with Google.' })
+    }
+
     const match = await bcrypt.compare(password, user.password)
     if (!match) return res.status(401).json({ error: 'Invalid credentials' })
 
@@ -128,6 +138,10 @@ export async function login(req, res) {
 
     const reason = await needsLoginVerification(user, { devId, ip, lat, lng })
     if (reason) {
+      if (!isEmailConfigured()) {
+        console.warn(`[auth] Login verification required (${reason}) but email is not configured; allowing sign-in.`)
+        return res.status(503).json({ error: 'Security verification is temporarily unavailable. Please try again later.' })
+      }
       const code = generateCode()
       await saveVerificationCode(user.id, code)
       try {
@@ -229,10 +243,16 @@ export async function getMe(req, res) {
   safe.accountStatus = accountStatus
   safe.accountReason = accountStatus === 'suspended' ? (user.suspension_reason || '') : (user.banned_reason || '')
   res.json({ success: true, user: safe })
-}export async function forgotPassword(req, res) {
+}
+
+export async function forgotPassword(req, res) {
   try {
     const { email } = req.body
     if (!email) return res.status(400).json({ error: 'Email required' })
+
+    if (!isEmailConfigured()) {
+      return res.status(503).json({ error: 'Password reset is temporarily unavailable. Please try again later.' })
+    }
 
     const user = await findUserByEmail(email)
     if (user) {
@@ -278,5 +298,156 @@ export async function resetPassword(req, res) {
     res.json({ success: true, message: 'Password updated. You can now sign in.' })
   } catch (err) {
     res.status(500).json({ error: err.message })
+  }
+}
+
+function getBaseUrl(req) {
+  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http'
+  const host = req.get('host')
+  return `${proto}://${host}`
+}
+
+function parseCookies(req) {
+  const header = req.headers.cookie || ''
+  const cookies = {}
+  for (const part of header.split(';')) {
+    const idx = part.indexOf('=')
+    if (idx === -1) continue
+    const key = part.slice(0, idx).trim()
+    const value = part.slice(idx + 1).trim()
+    if (key) cookies[decodeURIComponent(key)] = decodeURIComponent(value)
+  }
+  return cookies
+}
+
+function sanitizeRedirectPath(path) {
+  if (path && typeof path === 'string' && path.startsWith('/') && !path.startsWith('//')) {
+    return path.slice(0, 500)
+  }
+  return '/home'
+}
+
+export async function startGoogleAuth(req, res) {
+  const clientId = process.env.GOOGLE_CLIENT_ID
+  if (!clientId) {
+    return res.status(503).json({ error: 'Google Sign-In is not configured. Please try again later.' })
+  }
+
+  const redirectPath = sanitizeRedirectPath(req.query.redirect)
+  const redirectUri = `${getBaseUrl(req)}/api/auth/google/callback`
+  const state = jwt.sign({ purpose: 'google-oauth', path: redirectPath, ts: Date.now() }, JWT_SECRET, { expiresIn: '10m' })
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    scope: 'openid email profile',
+    state,
+    access_type: 'online',
+    prompt: 'select_account',
+  })
+
+  res.cookie('google_oauth_state', state, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: req.headers['x-forwarded-proto'] === 'https' || req.secure,
+    maxAge: 10 * 60 * 1000,
+    path: '/',
+  })
+
+  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`)
+}
+
+export async function googleCallback(req, res) {
+  const appUrl = process.env.APP_URL || 'http://localhost:3000'
+  const fail = (msg) => res.redirect(`${appUrl}/oauth/callback?error=${encodeURIComponent(msg)}`)
+
+  try {
+    const { code, state, error } = req.query
+
+    if (error) return fail('Google Sign-In was cancelled or failed.')
+
+    const cookieState = parseCookies(req).google_oauth_state
+    if (!code || !state || !cookieState || state !== cookieState) {
+      return fail('Invalid sign-in request. Please try again.')
+    }
+
+    let statePayload
+    try {
+      statePayload = jwt.verify(state, JWT_SECRET)
+    } catch {
+      return fail('Sign-in request expired. Please try again.')
+    }
+
+    const clientId = process.env.GOOGLE_CLIENT_ID
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET
+    if (!clientId || !clientSecret) return fail('Google Sign-In is not configured. Please try again later.')
+
+    const redirectUri = `${getBaseUrl(req)}/api/auth/google/callback`
+
+    const tokenRes = await axios.post('https://oauth2.googleapis.com/token', new URLSearchParams({
+      code,
+      client_id: clientId,
+      client_secret: clientSecret,
+      redirect_uri: redirectUri,
+      grant_type: 'authorization_code',
+    }).toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      timeout: 15000,
+    })
+
+    const { id_token } = tokenRes.data
+    if (!id_token) return fail('Unable to verify your Google account.')
+
+    const profile = jwt.decode(id_token)
+    if (!profile || !profile.sub || !profile.email) return fail('Unable to read your Google account.')
+
+    if (profile.email_verified === false) {
+      return fail('Your Google email is not verified.')
+    }
+
+    let user = await findUserByGoogleId(profile.sub)
+    let isNew = false
+
+    if (!user) {
+      const existing = await findUserByEmail(profile.email)
+      if (existing) {
+        await updateUser(existing.id, { google_id: profile.sub, email_verified: true, avatar: existing.avatar || profile.picture || null })
+        user = await findUserById(existing.id)
+      } else {
+        isNew = true
+        user = {
+          id: uuidv4(),
+          email: profile.email,
+          name: profile.name || profile.given_name || profile.email.split('@')[0],
+          password: null,
+          role: 'user',
+          plan: 'free',
+          avatar: profile.picture || null,
+          bio: '',
+          email_verified: true,
+          google_id: profile.sub,
+        }
+        await createUser(user)
+      }
+    }
+
+    if (user.role === 'banned') {
+      return res.redirect(`${appUrl}/oauth/callback?error=${encodeURIComponent('Account banned')}`)
+    }
+    if (user.suspended_until && new Date(user.suspended_until).getTime() > Date.now()) {
+      return res.redirect(`${appUrl}/oauth/callback?error=${encodeURIComponent('Account suspended')}`)
+    }
+
+    await recordLogin(req, user, undefined, undefined, undefined, undefined)
+
+    const token = signToken(user)
+    const redirectPath = sanitizeRedirectPath(statePayload.path)
+
+    res.clearCookie('google_oauth_state')
+    res.redirect(`${appUrl}/oauth/callback?token=${encodeURIComponent(token)}&redirect=${encodeURIComponent(redirectPath)}&new=${isNew ? '1' : '0'}`)
+  } catch (err) {
+    console.error('[auth] Google OAuth callback error:', err.message)
+    fail('Google Sign-In failed. Please try again.')
   }
 }

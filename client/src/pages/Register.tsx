@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuth } from '../lib/AuthContext'
 import { API_BASE } from '../lib/config'
+import Button from '../components/ui/Button'
 import Icon from '../components/ui/Icon'
 import ObliqueColumnsBackdrop from '../components/features/ObliqueColumnsBackdrop'
 
@@ -18,7 +19,7 @@ const genres = [
 export default function Register() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const { register } = useAuth()
+  const { register, verifyEmail, resendVerification } = useAuth()
   const [step, setStep] = useState(1)
   const [refCode, setRefCode] = useState(searchParams.get('ref') || '')
 
@@ -35,6 +36,9 @@ export default function Register() {
   const [selectedGenres, setSelectedGenres] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [needsVerify, setNeedsVerify] = useState(false)
+  const [code, setCode] = useState('')
+  const [verifying, setVerifying] = useState(false)
 
   const updateProgress = (s: number) => {
     const bar = document.getElementById('progress-bar')
@@ -65,8 +69,20 @@ export default function Register() {
     setLoading(true)
     const result = await register(email, password, displayName || undefined)
     setLoading(false)
+    if (result.success && result.userId) {
+      setNeedsVerify(true)
+    } else {
+      setError(result.error || 'Registration failed')
+    }
+  }
+
+  const handleVerify = async () => {
+    setError('')
+    setVerifying(true)
+    const result = await verifyEmail(code)
+    setVerifying(false)
     if (result.success) {
-      // Redeem referral code if present
+      // Redeem referral code now that the account is verified + authenticated.
       if (refCode) {
         try {
           const token = localStorage.getItem('novaflix-token')
@@ -81,8 +97,58 @@ export default function Register() {
       }
       navigate('/profiles')
     } else {
-      setError(result.error || 'Registration failed')
+      setError(result.error || 'Verification failed')
     }
+  }
+
+  const handleResend = async () => {
+    setError('')
+    const result = await resendVerification()
+    if (!result.success) {
+      setError(result.error || 'Failed to resend code')
+    }
+  }
+
+  if (needsVerify) {
+    return (
+      <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-background">
+        <ObliqueColumnsBackdrop />
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative z-10 w-full max-w-md px-margin-mobile"
+        >
+          <div className="glass-panel rounded-xl p-8 shadow-2xl border border-outline-variant/20">
+            <div className="text-center mb-8">
+              <h1 className="text-headline-md mb-2">Verify your email</h1>
+              <p className="text-body-md text-on-surface-variant">
+                6-digit code sent to <span className="text-primary">{email}</span>
+              </p>
+            </div>
+            {error && (
+              <div className="bg-error-container/20 border border-error/20 text-error text-sm rounded-xl px-4 py-3 mb-4">{error}</div>
+            )}
+            <div className="space-y-4">
+              <input
+                type="text"
+                placeholder="000000"
+                value={code}
+                onChange={e => setCode(e.target.value)}
+                maxLength={6}
+                className="w-full bg-surface-container-low border border-outline-variant/30 text-on-surface rounded-lg py-4 px-4 text-center text-2xl tracking-[0.5em] font-bold focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container"
+              />
+              <Button className="w-full" size="lg" loading={verifying} onClick={handleVerify} disabled={code.length !== 6}>
+                Verify Email
+              </Button>
+              <button onClick={handleResend} className="w-full text-sm text-on-surface-variant hover:text-primary transition-colors font-label-md">
+                Resend code
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    )
   }
 
   return (

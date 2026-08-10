@@ -67,7 +67,7 @@ function normalizeUpload(u) {
     id: u.id,
     title: u.title,
     year: u.created_at ? new Date(u.created_at).getFullYear().toString() : '',
-    poster: u.thumbnail_url || null,
+    poster: u.thumbnail_url ? `/api/stream/creator/${u.id}-thumb.jpg` : null,
     overview: u.description || '',
     type: 'movie',
     rating: 0,

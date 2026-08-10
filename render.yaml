@@ -24,6 +24,14 @@ services:
         sync: false
       - key: TMDB_ACCESS_TOKEN
         sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: APP_URL
+        value: https://novaflix-web.vercel.app
       - key: PAYSTACK_SECRET_KEY
         sync: false
       - key: FLUTTERWAVE_SECRET_KEY
