@@ -8,7 +8,13 @@ async function fetchJson<T>(url: string, params?: Record<string, string>): Promi
     const queryString = searchParams.toString()
     const fullUrl = queryString ? `${url}?${queryString}` : url
     const token = localStorage.getItem('novaflix-token') || ''
-    const res = await fetch(fullUrl, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 20000)
+    const res = await fetch(fullUrl, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      signal: controller.signal,
+    })
+    clearTimeout(timer)
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
       return { success: false, error: body.error || `Server error (${res.status})` } as T
