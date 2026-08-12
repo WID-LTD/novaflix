@@ -5,6 +5,7 @@ import type { MediaItem } from '../../types'
 import Badge from '../ui/Badge'
 import Icon from '../ui/Icon'
 import PremiumBadge from '../ui/PremiumBadge'
+import { useStore } from '../../store/useStore'
 
 interface MovieCardProps {
   item: MediaItem
@@ -17,6 +18,28 @@ interface MovieCardProps {
 export default function MovieCard({ item, index = 0, progress, duration, className }: MovieCardProps) {
   const [imgLoaded, setImgLoaded] = useState(false)
   const [imgError, setImgError] = useState(false)
+
+  const addToWatchlist = useStore((s) => s.addToWatchlist)
+  const removeFromWatchlist = useStore((s) => s.removeFromWatchlist)
+  const isInWatchlist = useStore((s) => s.isInWatchlist)
+
+  const inWatchlist = isInWatchlist(item.id)
+
+  const toggleFavorite = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (inWatchlist) {
+      removeFromWatchlist(item.id)
+    } else {
+      addToWatchlist({
+        id: item.id,
+        title: item.title,
+        poster: item.poster,
+        type: item.type === 'tv' ? 'tv' : 'movie',
+        year: item.year,
+      })
+    }
+  }
 
   const posterUrl = item.poster || ''
   const detailUrl = `/${item.type === 'tv' ? 'tv' : 'movie'}/${item.id}`
@@ -95,10 +118,10 @@ export default function MovieCard({ item, index = 0, progress, duration, classNa
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
                 className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center"
-                onClick={(e) => e.preventDefault()}
-                aria-label="Add to favorites"
+                onClick={toggleFavorite}
+                aria-label={inWatchlist ? 'Remove from favorites' : 'Add to favorites'}
               >
-                <Icon name="favorite" className="text-white" />
+                <Icon name="favorite" fill={inWatchlist} className={inWatchlist ? 'text-red-500' : 'text-white'} />
               </motion.button>
             </div>
           </div>

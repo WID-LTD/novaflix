@@ -21,7 +21,7 @@ function formatDate(iso: string | null) {
 }
 
 function articleRoute(a: NewsArticle) {
-  return { pathname: `/news/${encodeURIComponent(a.url)}`, state: { article: a } }
+  return { pathname: `/news/deep-dive/${encodeURIComponent(a.url)}`, state: { article: a } }
 }
 
 export default function NewsRow({ title, articles, loading, link }: NewsRowProps) {

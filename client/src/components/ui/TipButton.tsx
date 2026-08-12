@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Icon from './Icon'
+import { getToken, initializeTip } from '../../lib/auth'
 
 interface TipButtonProps {
+  creatorId?: string
   recipientName?: string
   onTip?: (amount: number) => void
   className?: string
@@ -14,18 +16,38 @@ const presets = [
   { amount: 10, icon: 'rocket_launch' as const, label: 'Rocket' },
 ]
 
-export default function TipButton({ recipientName = 'this creator', onTip, className = '' }: TipButtonProps) {
+export default function TipButton({ creatorId, recipientName = 'this creator', onTip, className = '' }: TipButtonProps) {
   const [open, setOpen] = useState(false)
   const [customAmount, setCustomAmount] = useState('')
-  const [showThanks, setShowThanks] = useState(false)
+  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+  const [msg, setMsg] = useState('')
 
-  const handleTip = (amount: number) => {
+  const handleTip = async (amount: number) => {
     onTip?.(amount)
-    setShowThanks(true)
-    setTimeout(() => {
-      setShowThanks(false)
-      setOpen(false)
-    }, 2000)
+    if (!creatorId) {
+      setStatus('done')
+      setMsg('Thanks for the support!')
+      setTimeout(() => {
+        setStatus('idle')
+        setOpen(false)
+      }, 2000)
+      return
+    }
+    const token = getToken()
+    if (!token) {
+      setStatus('error')
+      setMsg('Please sign in to send a tip')
+      return
+    }
+    setStatus('loading')
+    setMsg('Opening secure checkout…')
+    const res = await initializeTip(token, creatorId, amount)
+    if (res.success && res.authorization_url) {
+      window.location.href = res.authorization_url
+    } else {
+      setStatus('error')
+      setMsg(res.error || 'Failed to start tip')
+    }
   }
 
   const handleCustom = () => {
@@ -53,7 +75,7 @@ export default function TipButton({ recipientName = 'this creator', onTip, class
             exit={{ opacity: 0, y: -8, scale: 0.95 }}
             className="absolute bottom-full left-0 mb-2 bg-surface-card border border-white/10 rounded-2xl p-4 shadow-2xl min-w-[240px] z-50"
           >
-            {showThanks ? (
+            {status === 'done' ? (
               <div className="text-center py-4">
                 <Icon name="favorite" fill={true} className="w-8 h-8 text-pink-400 mx-auto mb-2" />
                 <p className="text-sm font-semibold text-white">Thank you!</p>
@@ -70,7 +92,8 @@ export default function TipButton({ recipientName = 'this creator', onTip, class
                       <button
                         key={p.amount}
                         onClick={() => handleTip(p.amount)}
-                        className="flex-1 flex flex-col items-center gap-1 px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl hover:border-premium/50 hover:bg-accent/10 transition-colors"
+                        disabled={status === 'loading'}
+                        className="flex-1 flex flex-col items-center gap-1 px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl hover:border-premium/50 hover:bg-accent/10 transition-colors disabled:opacity-50"
                       >
                         <Icon name={p.icon} className="w-5 h-5 text-accent" />
                         <span className="text-xs font-semibold text-white">${p.amount}</span>
@@ -90,12 +113,18 @@ export default function TipButton({ recipientName = 'this creator', onTip, class
                   />
                   <button
                     onClick={handleCustom}
-                    disabled={!customAmount || parseFloat(customAmount) <= 0}
+                    disabled={!customAmount || parseFloat(customAmount) <= 0 || status === 'loading'}
                     className="px-4 py-2 bg-accent text-black font-semibold text-sm rounded-xl disabled:opacity-50 hover:bg-accent-light transition-colors"
                   >
                     Send
                   </button>
                 </div>
+
+                {status !== 'idle' && (
+                  <p className={`text-xs mt-2 ${status === 'error' ? 'text-red-400' : 'text-gray-400'}`}>
+                    {status === 'loading' ? 'Processing…' : msg}
+                  </p>
+                )}
               </>
             )}
           </motion.div>

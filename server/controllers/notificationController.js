@@ -3,8 +3,9 @@ import { getNotifications, getUnreadCount, markNotificationRead, markAllNotifica
 export async function list(req, res) {
   try {
     const limit = parseInt(req.query.limit, 10) || 30
-    const items = await getNotifications(req.userId, limit)
-    res.json({ success: true, notifications: items })
+    const offset = parseInt(req.query.offset, 10) || 0
+    const items = await getNotifications(req.userId, limit, offset)
+    res.json({ success: true, notifications: items, total: items.length, offset, limit })
   } catch (err) {
     res.status(500).json({ success: false, error: err.message })
   }

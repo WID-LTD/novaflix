@@ -32,6 +32,8 @@ services:
         sync: false
       - key: APP_URL
         value: https://novaflix-web.vercel.app
+      - key: PAYSTACK_CALLBACK_URL
+        value: https://novaflix-web.vercel.app
       - key: PAYSTACK_SECRET_KEY
         sync: false
       - key: FLUTTERWAVE_SECRET_KEY

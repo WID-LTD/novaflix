@@ -96,6 +96,7 @@ export async function register(req, res) {
     }
 
     res.json({ success: true, message: 'Verification code sent to email', userId: user.id })
+    console.log(`[auth] register: ${email} (verification code sent)`)
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -107,19 +108,28 @@ export async function login(req, res) {
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' })
 
     const user = await findUserByEmail(email)
-    if (!user) return res.status(401).json({ error: 'Invalid credentials' })
+    if (!user) {
+      console.warn(`[auth] login failed: no account for ${email}`)
+      return res.status(401).json({ error: 'Invalid credentials' })
+    }
 
     if (!user.password) {
+      console.warn(`[auth] login failed: ${email} uses Google Sign-In`)
       return res.status(401).json({ error: 'This account uses Google Sign-In. Please sign in with Google.' })
     }
 
     const match = await bcrypt.compare(password, user.password)
-    if (!match) return res.status(401).json({ error: 'Invalid credentials' })
+    if (!match) {
+      console.warn(`[auth] login failed: bad password for ${email}`)
+      return res.status(401).json({ error: 'Invalid credentials' })
+    }
 
     if (user.role === 'banned') {
+      console.warn(`[auth] login blocked: banned account ${email}`)
       return res.status(403).json({ error: 'Account banned', banned: true, reason: user.banned_reason || undefined })
     }
     if (user.suspended_until && new Date(user.suspended_until).getTime() > Date.now()) {
+      console.warn(`[auth] login blocked: suspended account ${email}`)
       return res.status(403).json({
         error: 'Account suspended',
         suspended: true,
@@ -129,6 +139,7 @@ export async function login(req, res) {
     }
 
     if (!user.email_verified) {
+      console.warn(`[auth] login blocked: unverified email ${email}`)
       return res.json({ success: true, needsVerification: true, userId: user.id, error: 'Email not verified' })
     }
 
@@ -156,6 +167,7 @@ export async function login(req, res) {
 
     const token = signToken(user)
     const safe = { ...user, password: undefined }
+    console.log(`[auth] login success: ${email} (${user.role})`)
     res.json({ success: true, token, user: safe })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -196,7 +208,10 @@ export async function verifyEmail(req, res) {
     if (!userId || !code) return res.status(400).json({ error: 'User ID and code required' })
 
     const valid = await verifyCode(userId, code)
-    if (!valid) return res.status(400).json({ error: 'Invalid or expired verification code' })
+    if (!valid) {
+      console.warn(`[auth] verify failed: bad/expired code for user ${userId?.slice?.(0, 8)}`)
+      return res.status(400).json({ error: 'Invalid or expired verification code' })
+    }
 
     await updateUser(userId, { email_verified: true })
     const user = await findUserById(userId)
@@ -207,6 +222,7 @@ export async function verifyEmail(req, res) {
 
     const token = signToken(user)
     const safe = { ...user, password: undefined }
+    console.log(`[auth] verify success: ${user.email}`)
     res.json({ success: true, token, user: safe, message: 'Email verified successfully' })
   } catch (err) {
     res.status(500).json({ error: err.message })

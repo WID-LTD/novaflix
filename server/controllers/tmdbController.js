@@ -422,7 +422,9 @@ export async function searchAll(req, res) {
     } catch {}
 
     res.json({ success: true, data: results })
+    console.log(`[search] q="${q}" -> ${results.length} results`)
   } catch (err) {
+    console.error(`[search] error q="${req.query.q || ''}":`, err?.message)
     res.status(500).json({ error: err.message })
   }
 }

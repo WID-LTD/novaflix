@@ -1,5 +1,6 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Routes, Route } from 'react-router-dom'
+import { API_BASE } from './lib/config'
 import Layout from './components/layout/Layout'
 import AuthGuard from './components/layout/AuthGuard'
 import AdminGuard from './components/layout/AdminGuard'
@@ -77,6 +78,9 @@ const CreatorCourses = lazy(() => import('./pages/CreatorCourses'))
 const Archive = lazy(() => import('./pages/Archive'))
 const ArchiveDetail = lazy(() => import('./pages/ArchiveDetail'))
 const PaymentSuccess = lazy(() => import('./pages/PaymentSuccess'))
+const GatewaySuccess = lazy(() => import('./pages/GatewaySuccess'))
+const DeepDivePage = lazy(() => import('./pages/DeepDivePage'))
+const Notifications = lazy(() => import('./pages/Notifications'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 const Chat = lazy(() => import('./pages/Chat'))
 const Forum = lazy(() => import('./pages/Forum'))
@@ -99,7 +103,21 @@ function PageLoading() {
   )
 }
 
+// Fire-and-forget connection counter: once per browser session, tell the
+// server a user landed on the site. Survival-safe so it counts even if the
+// tab closes mid-load.
+function useConnectionTrack() {
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('nf-visited')) return
+      sessionStorage.setItem('nf-visited', '1')
+      fetch(`${API_BASE}/stats/visit`, { method: 'POST', keepalive: true }).catch(() => {})
+    } catch {}
+  }, [])
+}
+
 export default function App() {
+  useConnectionTrack()
   return (
     <Suspense fallback={<PageLoading />}>
       <Routes>
@@ -134,8 +152,12 @@ export default function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/payment/success" element={<AuthGuard><PaymentSuccess /></AuthGuard>} />
+          <Route path="/gift/success" element={<AuthGuard><GatewaySuccess /></AuthGuard>} />
+          <Route path="/tips/success" element={<AuthGuard><GatewaySuccess /></AuthGuard>} />
+          <Route path="/notifications" element={<AuthGuard><Notifications /></AuthGuard>} />
           <Route path="/hooks" element={<AuthGuard><HooksFeed /></AuthGuard>} />
           <Route path="/news" element={<News />} />
+          <Route path="/news/deep-dive/:id" element={<DeepDivePage />} />
           <Route path="/news/:id" element={<ArticleNews />} />
           <Route path="/category" element={<CategoryPage />} />
           <Route path="/category/:slug" element={<CategoryPage />} />

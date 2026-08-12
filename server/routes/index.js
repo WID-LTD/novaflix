@@ -38,6 +38,7 @@ import forumRoutes from './forumRoutes.js'
 import triviaRoutes from './triviaRoutes.js'
 import chatRoutes from './chatRoutes.js'
 import eggRoutes from './eggRoutes.js'
+import statsRoutes from './statsRoutes.js'
 
 const router = Router()
 
@@ -80,5 +81,6 @@ router.use('/forum', forumRoutes)
 router.use('/trivia', triviaRoutes)
 router.use('/chat', chatRoutes)
 router.use('/eggs', eggRoutes)
+router.use('/stats', statsRoutes)
 
 export default router

@@ -285,3 +285,17 @@ export interface NewsDeepDive {
 export function fetchDeepDive(title: string, keywords: string[] = []): Promise<NewsDeepDive> {
   return fetchJson(`${BASE}/news/fetch-deep-dive`, { title, keywords: keywords.join(',') })
 }
+
+export interface ArticleContent {
+  url: string
+  title: string
+  image: string | null
+  images: string[]
+  source: string | null
+  publishedAt: string | null
+  paragraphs: string[]
+}
+
+export function fetchArticleContent(url: string): Promise<{ success: boolean; article?: ArticleContent; error?: string }> {
+  return fetchJson(`${BASE}/news/article-content`, { url })
+}

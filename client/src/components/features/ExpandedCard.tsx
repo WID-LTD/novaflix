@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import type { MediaDetails } from '../../types'
 import { toggleLike, checkLike } from '../../lib/auth'
+import { subscribeContent } from '../../lib/live'
 import { useAuth } from '../../lib/AuthContext'
 import Icon from '../ui/Icon'
+import type { MediaDetails } from '../../types'
 
 interface ExpandedCardProps {
   details: MediaDetails
@@ -37,14 +38,26 @@ export default function ExpandedCard({ details, cardRect, onClose, onMouseEnter,
   const portalRoot = document.getElementById('preview-portal-root')
   const [visible, setVisible] = useState(false)
   const [liked, setLiked] = useState(false)
+  const [likeCount, setLikeCount] = useState(0)
 
   useEffect(() => {
     if (user) {
       checkLike(String(details.id), details.type).then((r) => {
-        if (r.success) setLiked(r.liked)
+        if (r.success) {
+          setLiked(r.liked)
+          setLikeCount(r.count || 0)
+        }
       })
     }
   }, [details.id, details.type, user])
+
+  useEffect(() => {
+    return subscribeContent(details.type, String(details.id), (msg) => {
+      if (msg.type === 'like' && typeof msg.count === 'number') {
+        setLikeCount(msg.count)
+      }
+    })
+  }, [details.id, details.type])
 
   useEffect(() => {
     requestAnimationFrame(() => setVisible(true))
@@ -104,6 +117,7 @@ export default function ExpandedCard({ details, cardRect, onClose, onMouseEnter,
     const res = await toggleLike(String(details.id), details.type)
     if (res.success) {
       setLiked(res.liked)
+      setLikeCount(res.count || 0)
     }
   }
 
@@ -154,6 +168,7 @@ export default function ExpandedCard({ details, cardRect, onClose, onMouseEnter,
             <ActionBtn icon="play_arrow" label={`Play ${details.title}`} onClick={handlePlay} />
             <ActionBtn icon="add" label="Add to My List" />
             <ActionBtn icon="thumb_up" label={liked ? 'Unlike' : 'Like'} onClick={handleLike} fill={liked} />
+            {likeCount > 0 && <span className="text-white text-xs font-medium">{likeCount}</span>}
             <ActionBtn icon="diversity_3" label="Watch Party" onClick={handleWatchParty} />
           </div>
           <ActionBtn icon="expand_more" label="More info" />

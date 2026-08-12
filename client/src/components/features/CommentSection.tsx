@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import Icon from '../ui/Icon'
 import { useAuth } from '../../lib/AuthContext'
 import { getComments, deleteComment, postCommentFull, uploadCommentMedia } from '../../lib/auth'
+import { subscribeContent } from '../../lib/live'
 
 interface Comment {
   id: string
@@ -37,6 +38,7 @@ const MILESTONES = [
 export default function CommentSection({ contentId, contentType, creatorId }: Props) {
   const { user } = useAuth()
   const [comments, setComments] = useState<Comment[]>([])
+  const [total, setTotal] = useState(0)
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
@@ -49,8 +51,23 @@ export default function CommentSection({ contentId, contentType, creatorId }: Pr
 
   useEffect(() => {
     getComments(String(contentId), contentType).then(r => {
-      if (r.success) setComments(r.comments)
+      if (r.success) {
+        setComments(r.comments)
+        if (typeof r.total === 'number') setTotal(r.total)
+      }
       setLoading(false)
+    })
+  }, [contentId, contentType])
+
+  useEffect(() => {
+    return subscribeContent(contentType, String(contentId), (msg) => {
+      if (msg.type === 'comment' && msg.comment) {
+        setComments(prev => {
+          if (prev.some(c => c.id === msg.comment.id)) return prev
+          return [msg.comment, ...prev]
+        })
+        setTotal(t => t + 1)
+      }
     })
   }, [contentId, contentType])
 
@@ -95,6 +112,7 @@ export default function CommentSection({ contentId, contentType, creatorId }: Pr
 
     if (res.success) {
       setComments(prev => [res.comment, ...prev])
+      setTotal(t => t + 1)
       setText('')
       setUnlockAt('')
       setMilestone('')
@@ -108,6 +126,7 @@ export default function CommentSection({ contentId, contentType, creatorId }: Pr
     const res = await deleteComment(id)
     if (res.success) {
       setComments(prev => prev.filter(c => c.id !== id))
+      setTotal(t => Math.max(0, t - 1))
     }
   }
 
@@ -130,7 +149,7 @@ export default function CommentSection({ contentId, contentType, creatorId }: Pr
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-on-surface-variant">
         <Icon name="chat_bubble" size="sm" />
-        <span className="text-sm font-medium">Comments ({comments.length})</span>
+        <span className="text-sm font-medium">Comments ({total || comments.length})</span>
       </div>
 
       {user && (

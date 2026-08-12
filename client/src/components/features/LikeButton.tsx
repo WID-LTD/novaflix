@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import Icon from '../ui/Icon'
 import { useAuth } from '../../lib/AuthContext'
 import { toggleLike, checkLike } from '../../lib/auth'
+import { subscribeContent } from '../../lib/live'
 
 interface Props {
   contentId: string | number
@@ -26,6 +27,14 @@ export default function LikeButton({ contentId, contentType, creatorId, classNam
       }
     })
   }, [contentId, contentType, user])
+
+  useEffect(() => {
+    return subscribeContent(contentType, String(contentId), (msg) => {
+      if (msg.type === 'like' && typeof msg.count === 'number') {
+        setCount(msg.count)
+      }
+    })
+  }, [contentId, contentType])
 
   const handleToggle = async () => {
     if (!user) return

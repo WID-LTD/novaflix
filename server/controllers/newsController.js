@@ -1,8 +1,10 @@
 import axios from 'axios'
+import * as cheerio from 'cheerio'
 
 const CACHE_TTL = 60 * 1000
 const cache = new Map()
 const articleCache = new Map()
+const articleContentCache = new Map()
 
 function cached(key, ttl = CACHE_TTL) {
   const hit = cache.get(key)
@@ -439,5 +441,255 @@ export async function getArticle(req, res) {
     res.json({ success: true, article: payload })
   } catch (err) {
     res.status(500).json({ success: false, error: err.message })
+  }
+}
+
+const ARTICLE_CONTENT_TTL = 10 * 60 * 1000
+
+const BODY_SELECTOR = [
+  '[itemprop="articleBody"]',
+  '.article-content', '.post-content', '.article-body', '.post-body', '.entry-content', '.story-body', '.main-content',
+  '.article__content', '.post__content', '.story-content', '.td-post-content', '.c-entry-content', '.article-text',
+  '[class*="article-body"]', '[class*="post-content"]', '[class*="entry-content"]', '[class*="story-content"]',
+  '[class*="article__content"]', '[class*="article-content"]',
+  'article', 'main',
+]
+
+function collectJsonLdBodies(node, out) {
+  if (!node || typeof node !== 'object') return
+  if (typeof node.articleBody === 'string') out.push(node.articleBody)
+  if (Array.isArray(node['@graph'])) for (const n of node['@graph']) collectJsonLdBodies(n, out)
+  if (Array.isArray(node.itemListElement)) for (const n of node.itemListElement) collectJsonLdBodies(n, out)
+}
+
+function jsonLdArticleBody($) {
+  let body = ''
+  $('script[type="application/ld+json"]').each((_, el) => {
+    if (body) return
+    const raw = $(el).html() || ''
+    try {
+      const parsed = JSON.parse(raw)
+      const items = Array.isArray(parsed) ? parsed : [parsed]
+      for (const item of items) {
+        const found = []
+        collectJsonLdBodies(item, found)
+        const candidate = found.map((b) => stripTags(b)).find((b) => b.length > 200)
+        if (candidate) {
+          body = candidate
+          break
+        }
+      }
+    } catch { /* ignore malformed JSON-LD */ }
+  })
+  return body
+}
+
+function paragraphsFromText(text) {
+  const blocks = (text || '')
+    .split(/\n+/)
+    .map((b) => b.replace(/\s+/g, ' ').trim())
+    .filter((b) => b.length > 0)
+  if (blocks.length === 0) return []
+  if (blocks.length > 1) return blocks.filter((b) => b.length > 60)
+  const sentences = blocks[0].match(/[^.!?]+[.!?]+/g) || []
+  if (sentences.length > 1) {
+    const chunks = []
+    let current = ''
+    for (const s of sentences) {
+      const next = (current ? current + ' ' : '') + s
+      if (current && next.length > 420) {
+        chunks.push(current)
+        current = s
+      } else {
+        current = next
+      }
+    }
+    if (current.trim().length > 60) chunks.push(current.trim())
+    return chunks
+  }
+  return blocks[0].length > 60 ? [blocks[0]] : []
+}
+
+function metaContent($, name) {
+  const v =
+    $(`meta[property="${name}"]`).attr('content') ||
+    $(`meta[name="${name}"]`).attr('content') ||
+    $(`meta[itemprop="${name}"]`).attr('content') ||
+    ''
+  return v ? v.trim() : ''
+}
+
+function hostnameOfUrl(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return null
+  }
+}
+
+function resolveUrl(url, maybeRelative) {
+  try {
+    const absolute = new URL(maybeRelative, url)
+    return absolute.href
+  } catch {
+    return maybeRelative
+  }
+}
+
+function extractArticleBody($, url) {
+  let $root = null
+  for (const sel of BODY_SELECTOR) {
+    const $el = $(sel).first()
+    if ($el.length && ($el.find('p').length >= 2 || $el.text().trim().length > 300)) {
+      $root = $el
+      break
+    }
+  }
+  if (!$root && $('p').length > 0) {
+    const $parent = $('article p').first().parents('article')
+    $root = $parent.length ? $parent.first() : $('body')
+  }
+  if (!$root) return { paragraphs: [], images: [] }
+
+  const $clone = $root.clone()
+  $clone.find('script, style, nav, aside, footer, header, figure, form, iframe, noscript, .ad, .ads, .advertisement, .share, .related, .subscribe, .newsletter, button').remove()
+  const $imgs = $clone.find('img').slice(0, 8)
+  const images = []
+  $imgs.each((_, el) => {
+    const src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-original') || ''
+    const srcset = $(el).attr('srcset') || ''
+    let best = src
+    if (srcset) {
+      best = srcset.split(',').map((s) => s.trim().split(/\s+/)[0]).pop() || src
+    }
+    if (best) images.push(resolveUrl(url, best))
+  })
+
+  const paragraphs = []
+  $clone.find('p').each((_, el) => {
+    const text = $(el).text().replace(/\s+/g, ' ').trim()
+    if (text.length > 40) paragraphs.push(text)
+  })
+
+  if (paragraphs.length === 0) {
+    const text = $clone.text().replace(/\s+/g, ' ').trim()
+    if (text.length > 60) paragraphs.push(text)
+  }
+
+  return { paragraphs: paragraphs.map((p) => p.slice(0, 3000)).slice(0, 60), images }
+}
+
+function filterParagraphs(list) {
+  const out = []
+  const seen = new Set()
+  for (const p of list) {
+    const text = p.replace(/\s+/g, ' ').trim()
+    if (text.length < 60 || seen.has(text)) continue
+    seen.add(text)
+    out.push(text.slice(0, 3000))
+    if (out.length >= 60) break
+  }
+  return out
+}
+
+export async function getArticleContent(req, res) {
+  const url = (req.query.url || '').trim()
+  try {
+    if (!url) return res.status(400).json({ success: false, error: 'URL required' })
+    let parsed
+    try {
+      parsed = new URL(url)
+      if (!/^https?:$/.test(parsed.protocol)) throw new Error('bad protocol')
+    } catch {
+      return res.status(400).json({ success: false, error: 'Invalid URL' })
+    }
+
+    const cachedHit = articleContentCache.get(url)
+    if (cachedHit && Date.now() - cachedHit.at < ARTICLE_CONTENT_TTL) {
+      return res.json({ success: true, article: cachedHit.article, cached: true })
+    }
+
+    const fetchRes = await axios.get(url, {
+      timeout: 12000,
+      maxRedirects: 5,
+      responseType: 'text',
+      transformResponse: (d) => d,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+    })
+    const html = typeof fetchRes.data === 'string' ? fetchRes.data : String(fetchRes.data)
+
+    const $ = cheerio.load(html)
+    const title =
+      metaContent($, 'og:title') ||
+      metaContent($, 'twitter:title') ||
+      $('h1').first().text().trim() ||
+      $('title').text().trim() ||
+      ''
+    const image =
+      metaContent($, 'og:image') ||
+      metaContent($, 'twitter:image') ||
+      $('article img').first().attr('src') ||
+      $('img').first().attr('src') ||
+      null
+    const source =
+      metaContent($, 'og:site_name') ||
+      metaContent($, 'application-name') ||
+      hostnameOfUrl(url) ||
+      null
+    const publishedAt =
+      metaContent($, 'article:published_time') ||
+      metaContent($, 'og:pubdate') ||
+      $('time[datetime]').first().attr('datetime') ||
+      null
+
+    const { paragraphs, images } = extractArticleBody($, url)
+
+    let bodyFrom = 'html'
+    let finalParagraphs = paragraphs
+    if (finalParagraphs.length === 0) {
+      const jsonLd = jsonLdArticleBody($)
+      const jsonLdParas = jsonLd ? paragraphsFromText(jsonLd) : []
+      if (jsonLdParas.length >= 2) {
+        finalParagraphs = jsonLdParas
+        bodyFrom = 'jsonld'
+      }
+    }
+    if (finalParagraphs.length === 0) {
+      const desc = metaContent($, 'og:description') || metaContent($, 'description')
+      if (desc && desc.length > 120) {
+        finalParagraphs = [desc]
+        bodyFrom = 'meta'
+      }
+    }
+
+    if (!title && finalParagraphs.length === 0) {
+      return res.json({ success: false, error: 'Could not read this article from the source.' })
+    }
+
+    const article = {
+      url,
+      title,
+      image: image ? resolveUrl(url, image) : null,
+      images,
+      source,
+      publishedAt,
+      paragraphs: filterParagraphs(finalParagraphs),
+      bodyFrom,
+    }
+    articleContentCache.set(url, { article, at: Date.now() })
+    res.json({ success: true, article, cached: false })
+  } catch (err) {
+    const isAuth = err?.response?.status === 403 || err?.response?.status === 401
+    const code = err?.response?.status || ''
+    res.json({
+      success: false,
+      error: isAuth
+        ? `The source (${code}) requires a subscription or blocks automated readers.`
+        : `Couldn't reach the article at this source${code ? ` (${code})` : ''}.`,
+    })
   }
 }

@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import Icon from '../../ui/Icon'
+import FullArticle from './FullArticle'
 import type { NewsDeepDive, DeepDiveImage, DeepDiveRelated, DeepDivePublisher } from '../../../lib/api'
 
 interface DeepDiveModalProps {
@@ -106,19 +107,13 @@ function RelatedList({ related }: { related: DeepDiveRelated[] }) {
       </h3>
       <div className="space-y-4">
         {related.slice(0, 8).map((r, i) => (
-          <a key={i} href={r.url} target="_blank" rel="noreferrer noopener" className="group block">
-            <div className="flex items-center gap-2 text-[11px] text-on-surface-variant/70 mb-0.5">
-              <span className="font-semibold uppercase tracking-wide text-primary">{r.source}</span>
-              {r.publishedAt && (
-                <>
-                  <span aria-hidden>·</span>
-                  <time dateTime={r.publishedAt || undefined}>{formatDate(r.publishedAt)}</time>
-                </>
-              )}
-            </div>
-            <p className="text-sm font-semibold text-on-surface leading-snug group-hover:text-primary transition-colors line-clamp-2">{r.title}</p>
-            {r.snippet && <p className="text-xs text-on-surface-variant line-clamp-2 mt-1">{r.snippet}</p>}
-          </a>
+          <FullArticle
+            key={i}
+            url={r.url}
+            title={r.title}
+            variant="list"
+            fallbackBody={r.snippet}
+          />
         ))}
       </div>
     </div>
@@ -222,14 +217,7 @@ export default function DeepDiveModal({ open, loading, data, error, onClose, onR
                   )}
 
                   {data.headline.url && data.headline.url !== '#' && (
-                    <a
-                      href={data.headline.url}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="inline-flex items-center gap-2 mt-6 px-5 py-2.5 bg-primary-container text-on-primary-container rounded-lg text-sm font-bold hover:brightness-110 transition-all"
-                    >
-                      <Icon name="open_in_new" size="sm" /> Open Original Article
-                    </a>
+                    <FullArticle url={data.headline.url} title={data.headline.title} fallbackBody={data.headline.body} />
                   )}
                 </>
               ) : (

@@ -41,9 +41,7 @@ export default function GlowGiftButton({ creatorId, recipientName = 'this creato
     setMsg('Opening secure checkout…')
     const res = await initializeGlowGift(token, creatorId, amt, note.trim())
     if (res.success && res.authorization_url) {
-      window.open(res.authorization_url, '_blank')
-      setStatus('done')
-      setMsg('Checkout opened in a new tab')
+      window.location.href = res.authorization_url
     } else {
       setStatus('error')
       setMsg(res.error || 'Failed to start gift')

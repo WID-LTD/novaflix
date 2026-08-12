@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid'
 import { uploadFile } from '../lib/r2.js'
-import { addLike, removeLike, getContentLikes, hasUserLiked, addComment, getContentComments, deleteComment, getCommentsForCreator, addFollower, removeFollower, isFollowing, getFollowerCount, getFollowingCount, getFollowers, getFollowing, findUserById, checkAndAwardAchievements, addXp, recordFanEngagement, createNotification } from '../db.js'
-import { notifyUser } from '../services/realtime.js'
+import { addLike, removeLike, getContentLikes, hasUserLiked, addComment, getContentComments, getContentCommentCount, deleteComment, getCommentsForCreator, addFollower, removeFollower, isFollowing, getFollowerCount, getFollowingCount, getFollowers, getFollowing, findUserById, checkAndAwardAchievements, addXp, recordFanEngagement, createNotification } from '../db.js'
+import { notifyUser, broadcastFeed } from '../services/realtime.js'
 
 export async function uploadCommentMedia(req, res) {
   try {
@@ -35,6 +35,7 @@ export async function toggleLike(req, res) {
 
     const count = await getContentLikes(contentId, contentType)
     checkAndAwardAchievements(req.userId).catch(() => {})
+    broadcastFeed({ type: 'like', contentId, contentType, count, liked: !liked })
     res.json({ success: true, liked: !liked, count })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -74,6 +75,7 @@ export async function postComment(req, res) {
     addXp(req.userId, 3).catch(() => {})
     if (creatorId) await recordFanEngagement(req.userId, creatorId, 'comment')
     checkAndAwardAchievements(req.userId).catch(() => {})
+    broadcastFeed({ type: 'comment', contentId, contentType, comment })
     if (creatorId && creatorId !== req.userId) {
       const [commenter] = await Promise.all([findUserById(req.userId).catch(() => null)])
       const notification = await createNotification({
@@ -129,7 +131,8 @@ export async function listComments(req, res) {
 
     let comments = await getContentComments(contentId, contentType, 50, 0, req.userId || null)
     comments = await evaluateMilestoneUnlocks(comments, req)
-    res.json({ success: true, comments })
+    const total = await getContentCommentCount(contentId, contentType)
+    res.json({ success: true, comments, total })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

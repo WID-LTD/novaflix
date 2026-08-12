@@ -266,7 +266,7 @@ export default function MovieDetail() {
             location="Los Angeles, CA"
             creatorId={user?.id}
           />
-          <TipButton recipientName={details.title} />
+          <TipButton creatorId={user?.id} recipientName={details.title} />
         </div>
 
         {/* Comments */}

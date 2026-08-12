@@ -451,6 +451,14 @@ export async function getContentComments(contentId, contentType, limit = 20, off
   })
 }
 
+export async function getContentCommentCount(contentId, contentType) {
+  const { rows } = await pool.query(
+    `SELECT COUNT(*)::int AS count FROM comments WHERE content_id = $1 AND content_type = $2`,
+    [contentId, contentType]
+  )
+  return rows[0]?.count ?? 0
+}
+
 export async function getCommentsForCreator(creatorId, limit = 20, offset = 0) {
   const { rows } = await pool.query(
     `SELECT c.*, u.name as user_name, u.avatar as user_avatar
@@ -2370,7 +2378,7 @@ export async function createNotificationsBulk(recipients, { type = 'system', tit
   return rows
 }
 
-export async function getNotifications(userId, limit = 30) {
+export async function getNotifications(userId, limit = 30, offset = 0) {
   const { rows } = await pool.query(
     `SELECT n.id, n.type, n.title, n.body, n.link, n.is_read, n.created_at,
             u.name AS actor_name, u.avatar AS actor_avatar
@@ -2378,8 +2386,8 @@ export async function getNotifications(userId, limit = 30) {
      LEFT JOIN users u ON u.id = n.actor_id
      WHERE n.user_id = $1
      ORDER BY n.created_at DESC
-     LIMIT $2`,
-    [userId, Math.min(parseInt(limit, 10) || 30, 50)]
+     LIMIT $2 OFFSET $3`,
+    [userId, Math.min(parseInt(limit, 10) || 30, 50), Math.max(parseInt(offset, 10) || 0, 0)]
   )
   return rows
 }

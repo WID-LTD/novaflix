@@ -13,7 +13,7 @@ interface NewsCardProps {
 }
 
 function articleRoute(a: NewsArticle) {
-  return { pathname: `/news/${encodeURIComponent(a.url)}`, state: { article: a } }
+  return { pathname: `/news/deep-dive/${encodeURIComponent(a.url)}`, state: { article: a } }
 }
 
 function Meta({ article }: { article: NewsArticle }) {

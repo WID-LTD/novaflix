@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Icon from '../components/ui/Icon'
-import { getNews, getIndustryNews, fetchDeepDive } from '../lib/api'
-import type { NewsArticle, NewsDeepDive } from '../lib/api'
+import { getNews, getIndustryNews } from '../lib/api'
+import type { NewsArticle } from '../lib/api'
 import NewsCard from '../components/features/news/NewsCard'
-import DeepDiveModal from '../components/features/news/DeepDiveModal'
 
 const FT_CATEGORIES = [
   'World', 'Politics', 'Business', 'Opinion', 'Tech', 'Science',
@@ -204,10 +204,6 @@ export default function News() {
   const [refreshing, setRefreshing] = useState(false)
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
   const [pendingNew, setPendingNew] = useState<NewsArticle[]>([])
-  const [deepDive, setDeepDive] = useState<NewsArticle | null>(null)
-  const [ddLoading, setDdLoading] = useState(false)
-  const [ddData, setDdData] = useState<NewsDeepDive | null>(null)
-  const [ddError, setDdError] = useState(false)
 
   const pollRef = useRef({ category, query, subNav })
   pollRef.current = { category, query, subNav }
@@ -360,36 +356,11 @@ export default function News() {
     setPendingNew([])
   }
 
-  const openDeepDive = useCallback(async (article: NewsArticle) => {
-    if (ddLoading) return
-    setDeepDive(article)
-    setDdData(null)
-    setDdError(false)
-    setDdLoading(true)
-    const keywords = [article.source, article.category].filter(Boolean) as string[]
-    const res = await fetchDeepDive(article.title, keywords)
-    setDdLoading(false)
-    if (res.success) setDdData(res)
-    else setDdError(true)
-  }, [ddLoading])
+  const navigate = useNavigate()
 
-  const closeDeepDive = useCallback(() => {
-    setDeepDive(null)
-    setDdData(null)
-    setDdError(false)
-    setDdLoading(false)
-  }, [])
-
-  const retryDeepDive = useCallback(async () => {
-    if (!deepDive) return
-    setDdData(null)
-    setDdError(false)
-    setDdLoading(true)
-    const res = await fetchDeepDive(deepDive.title, [deepDive.source, deepDive.category].filter(Boolean) as string[])
-    setDdLoading(false)
-    if (res.success) setDdData(res)
-    else setDdError(true)
-  }, [deepDive])
+  const openDeepDive = useCallback((article: NewsArticle) => {
+    navigate(`/news/deep-dive/${encodeURIComponent(article.url)}`, { state: { article } })
+  }, [navigate])
 
   const now = new Date()
   const weekday = now.toLocaleDateString(undefined, { weekday: 'long' })
@@ -515,9 +486,9 @@ export default function News() {
         </header>
 
         <main className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[1.1fr_1fr_1fr] gap-6 lg:gap-8">
-          <MoviesColumn articles={movies} loading={moviesLoading} subNav={subNav} onSubNav={setSubNav} onDeepDive={openDeepDive} busy={ddLoading} />
-          <LatestNewsColumn articles={latestItems} loading={loading} onDeepDive={openDeepDive} busy={ddLoading} />
-          <MostReadColumn articles={mostReadItems} loading={industryLoading} onDeepDive={openDeepDive} busy={ddLoading} />
+          <MoviesColumn articles={movies} loading={moviesLoading} subNav={subNav} onSubNav={setSubNav} onDeepDive={openDeepDive} busy={false} />
+          <LatestNewsColumn articles={latestItems} loading={loading} onDeepDive={openDeepDive} busy={false} />
+          <MostReadColumn articles={mostReadItems} loading={industryLoading} onDeepDive={openDeepDive} busy={false} />
         </main>
 
         <div ref={sentinelRef} className="py-8 text-center">
@@ -531,15 +502,6 @@ export default function News() {
           ) : null}
         </div>
       </div>
-
-      <DeepDiveModal
-        open={!!deepDive}
-        loading={ddLoading}
-        data={ddData}
-        error={ddError}
-        onClose={closeDeepDive}
-        onRetry={retryDeepDive}
-      />
     </div>
   )
 }

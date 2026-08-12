@@ -110,6 +110,32 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '50mb' }));
 
+// ---- Request + error logging (console only) ----
+app.use((req, res, next) => {
+  const start = Date.now()
+  const originLog = req.headers.origin ? req.headers.origin.replace(/^https:\/\//, '') : (req.get('x-forwarded-for') || req.socket?.remoteAddress || '').toString().slice(0, 40).replace(/^https:\/\//, '')
+
+  res.on('finish', () => {
+    const ms = Date.now() - start
+    const q = req.originalUrl || req.url || ''
+    let userId = null
+    const auth = req.headers.authorization
+    if (auth && auth.startsWith('Bearer ')) {
+      try {
+        const decoded = jwt.verify(auth.slice(7), JWT_SECRET)
+        userId = decoded.id?.slice(0, 8) || null
+      } catch {}
+    }
+    const status = res.statusCode
+    if (status >= 400) {
+      console.error(`[err] ${status} ${req.method} ${q} ${ms}ms u:${userId} origin:${originLog}`)
+    } else {
+      console.log(`[req] ${req.method} ${q} ${ms}ms -> ${status} u:${userId} origin:${originLog}`)
+    }
+  })
+  next()
+})
+
 app.locals.ffmpegPath = ffmpegPath;
 app.locals.tmdb = axios.create({
   baseURL: 'https://api.themoviedb.org/3',

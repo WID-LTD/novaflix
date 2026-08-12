@@ -88,6 +88,12 @@ export default function NotificationBell({ items, unread, open, setOpen, markRea
               ))
             )}
           </div>
+          <button
+            onClick={() => { setOpen(false); navigate('/notifications') }}
+            className="w-full py-3 border-t border-surface-variant flex items-center justify-center gap-1.5 text-label-sm text-primary hover:bg-white/5 transition-colors"
+          >
+            <Icon name="notifications" size="sm" /> View all
+          </button>
         </div>
       )}
     </div>

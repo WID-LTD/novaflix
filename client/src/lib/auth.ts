@@ -445,6 +445,30 @@ export async function sendTip(token: string, creatorId: string, amount: number, 
   }
 }
 
+export async function initializeTip(token: string, creatorId: string, amount: number, message?: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/tips/initialize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ creatorId, amount, message }),
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function verifyTip(token: string, reference: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/tips/verify?reference=${reference}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
 export async function initializeGlowGift(token: string, creatorId: string, amount: number, note?: string): Promise<any> {
   try {
     const res = await fetch(`${BASE}/gift/initialize`, {
