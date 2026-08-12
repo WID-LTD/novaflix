@@ -61,24 +61,33 @@ export default function Home() {
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const [trendingRes, nowPlayingRes, newsRes, horrorRes, indieRes, animeRes, classicRes] = await Promise.all([
-        getTrendingFeed(),
-        getNowPlaying(),
-        getHomeNews(),
-        getCategoryMovies('27', 'movie'),
-        getDiscover({ type: 'movie', with_companies: '1549' }),
-        getDiscover({ type: 'movie', genre_id: '16', with_original_language: 'ja' }),
-        getDiscover({ type: 'movie', sort_by: 'vote_average.desc', min_votes: 1000, primary_release_date_lte: '1999-12-31' }),
+      const timeout = (p: Promise<any>) => Promise.race([
+        p,
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 20000)),
       ])
 
-      const movies = trendingRes.success ? trendingRes.data.movies.slice(0, 20) : []
-      const tv = trendingRes.success ? trendingRes.data.tv.slice(0, 20) : []
-      const np = nowPlayingRes.success ? nowPlayingRes.data.slice(0, 20) : []
-      const horror = horrorRes.success ? horrorRes.data.slice(0, 20) : []
-      const indie = indieRes.success ? indieRes.data.slice(0, 20) : []
-      const animeList = animeRes.success ? animeRes.data.slice(0, 20) : []
-      const classics = classicRes.success ? classicRes.data.slice(0, 20) : []
-      if (newsRes.success) setNewsArticles(newsRes.articles || [])
+      const settle = async (p: Promise<any>) => {
+        try { return await timeout(p) } catch { return { success: false } }
+      }
+
+      const [trendingRes, nowPlayingRes, newsRes, horrorRes, indieRes, animeRes, classicRes] = await Promise.all([
+        settle(getTrendingFeed()),
+        settle(getNowPlaying()),
+        settle(getHomeNews()),
+        settle(getCategoryMovies('27', 'movie')),
+        settle(getDiscover({ type: 'movie', with_companies: '1549' })),
+        settle(getDiscover({ type: 'movie', genre_id: '16', with_original_language: 'ja' })),
+        settle(getDiscover({ type: 'movie', sort_by: 'vote_average.desc', min_votes: 1000, primary_release_date_lte: '1999-12-31' })),
+      ])
+
+      const movies = trendingRes && trendingRes.success ? trendingRes.data.movies.slice(0, 20) : []
+      const tv = trendingRes && trendingRes.success ? trendingRes.data.tv.slice(0, 20) : []
+      const np = nowPlayingRes && nowPlayingRes.success ? nowPlayingRes.data.slice(0, 20) : []
+      const horror = horrorRes && horrorRes.success ? horrorRes.data.slice(0, 20) : []
+      const indie = indieRes && indieRes.success ? indieRes.data.slice(0, 20) : []
+      const animeList = animeRes && animeRes.success ? animeRes.data.slice(0, 20) : []
+      const classics = classicRes && classicRes.success ? classicRes.data.slice(0, 20) : []
+      if (newsRes && newsRes.success) setNewsArticles(newsRes.articles || [])
 
       setTrendingMovies(movies)
       setTrendingTV(tv)
@@ -91,15 +100,17 @@ export default function Home() {
       const heroCandidates = shuffleArray([...np.slice(0, 8), ...movies.slice(0, 8)]).slice(0, HERO_COUNT)
 
       if (heroCandidates.length > 0) {
-        const detailResults = await Promise.all(
-          heroCandidates.map((item) => getDetails(String(item.id), item.type))
-        )
-        setHeroItems(
-          detailResults
-            .filter((r) => r.success && r.data)
-            .map((r) => r.data)
-            .slice(0, HERO_COUNT)
-        )
+        try {
+          const detailResults = await Promise.all(
+            heroCandidates.map((item) => timeout(getDetails(String(item.id), item.type)))
+          )
+          setHeroItems(
+            detailResults
+              .filter((r) => r.success && r.data)
+              .map((r) => r.data)
+              .slice(0, HERO_COUNT)
+          )
+        } catch { /* hero is best-effort */ }
       }
 
       setLoading(false)

@@ -113,6 +113,7 @@ app.use(express.json({ limit: '50mb' }));
 app.locals.ffmpegPath = ffmpegPath;
 app.locals.tmdb = axios.create({
   baseURL: 'https://api.themoviedb.org/3',
+  timeout: 15000,
   headers: {
     Authorization: `Bearer ${TMDB_ACCESS_TOKEN}`,
     'Content-Type': 'application/json',
