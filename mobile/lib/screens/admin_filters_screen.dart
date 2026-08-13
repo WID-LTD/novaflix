@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
-import '../theme/app_typography.dart';
+import '../widgets/ui/index.dart';
 
 class AdminFiltersScreen extends StatelessWidget {
   const AdminFiltersScreen({super.key});
@@ -10,7 +10,11 @@ class AdminFiltersScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Content Filters')),
-      body: Center(child: Text('Filter management coming soon', style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant))),
+      body: const ComingSoonView(
+        icon: Icons.tune,
+        title: 'Content Filters',
+        description: 'Manage content filtering rules coming soon',
+      ),
     );
   }
 }

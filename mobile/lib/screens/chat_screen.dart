@@ -28,7 +28,7 @@ final _conversationsProvider = FutureProvider<List<Map<String, dynamic>>>((
 });
 
 class ChatScreen extends ConsumerStatefulWidget {
-  final int? otherUserId;
+  final String? otherUserId;
   final String? otherUserName;
 
   const ChatScreen({super.key, this.otherUserId, this.otherUserName});
@@ -46,7 +46,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   bool _connected = false;
   bool _loading = true;
   String? _error;
-  int? _myId;
+  String? _myId;
   String? _otherName;
 
   @override
@@ -213,17 +213,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   bool _isIncoming(Map<String, dynamic> m) {
-    final uid = _intField(m, 'userId');
+    final uid = _stringField(m, 'userId');
     if (_myId != null && uid != null) return uid != _myId;
     if (uid != null) return uid != widget.otherUserId;
     return false;
   }
 
-  int? _intField(Map<String, dynamic> m, String key) {
+  String? _stringField(Map<String, dynamic> m, String key) {
     final v = m[key];
-    if (v is int) return v;
-    if (v is num) return v.toInt();
-    return null;
+    if (v == null) return null;
+    return v.toString();
   }
 
   String _messageText(Map<String, dynamic> m) => m['message']?.toString() ?? '';
@@ -396,7 +395,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   child: Text(
                     _messageText(m),
                     style: TextStyle(
-                      color: isMine ? AppColors.onPrimary : AppColors.onSurface,
+                      color: isMine ? AppColors.white : AppColors.onSurface,
                     ),
                   ),
                 ),
@@ -454,7 +453,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               onPressed: _send,
               style: IconButton.styleFrom(
                 backgroundColor: AppColors.primary,
-                foregroundColor: AppColors.onPrimary,
+                foregroundColor: AppColors.white,
               ),
               icon: const Icon(Icons.send),
             ),
@@ -470,11 +469,10 @@ class _ConversationTile extends ConsumerWidget {
 
   const _ConversationTile({required this.item});
 
-  int? _intField(String key) {
+  String? _stringField(String key) {
     final v = item[key];
-    if (v is int) return v;
-    if (v is num) return v.toInt();
-    return null;
+    if (v == null) return null;
+    return v.toString();
   }
 
   String _relativeTime(Object? t) {
@@ -497,7 +495,7 @@ class _ConversationTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final userId =
-        _intField('userId') ?? _intField('user_id') ?? _intField('id');
+        _stringField('userId') ?? _stringField('user_id') ?? _stringField('id');
     final name = item['name']?.toString() ?? 'User';
     final avatar = item['avatar'];
     final lastMessage =

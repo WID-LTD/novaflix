@@ -8,7 +8,7 @@ class AuthState {
   final AuthStatus status;
   final User? user;
   final String? error;
-  final int? pendingUserId;
+  final String? pendingUserId;
   final String? pendingEmail;
   final String? loginVerifyReason;
 
@@ -25,7 +25,7 @@ class AuthState {
     AuthStatus? status,
     User? user,
     String? error,
-    int? pendingUserId,
+    String? pendingUserId,
     String? pendingEmail,
     String? loginVerifyReason,
     bool clearError = false,
@@ -61,7 +61,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(status: AuthStatus.loading, clearError: true);
     try {
       final res = await _authService.register(email, password, name);
-      final userId = res['userId'] as int?;
+      final userId = res['userId']?.toString();
       if (userId != null) {
         state = state.copyWith(
           status: AuthStatus.needsVerification,

@@ -38,8 +38,9 @@ class CategoryScreen extends ConsumerWidget {
       body: genres.when(
         data: (items) => GridView.builder(
           padding: const EdgeInsets.all(16),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2, childAspectRatio: 1.5,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: (gridColumnsFor(MediaQuery.sizeOf(context).width) / 2).ceil(),
+            childAspectRatio: 1.5,
             crossAxisSpacing: 12, mainAxisSpacing: 12,
           ),
           itemCount: items.length,
@@ -75,8 +76,9 @@ class CategoryScreen extends ConsumerWidget {
         body: ref.watch(_categoryMoviesProvider(genre.id)).when(
           data: (items) => GridView.builder(
             padding: const EdgeInsets.all(12),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3, childAspectRatio: 0.65,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: gridColumnsFor(MediaQuery.sizeOf(context).width),
+              childAspectRatio: 0.65,
               crossAxisSpacing: 8, mainAxisSpacing: 8,
             ),
             itemCount: items.length,

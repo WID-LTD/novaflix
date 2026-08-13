@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
-import '../theme/app_typography.dart';
+import '../widgets/ui/index.dart';
 
 class AdminAssetQCScreen extends StatelessWidget {
   const AdminAssetQCScreen({super.key});
@@ -10,7 +10,11 @@ class AdminAssetQCScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Asset QC')),
-      body: Center(child: Text('Asset quality control coming soon', style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant))),
+      body: const ComingSoonView(
+        icon: Icons.fact_check,
+        title: 'Asset QC',
+        description: 'Asset quality control dashboard coming soon',
+      ),
     );
   }
 }

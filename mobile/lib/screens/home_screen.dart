@@ -70,7 +70,11 @@ class HomeScreen extends ConsumerWidget {
               child: trending.when(
                 data: (items) {
                   final movies = items.where((m) => !m.isTV).toList();
-                  return ContentRow(title: 'Trending Movies', items: movies.take(10).toList());
+                  return ContentRow(
+                    title: 'Trending Movies',
+                    items: movies.take(10).toList(),
+                    onSeeAll: () => context.go('/list/trending'),
+                  );
                 },
                 loading: () => const SizedBox(height: 220, child: LoadingSpinner(logo: true)),
                 error: (_, __) => const SizedBox.shrink(),
@@ -78,7 +82,11 @@ class HomeScreen extends ConsumerWidget {
             ),
             SliverToBoxAdapter(
               child: nowPlaying.when(
-                data: (items) => ContentRow(title: 'Now Playing', items: items.take(10).toList()),
+                data: (items) => ContentRow(
+                  title: 'Now Playing',
+                  items: items.take(10).toList(),
+                  onSeeAll: () => context.go('/list/now-playing'),
+                ),
                 loading: () => const SizedBox(height: 220, child: LoadingSpinner(logo: true)),
                 error: (_, __) => const SizedBox.shrink(),
               ),
@@ -87,7 +95,11 @@ class HomeScreen extends ConsumerWidget {
               child: trending.when(
                 data: (items) {
                   final tvShows = items.where((m) => m.isTV).toList();
-                  return ContentRow(title: 'Popular TV Shows', items: tvShows.take(10).toList());
+                  return ContentRow(
+                    title: 'Popular TV Shows',
+                    items: tvShows.take(10).toList(),
+                    onSeeAll: () => context.go('/list/tv-trending'),
+                  );
                 },
                 loading: () => const SizedBox(height: 220),
                 error: (_, __) => const SizedBox.shrink(),

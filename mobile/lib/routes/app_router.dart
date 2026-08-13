@@ -5,6 +5,7 @@ import '../providers/auth_provider.dart';
 import '../screens/splash_screen.dart';
 import '../screens/landing_screen.dart';
 import '../screens/login_screen.dart';
+import '../screens/forgot_password_screen.dart';
 import '../screens/register_screen.dart';
 import '../screens/verify_email_screen.dart';
 import '../screens/profile_gateway_screen.dart';
@@ -12,6 +13,7 @@ import '../screens/creator_login_screen.dart';
 import '../screens/not_found_screen.dart';
 
 import '../screens/home_screen.dart';
+import '../screens/movie_list_screen.dart';
 import '../screens/search_screen.dart';
 import '../screens/search_results_screen.dart';
 import '../screens/tv_shows_screen.dart';
@@ -82,6 +84,7 @@ final _publicRoutes = <String>{
   '/splash',
   '/landing',
   '/login',
+  '/forgot-password',
   '/register',
   '/verify-email',
   '/profiles',
@@ -201,6 +204,10 @@ GoRouter appRouter(WidgetRef ref) {
       GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
       GoRoute(path: '/landing', builder: (_, __) => const LandingScreen()),
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+      GoRoute(
+        path: '/forgot-password',
+        builder: (_, __) => const ForgotPasswordScreen(),
+      ),
       GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
       GoRoute(
         path: '/verify-email',
@@ -255,8 +262,11 @@ GoRouter appRouter(WidgetRef ref) {
           ),
           GoRoute(
             path: '/discover',
-            pageBuilder: (_, s) =>
-                NoTransitionPage(child: const DiscoverScreen()),
+            pageBuilder: (_, s) => NoTransitionPage(
+              child: DiscoverScreen(
+                initialSort: s.uri.queryParameters['sort'],
+              ),
+            ),
           ),
           GoRoute(
             path: '/category',
@@ -283,6 +293,12 @@ GoRouter appRouter(WidgetRef ref) {
               child: MovieDetailScreen(
                 movieId: int.parse(s.pathParameters['id']!),
               ),
+            ),
+          ),
+          GoRoute(
+            path: '/list/:kind',
+            pageBuilder: (_, s) => NoTransitionPage(
+              child: MovieListScreen(kind: s.pathParameters['kind']!),
             ),
           ),
           GoRoute(
@@ -404,7 +420,7 @@ GoRouter appRouter(WidgetRef ref) {
             path: '/chat',
             pageBuilder: (_, s) => NoTransitionPage(
               child: ChatScreen(
-                otherUserId: int.tryParse(s.uri.queryParameters['with'] ?? ''),
+                otherUserId: s.uri.queryParameters['with'],
               ),
             ),
           ),
@@ -424,7 +440,7 @@ GoRouter appRouter(WidgetRef ref) {
             path: '/user/:id',
             pageBuilder: (_, s) => NoTransitionPage(
               child: PublicProfileScreen(
-                userId: int.tryParse(s.pathParameters['id'] ?? '0') ?? 0,
+                userId: s.pathParameters['id'] ?? '',
               ),
             ),
           ),

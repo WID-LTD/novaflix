@@ -6,6 +6,7 @@ import '../theme/app_typography.dart';
 import '../services/api_service.dart';
 import '../models/creator.dart';
 import '../widgets/ui/index.dart';
+import '../widgets/features/index.dart';
 
 final _publicCreatorsProvider = FutureProvider<List<Creator>>((ref) async {
   final api = ref.read(apiServiceProvider);
@@ -27,9 +28,13 @@ class CreatorsScreen extends ConsumerWidget {
       body: creators.when(
         data: (items) => GridView.builder(
           padding: const EdgeInsets.all(16),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2, childAspectRatio: 0.9,
-            crossAxisSpacing: 12, mainAxisSpacing: 12,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: gridColumnsFor(
+              MediaQuery.sizeOf(context).width,
+            ).clamp(2, 4),
+            childAspectRatio: 0.9,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
           ),
           itemCount: items.length,
           itemBuilder: (_, i) {
@@ -45,14 +50,35 @@ class CreatorsScreen extends ConsumerWidget {
                   CircleAvatar(
                     radius: 36,
                     backgroundColor: AppColors.surfaceContainerHighest,
-                    backgroundImage: creator.avatarUrl != null ? CachedNetworkImageProvider(creator.avatarUrl!) : null,
-                    child: creator.avatarUrl == null ? const Icon(Icons.person, size: 36, color: Colors.grey) : null,
+                    backgroundImage: creator.avatarUrl != null
+                        ? CachedNetworkImageProvider(creator.avatarUrl!)
+                        : null,
+                    child: creator.avatarUrl == null
+                        ? const Icon(Icons.person, size: 36, color: Colors.grey)
+                        : null,
                   ),
                   const SizedBox(height: 8),
-                  Text(creator.username, style: AppTypography.bodyMd.copyWith(fontWeight: FontWeight.w600)),
+                  Text(
+                    creator.username,
+                    style: AppTypography.bodyMd.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   if (creator.department != null)
-                    Text(creator.department!, style: TextStyle(color: AppColors.onSurfaceVariant, fontSize: 12)),
-                  Text('${creator.filmCount} films', style: const TextStyle(color: AppColors.onSurfaceVariant, fontSize: 11)),
+                    Text(
+                      creator.department!,
+                      style: TextStyle(
+                        color: AppColors.onSurfaceVariant,
+                        fontSize: 12,
+                      ),
+                    ),
+                  Text(
+                    '${creator.filmCount} films',
+                    style: const TextStyle(
+                      color: AppColors.onSurfaceVariant,
+                      fontSize: 11,
+                    ),
+                  ),
                 ],
               ),
             );

@@ -1,7 +1,7 @@
 class Comment {
   final int id;
   final String text;
-  final int userId;
+  final String userId;
   final String? username;
   final String? userAvatar;
   final String createdAt;
@@ -18,7 +18,7 @@ class Comment {
   factory Comment.fromJson(Map<String, dynamic> json) => Comment(
     id: json['id'] as int,
     text: json['text'] as String,
-    userId: json['user_id'] as int,
+    userId: json['user_id']?.toString() ?? '',
     username: json['username'] as String?,
     userAvatar: json['user_avatar'] as String?,
     createdAt: json['created_at'] as String,

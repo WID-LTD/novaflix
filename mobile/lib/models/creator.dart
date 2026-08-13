@@ -1,5 +1,5 @@
 class Creator {
-  final int id;
+  final String id;
   final String username;
   final String? avatar;
   final String? bio;
@@ -20,7 +20,7 @@ class Creator {
   });
 
   factory Creator.fromJson(Map<String, dynamic> json) => Creator(
-    id: json['id'] as int,
+    id: json['id']?.toString() ?? '',
     username: json['username'] as String? ?? json['name'] as String? ?? '',
     avatar: json['avatar'] as String? ?? json['profile_path'] as String?,
     bio: json['bio'] as String?,

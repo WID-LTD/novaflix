@@ -7,7 +7,7 @@ import '../theme/app_typography.dart';
 import '../services/api_service.dart';
 import '../widgets/ui/index.dart';
 
-final _profileProvider = FutureProvider.family<Map<String, dynamic>, int>((
+final _profileProvider = FutureProvider.family<Map<String, dynamic>, String>((
   ref,
   userId,
 ) async {
@@ -23,7 +23,7 @@ final _profileProvider = FutureProvider.family<Map<String, dynamic>, int>((
 });
 
 final _fanLeaderboardProvider =
-    FutureProvider.family<List<Map<String, dynamic>>, int>((
+    FutureProvider.family<List<Map<String, dynamic>>, String>((
       ref,
       creatorId,
     ) async {
@@ -40,7 +40,7 @@ final _fanLeaderboardProvider =
     });
 
 class PublicProfileScreen extends ConsumerStatefulWidget {
-  final int userId;
+  final String userId;
 
   const PublicProfileScreen({super.key, required this.userId});
 
@@ -309,7 +309,7 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
                     final uName = u['name']?.toString() ?? 'User';
                     final uAvatar = u['avatar']?.toString();
                     final uFollowing = u['isFollowing'] as bool? ?? false;
-                    final id = (u['id'] as num?)?.toInt() ?? 0;
+                    final id = u['id']?.toString() ?? '';
                     return ListTile(
                       leading: CircleAvatar(
                         backgroundColor: AppColors.surfaceContainerHighest,
@@ -328,7 +328,7 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
                         creatorId: id,
                         isFollowing: uFollowing,
                       ),
-                      onTap: id > 0
+                      onTap: id.isNotEmpty
                           ? () {
                               Navigator.of(context).pop();
                               context.push('/user/$id');

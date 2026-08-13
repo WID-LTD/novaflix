@@ -6,6 +6,7 @@ import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../widgets/ui/index.dart';
+import '../widgets/features/index.dart';
 
 final _coinsProvider = FutureProvider<int>((ref) async {
   final api = ref.read(apiServiceProvider);
@@ -801,8 +802,8 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
         }
         return GridView.builder(
           padding: const EdgeInsets.all(16),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: gridColumnsFor(MediaQuery.sizeOf(context).width),
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
             childAspectRatio: 0.66,
@@ -1068,7 +1069,7 @@ class _CosmeticCard extends StatelessWidget {
                       : AppColors.primary,
                   foregroundColor: equipped
                       ? AppColors.onSurfaceVariant
-                      : AppColors.onPrimary,
+                      : AppColors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -1092,7 +1093,7 @@ class _CosmeticCard extends StatelessWidget {
                   padding: EdgeInsets.zero,
                   backgroundColor: AppColors.primary,
                   foregroundColor: canBuy
-                      ? AppColors.onPrimary
+                      ? AppColors.white
                       : AppColors.onSurfaceVariant,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),

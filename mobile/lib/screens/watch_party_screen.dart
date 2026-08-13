@@ -8,6 +8,7 @@ import '../theme/app_typography.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/ui/index.dart';
 import '../services/api_service.dart';
+import '../services/ws_service.dart';
 
 class WatchPartyScreen extends ConsumerStatefulWidget {
   const WatchPartyScreen({super.key});
@@ -26,25 +27,32 @@ class _WatchPartyScreenState extends ConsumerState<WatchPartyScreen> {
   List<Map<String, dynamic>> _messages = [];
 
   void _connect(String room) async {
-    final token = await ref.read(apiServiceProvider).getToken() ?? '';
-    final host = 'ws://10.0.2.2:5001/ws?token=$token';
-    _channel = WebSocketChannel.connect(Uri.parse(host));
+    final token = await ref.read(apiServiceProvider).getToken();
+    _channel = await WsService.connectWithToken('/ws', token);
     _channel!.stream.listen((data) {
       final msg = jsonDecode(data as String) as Map<String, dynamic>;
       _handleMessage(msg);
     });
     _channel!.sink.add(jsonEncode({'type': 'join', 'room': room}));
-    setState(() { _joined = true; _roomCode = room; });
+    setState(() {
+      _joined = true;
+      _roomCode = room;
+    });
   }
 
   void _handleMessage(Map<String, dynamic> msg) {
     switch (msg['type']) {
       case 'joined':
       case 'user-joined':
-        setState(() => _users = (msg['users'] as List?)?.cast<Map<String, dynamic>>() ?? _users);
+        setState(
+          () => _users =
+              (msg['users'] as List?)?.cast<Map<String, dynamic>>() ?? _users,
+        );
         break;
       case 'user-left':
-        setState(() => _users = _users.where((u) => u['id'] != msg['userId']).toList());
+        setState(
+          () => _users = _users.where((u) => u['id'] != msg['userId']).toList(),
+        );
         break;
       case 'chat':
         setState(() => _messages.add(msg['payload'] as Map<String, dynamic>));
@@ -54,10 +62,16 @@ class _WatchPartyScreenState extends ConsumerState<WatchPartyScreen> {
 
   void _sendChat() {
     if (_chatCtl.text.isEmpty || _roomCode == null) return;
-    _channel!.sink.add(jsonEncode({
-      'type': 'chat', 'room': _roomCode!,
-      'payload': {'message': _chatCtl.text, 'name': ref.read(authProvider).user?.username ?? 'User'},
-    }));
+    _channel!.sink.add(
+      jsonEncode({
+        'type': 'chat',
+        'room': _roomCode!,
+        'payload': {
+          'message': _chatCtl.text,
+          'name': ref.read(authProvider).user?.username ?? 'User',
+        },
+      }),
+    );
     _chatCtl.clear();
   }
 
@@ -85,24 +99,52 @@ class _WatchPartyScreenState extends ConsumerState<WatchPartyScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.people, size: 80, color: hasAccess ? AppColors.primary : AppColors.onSurfaceVariant),
+                Icon(
+                  Icons.people,
+                  size: 80,
+                  color: hasAccess
+                      ? AppColors.primary
+                      : AppColors.onSurfaceVariant,
+                ),
                 const SizedBox(height: 24),
                 Text('Watch Together', style: AppTypography.headlineMd),
                 const SizedBox(height: 8),
-                Text(hasAccess ? 'Create or join a watch party' : 'Premium feature - upgrade to access',
-                  style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant),
+                Text(
+                  hasAccess
+                      ? 'Create or join a watch party'
+                      : 'Premium feature - upgrade to access',
+                  style: AppTypography.bodyMd.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 if (hasAccess) ...[
                   const SizedBox(height: 32),
-                  AppButton(label: 'Create Party', onPressed: () => _connect('room_${DateTime.now().millisecondsSinceEpoch}')),
+                  AppButton(
+                    label: 'Create Party',
+                    onPressed: () => _connect(
+                      'room_${DateTime.now().millisecondsSinceEpoch}',
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      Expanded(child: AppInput(controller: _roomCtl, label: 'Room Code', hint: 'Enter room code')),
+                      Expanded(
+                        child: AppInput(
+                          controller: _roomCtl,
+                          label: 'Room Code',
+                          hint: 'Enter room code',
+                        ),
+                      ),
                       const SizedBox(width: 12),
-                      AppButton(label: 'Join', onPressed: _roomCtl.text.isNotEmpty ? () => _connect(_roomCtl.text) : null,
-                        fullWidth: false, height: 48),
+                      AppButton(
+                        label: 'Join',
+                        onPressed: _roomCtl.text.isNotEmpty
+                            ? () => _connect(_roomCtl.text)
+                            : null,
+                        fullWidth: false,
+                        height: 48,
+                      ),
                     ],
                   ),
                 ],
@@ -121,14 +163,19 @@ class _WatchPartyScreenState extends ConsumerState<WatchPartyScreen> {
           Expanded(
             child: Container(
               color: Colors.grey[900],
-              child: Center(child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.tv, size: 64, color: Colors.grey),
-                  const SizedBox(height: 16),
-                  Text('Waiting to start...', style: TextStyle(color: Colors.grey[400])),
-                ],
-              )),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.tv, size: 64, color: Colors.grey),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Waiting to start...',
+                      style: TextStyle(color: Colors.grey[400]),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
           Container(
@@ -144,8 +191,13 @@ class _WatchPartyScreenState extends ConsumerState<WatchPartyScreen> {
                       final m = _messages[i];
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 2),
-                        child: Text('${m['name'] ?? 'User'}: ${m['message'] ?? ''}',
-                          style: const TextStyle(color: Colors.white, fontSize: 13)),
+                        child: Text(
+                          '${m['name'] ?? 'User'}: ${m['message'] ?? ''}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                          ),
+                        ),
                       );
                     },
                   ),
@@ -163,8 +215,14 @@ class _WatchPartyScreenState extends ConsumerState<WatchPartyScreen> {
                             hintStyle: TextStyle(color: Colors.grey[500]),
                             filled: true,
                             fillColor: Colors.grey[800],
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(20),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
                           ),
                           onSubmitted: (_) => _sendChat(),
                         ),

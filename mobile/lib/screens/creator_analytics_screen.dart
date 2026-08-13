@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
-import '../theme/app_typography.dart';
+import '../widgets/ui/index.dart';
 
 class CreatorAnalyticsScreen extends StatelessWidget {
   const CreatorAnalyticsScreen({super.key});
@@ -10,7 +10,11 @@ class CreatorAnalyticsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Creator Analytics')),
-      body: Center(child: Text('Detailed analytics coming soon', style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant))),
+      body: const ComingSoonView(
+        icon: Icons.analytics,
+        title: 'Creator Analytics',
+        description: 'Detailed analytics and insights coming soon',
+      ),
     );
   }
 }

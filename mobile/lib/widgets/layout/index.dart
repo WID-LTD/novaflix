@@ -479,31 +479,42 @@ class _DesktopSidebar extends StatelessWidget {
     Widget itemTile(_SidebarItem item) {
       final active = isActive(item.route);
       return InkWell(
-        onTap: () => context.go(item.route.split('?').first),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Row(
-            children: [
-              Icon(
-                item.icon,
-                size: 20,
-                color: active
-                    ? AppColors.primary
-                    : (item.primary
-                          ? AppColors.primaryLight
-                          : AppColors.onSurfaceVariant.withValues(alpha: 0.6)),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                item.label,
-                style: AppTypography.labelMd.copyWith(
+        onTap: () => context.go(item.route),
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+          decoration: BoxDecoration(
+            color: active
+                ? (item.primary
+                    ? Colors.white.withValues(alpha: 0.05)
+                    : AppColors.primaryContainer.withValues(alpha: 0.2))
+                : null,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                Icon(
+                  item.icon,
+                  size: 20,
                   color: active
-                      ? AppColors.primary
-                      : AppColors.onSurfaceVariant.withValues(alpha: 0.6),
-                  fontWeight: item.primary ? FontWeight.w600 : FontWeight.w500,
+                      ? AppColors.primaryPink
+                      : (item.primary
+                            ? AppColors.primaryLight
+                            : AppColors.onSurfaceVariant.withValues(alpha: 0.6)),
                 ),
-              ),
-            ],
+                const SizedBox(width: 12),
+                Text(
+                  item.label,
+                  style: AppTypography.labelMd.copyWith(
+                    color: active
+                        ? AppColors.primaryPink
+                        : AppColors.onSurfaceVariant.withValues(alpha: 0.6),
+                    fontWeight: item.primary ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -638,7 +649,7 @@ class _MobileLayout extends StatelessWidget {
                                 : items[i].icon,
                             size: 22,
                             color: activeIndex == i
-                                ? AppColors.primary
+                                ? AppColors.primaryPink
                                 : AppColors.onSurfaceVariant.withValues(
                                     alpha: 0.6,
                                   ),
@@ -650,7 +661,7 @@ class _MobileLayout extends StatelessWidget {
                               fontSize: 10,
                               height: 1.1,
                               color: activeIndex == i
-                                  ? AppColors.primary
+                                  ? AppColors.primaryPink
                                   : AppColors.onSurfaceVariant.withValues(
                                       alpha: 0.6,
                                     ),

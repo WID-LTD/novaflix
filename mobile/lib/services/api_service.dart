@@ -110,7 +110,7 @@ class ApiService {
     );
   }
 
-  Future<Response> loginVerify(int userId, String code) async {
+  Future<Response> loginVerify(String userId, String code) async {
     final deviceId = await getDeviceId();
     return post(
       '/auth/login/verify',
@@ -118,13 +118,17 @@ class ApiService {
     );
   }
 
-  Future<Response> verifyEmail(int userId, String code) =>
+  Future<Response> verifyEmail(String userId, String code) =>
       post('/auth/verify-email', data: {'userId': userId, 'code': code});
 
-  Future<Response> resendVerification(int userId) =>
+  Future<Response> resendVerification(String userId) =>
       post('/auth/resend-verification', data: {'userId': userId});
 
   Future<Response> getMe() => get('/auth/me');
+  Future<Response> forgotPassword(String email) =>
+      post('/auth/forgot-password', data: {'email': email});
+  Future<Response> resetPassword(String token, String password) =>
+      post('/auth/reset-password', data: {'token': token, 'password': password});
   Future<Response> updateProfile(Map<String, dynamic> data) =>
       put('/user/profile', data: data);
   Future<Response> getUserStats() => get('/user/stats');
@@ -155,7 +159,7 @@ class ApiService {
     );
   }
 
-  Future<Response> creatorLoginVerify(int userId, String code) async {
+  Future<Response> creatorLoginVerify(String userId, String code) async {
     final deviceId = await getDeviceId();
     return post(
       '/creator/auth/login/verify',
@@ -238,7 +242,7 @@ class ApiService {
   Future<Response> toggleLike(
     int contentId,
     String contentType, {
-    int? creatorId,
+    String? creatorId,
   }) => post(
     '/interactions/like',
     data: {
@@ -259,7 +263,7 @@ class ApiService {
     int contentId,
     String contentType,
     String text, {
-    int? creatorId,
+    String? creatorId,
   }) => post(
     '/interactions/comment',
     data: {
@@ -270,9 +274,9 @@ class ApiService {
     },
   );
   Future<Response> deleteComment(int id) => delete('/interactions/comment/$id');
-  Future<Response> toggleFollow(int followingId) =>
+  Future<Response> toggleFollow(String followingId) =>
       post('/interactions/follow', data: {'followingId': followingId});
-  Future<Response> checkFollow(int followingId) =>
+  Future<Response> checkFollow(String followingId) =>
       get('/interactions/follow', params: {'followingId': followingId});
 
   Future<Response> getForYouRecommendations() =>
@@ -324,7 +328,7 @@ class ApiService {
   Future<Response> getPaymentStatus() => get('/payment/status');
   Future<Response> getGatewayInfo() => get('/payment/gateway-info');
 
-  Future<Response> sendTip(int creatorId, double amount, {String? message}) =>
+  Future<Response> sendTip(String creatorId, double amount, {String? message}) =>
       post(
         '/tips',
         data: {
@@ -344,7 +348,7 @@ class ApiService {
       post('/memberships/tiers', data: data);
   Future<Response> updateTier(int id, Map<String, dynamic> data) =>
       put('/memberships/tiers/$id', data: data);
-  Future<Response> getCreatorTiers(int creatorId) =>
+  Future<Response> getCreatorTiers(String creatorId) =>
       get('/memberships/tiers/$creatorId');
   Future<Response> getMyTiers() => get('/memberships/my-tiers');
   Future<Response> subscribeToTier(int tierId) =>
@@ -490,9 +494,9 @@ class ApiService {
   Future<Response> adminGetStats() => get('/admin/stats');
   Future<Response> adminGetUploads() => get('/admin/uploads');
   Future<Response> adminGetCreators() => get('/admin/creators');
-  Future<Response> adminUpdateUserRole(int userId, String role) =>
+  Future<Response> adminUpdateUserRole(String userId, String role) =>
       put('/admin/users/$userId/role', data: {'role': role});
-  Future<Response> adminBanUser(int userId) => post('/admin/users/$userId/ban');
+  Future<Response> adminBanUser(String userId) => post('/admin/users/$userId/ban');
   Future<Response> adminSendNewsletter(String subject, String content) => post(
     '/admin/newsletter/send',
     data: {'subject': subject, 'content': content},
@@ -557,7 +561,7 @@ class ApiService {
 
   // ---------- Chat / DM ----------
   Future<Response> getConversations() => get('/chat/conversations');
-  Future<Response> getDirectMessages(int userId, {int? limit}) => get(
+  Future<Response> getDirectMessages(String userId, {int? limit}) => get(
     '/chat/messages',
     params: {'with': userId, if (limit != null) 'limit': limit},
   );
@@ -587,13 +591,13 @@ class ApiService {
       post('/forum/topics/$id/replies', data: {'content': content});
 
   // ---------- Public profiles / fan ----------
-  Future<Response> getFollowStats(int userId) =>
+  Future<Response> getFollowStats(String userId) =>
       get('/interactions/follow-stats', params: {'userId': userId});
-  Future<Response> getFollowers(int userId) =>
+  Future<Response> getFollowers(String userId) =>
       get('/interactions/followers', params: {'userId': userId});
-  Future<Response> getFollowing(int userId) =>
+  Future<Response> getFollowing(String userId) =>
       get('/interactions/following', params: {'userId': userId});
-  Future<Response> getFanLeaderboard(int creatorId) =>
+  Future<Response> getFanLeaderboard(String creatorId) =>
       get('/fan/$creatorId/leaderboard');
-  Future<Response> getFanStatus(int creatorId) => get('/fan/$creatorId/status');
+  Future<Response> getFanStatus(String creatorId) => get('/fan/$creatorId/status');
 }

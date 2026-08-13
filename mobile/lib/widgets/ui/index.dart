@@ -18,9 +18,16 @@ class AppButton extends StatelessWidget {
   final double? height;
 
   const AppButton({
-    super.key, required this.label, this.onPressed,
-    this.loading = false, this.fullWidth = true, this.icon,
-    this.outlined = false, this.text = false, this.color, this.height,
+    super.key,
+    required this.label,
+    this.onPressed,
+    this.loading = false,
+    this.fullWidth = true,
+    this.icon,
+    this.outlined = false,
+    this.text = false,
+    this.color,
+    this.height,
   });
 
   @override
@@ -29,8 +36,19 @@ class AppButton extends StatelessWidget {
       return TextButton(
         onPressed: loading ? null : onPressed,
         child: loading
-            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-            : Text(label, style: const TextStyle(color: AppColors.primaryLight)),
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Text(
+                label,
+                style: const TextStyle(
+                  color: AppColors.primaryPink,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
       );
     }
     if (outlined) {
@@ -40,9 +58,13 @@ class AppButton extends StatelessWidget {
         child: OutlinedButton(
           onPressed: loading ? null : onPressed,
           style: OutlinedButton.styleFrom(
-            foregroundColor: color ?? AppColors.primary,
-            side: BorderSide(color: color ?? AppColors.primary),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            foregroundColor: color ?? AppColors.white,
+            side: BorderSide(
+              color: color ?? AppColors.white.withValues(alpha: 0.2),
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
           ),
           child: _buildChild(),
         ),
@@ -54,10 +76,11 @@ class AppButton extends StatelessWidget {
       child: ElevatedButton(
         onPressed: loading ? null : onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: color ?? AppColors.primary,
-          foregroundColor: AppColors.onPrimary,
+          backgroundColor: color ?? AppColors.primaryContainer,
+          foregroundColor: AppColors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          elevation: 0,
+          elevation: 2,
+          shadowColor: const Color(0x4D7F1D1D),
         ),
         child: _buildChild(),
       ),
@@ -66,15 +89,29 @@ class AppButton extends StatelessWidget {
 
   Widget _buildChild() {
     if (loading) {
-      return const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white));
+      return const SizedBox(
+        width: 20,
+        height: 20,
+        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+      );
     }
     if (icon != null) {
       return Row(
         mainAxisSize: MainAxisSize.min,
-        children: [Icon(icon, size: 20), const SizedBox(width: 8), Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600))],
+        children: [
+          Icon(icon, size: 20),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+        ],
       );
     }
-    return Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600));
+    return Text(
+      label,
+      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+    );
   }
 }
 
@@ -90,8 +127,16 @@ class AppInput extends StatelessWidget {
   final ValueChanged<String>? onChanged;
 
   const AppInput({
-    super.key, this.controller, this.label, this.hint, this.icon,
-    this.obscureText = false, this.error, this.suffix, this.keyboardType, this.onChanged,
+    super.key,
+    this.controller,
+    this.label,
+    this.hint,
+    this.icon,
+    this.obscureText = false,
+    this.error,
+    this.suffix,
+    this.keyboardType,
+    this.onChanged,
   });
 
   @override
@@ -100,22 +145,57 @@ class AppInput extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (label != null) Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Text(label!, style: AppTypography.labelMd),
-        ),
+        if (label != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(label!, style: AppTypography.labelMd),
+          ),
         TextField(
           controller: controller,
           obscureText: obscureText,
           keyboardType: keyboardType,
           onChanged: onChanged,
-          style: const TextStyle(color: AppColors.onSurface, fontSize: 16),
+          style: const TextStyle(color: AppColors.onSurface, fontSize: 15),
           decoration: InputDecoration(
             hintText: hint,
-            prefixIcon: icon != null ? Icon(icon, color: AppColors.onSurfaceVariant) : null,
+            hintStyle: TextStyle(
+              color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
+              fontSize: 15,
+            ),
+            prefixIcon: icon != null
+                ? Icon(icon, color: AppColors.onSurfaceVariant, size: 20)
+                : null,
             suffixIcon: suffix,
             errorText: error,
             errorMaxLines: 2,
+            filled: true,
+            fillColor: AppColors.surfaceContainerLow,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: Colors.white.withValues(alpha: 0.1),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: AppColors.primaryContainer,
+                width: 1.5,
+              ),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.error),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.error, width: 1.5),
+            ),
           ),
         ),
       ],
@@ -137,11 +217,15 @@ class AppBadge extends StatelessWidget {
         color: (color ?? AppColors.primary).withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Text(label, style: TextStyle(
-        fontSize: 10, fontWeight: FontWeight.w700,
-        color: color ?? AppColors.primary,
-        letterSpacing: 0.5,
-      )),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: color ?? AppColors.primary,
+          letterSpacing: 0.5,
+        ),
+      ),
     );
   }
 }
@@ -156,7 +240,9 @@ class PremiumBadge extends StatelessWidget {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: size * 0.5, vertical: 2),
       decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [AppColors.primary, AppColors.primaryLight]),
+        gradient: LinearGradient(
+          colors: [AppColors.primary, AppColors.primaryLight],
+        ),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
@@ -164,7 +250,15 @@ class PremiumBadge extends StatelessWidget {
         children: [
           Icon(Icons.star, size: size * 0.75, color: Colors.white),
           const SizedBox(width: 2),
-          Text('PREMIUM', style: TextStyle(fontSize: size * 0.5, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: 0.5)),
+          Text(
+            'PREMIUM',
+            style: TextStyle(
+              fontSize: size * 0.5,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+              letterSpacing: 0.5,
+            ),
+          ),
         ],
       ),
     );
@@ -180,7 +274,9 @@ class RatingBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pct = rating / maxRating;
-    final color = pct >= 0.7 ? AppColors.secondary : (pct >= 0.4 ? Colors.orange : AppColors.error);
+    final color = pct >= 0.7
+        ? AppColors.secondary
+        : (pct >= 0.4 ? Colors.orange : AppColors.error);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
@@ -192,7 +288,14 @@ class RatingBadge extends StatelessWidget {
         children: [
           Icon(Icons.star, size: 12, color: color),
           const SizedBox(width: 2),
-          Text(rating.toStringAsFixed(1), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
+          Text(
+            rating.toStringAsFixed(1),
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
         ],
       ),
     );
@@ -204,17 +307,29 @@ class LoadingSpinner extends StatelessWidget {
   final Color? color;
   final bool logo;
 
-  const LoadingSpinner({super.key, this.size = 50, this.color, this.logo = false});
+  const LoadingSpinner({
+    super.key,
+    this.size = 50,
+    this.color,
+    this.logo = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     if (logo) {
-      return Center(child: AnimatedLoader(size: size * 4, color: color ?? AppColors.primary));
+      return Center(
+        child: AnimatedLoader(
+          size: size * 4,
+          color: color ?? AppColors.primary,
+        ),
+      );
     }
-    return Center(child: CircularProgressIndicator(
-      strokeWidth: 3,
-      valueColor: AlwaysStoppedAnimation(color ?? AppColors.primary),
-    ));
+    return Center(
+      child: CircularProgressIndicator(
+        strokeWidth: 3,
+        valueColor: AlwaysStoppedAnimation(color ?? AppColors.primary),
+      ),
+    );
   }
 }
 
@@ -223,10 +338,17 @@ class AppSkeleton extends StatelessWidget {
   final double? height;
   final double borderRadius;
 
-  const AppSkeleton({super.key, this.width, this.height, this.borderRadius = 8});
+  const AppSkeleton({
+    super.key,
+    this.width,
+    this.height,
+    this.borderRadius = 8,
+  });
 
-  factory AppSkeleton.card() => AppSkeleton(width: 160, height: 240, borderRadius: 12);
-  factory AppSkeleton.poster() => AppSkeleton(width: 120, height: 180, borderRadius: 8);
+  factory AppSkeleton.card() =>
+      AppSkeleton(width: 160, height: 240, borderRadius: 12);
+  factory AppSkeleton.poster() =>
+      AppSkeleton(width: 120, height: 180, borderRadius: 8);
   factory AppSkeleton.text() => AppSkeleton(height: 16, borderRadius: 4);
   factory AppSkeleton.hero() => AppSkeleton(height: 400, borderRadius: 0);
 
@@ -248,16 +370,27 @@ class AppModal extends StatelessWidget {
   final Widget content;
   final List<Widget>? actions;
 
-  const AppModal({super.key, required this.title, required this.content, this.actions});
+  const AppModal({
+    super.key,
+    required this.title,
+    required this.content,
+    this.actions,
+  });
 
-  static Future<T?> show<T>(BuildContext context, {required String title, required Widget content, List<Widget>? actions}) {
+  static Future<T?> show<T>(
+    BuildContext context, {
+    required String title,
+    required Widget content,
+    List<Widget>? actions,
+  }) {
     return showModalBottomSheet<T>(
       context: context,
       backgroundColor: AppColors.surfaceContainer,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (_) => AppModal(title: title, content: content, actions: actions),
+      builder: (_) =>
+          AppModal(title: title, content: content, actions: actions),
     );
   }
 
@@ -289,8 +422,11 @@ class AppTabs extends StatelessWidget {
   final bool scrollable;
 
   const AppTabs({
-    super.key, required this.tabs, required this.activeIndex,
-    required this.onChanged, this.scrollable = false,
+    super.key,
+    required this.tabs,
+    required this.activeIndex,
+    required this.onChanged,
+    this.scrollable = false,
   });
 
   @override
@@ -298,10 +434,7 @@ class AppTabs extends StatelessWidget {
     return SizedBox(
       height: 40,
       child: scrollable
-          ? ListView(
-              scrollDirection: Axis.horizontal,
-              children: _buildTabs(),
-            )
+          ? ListView(scrollDirection: Axis.horizontal, children: _buildTabs())
           : Row(children: _buildTabs()),
     );
   }
@@ -316,17 +449,24 @@ class AppTabs extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: isActive ? AppColors.primary.withValues(alpha: 0.2) : AppColors.transparent,
+              color: isActive
+                  ? AppColors.primary.withValues(alpha: 0.2)
+                  : AppColors.transparent,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
                 color: isActive ? AppColors.primary : AppColors.outlineVariant,
               ),
             ),
-            child: Text(tabs[i], style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: isActive ? AppColors.primary : AppColors.onSurfaceVariant,
-            )),
+            child: Text(
+              tabs[i],
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: isActive
+                    ? AppColors.primary
+                    : AppColors.onSurfaceVariant,
+              ),
+            ),
           ),
         ),
       );
@@ -352,7 +492,11 @@ class LockedOverlay extends StatelessWidget {
           children: [
             const Icon(Icons.lock, color: Colors.white, size: 32),
             const SizedBox(height: 8),
-            Text(message, style: const TextStyle(color: Colors.white, fontSize: 12), textAlign: TextAlign.center),
+            Text(
+              message,
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       ),
@@ -366,7 +510,13 @@ class AppDropdown extends StatelessWidget {
   final ValueChanged<String?> onChanged;
   final String? label;
 
-  const AppDropdown({super.key, this.value, required this.items, required this.onChanged, this.label});
+  const AppDropdown({
+    super.key,
+    this.value,
+    required this.items,
+    required this.onChanged,
+    this.label,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -374,10 +524,11 @@ class AppDropdown extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (label != null) Padding(
-          padding: const EdgeInsets.only(bottom: 4),
-          child: Text(label!, style: AppTypography.labelSm),
-        ),
+        if (label != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(label!, style: AppTypography.labelSm),
+          ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
@@ -390,7 +541,17 @@ class AppDropdown extends StatelessWidget {
               value: value,
               isExpanded: true,
               dropdownColor: AppColors.surfaceContainerHigh,
-              items: items.map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(color: AppColors.onSurface)))).toList(),
+              items: items
+                  .map(
+                    (e) => DropdownMenuItem(
+                      value: e,
+                      child: Text(
+                        e,
+                        style: const TextStyle(color: AppColors.onSurface),
+                      ),
+                    ),
+                  )
+                  .toList(),
               onChanged: onChanged,
             ),
           ),
@@ -401,10 +562,14 @@ class AppDropdown extends StatelessWidget {
 }
 
 class FollowButton extends ConsumerWidget {
-  final int creatorId;
+  final String creatorId;
   final bool isFollowing;
 
-  const FollowButton({super.key, required this.creatorId, required this.isFollowing});
+  const FollowButton({
+    super.key,
+    required this.creatorId,
+    required this.isFollowing,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -428,10 +593,58 @@ class AppBackButton extends StatelessWidget {
     return IconButton(
       onPressed: onPressed ?? () => Navigator.of(context).maybePop(),
       tooltip: 'Back',
-      icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.onSurface, size: 20),
+      icon: const Icon(
+        Icons.arrow_back_ios_new,
+        color: AppColors.onSurface,
+        size: 20,
+      ),
       style: IconButton.styleFrom(
         backgroundColor: AppColors.surfaceContainerLow,
         side: const BorderSide(color: AppColors.outlineVariant),
+      ),
+    );
+  }
+}
+
+class ComingSoonView extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String description;
+
+  const ComingSoonView({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 56,
+              color: AppColors.onSurfaceVariant.withValues(alpha: 0.4),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: AppTypography.headlineSm.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              description,
+              textAlign: TextAlign.center,
+              style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant),
+            ),
+          ],
+        ),
       ),
     );
   }

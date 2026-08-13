@@ -20,7 +20,7 @@ class _CreatorLoginScreenState extends ConsumerState<CreatorLoginScreen> {
   bool _loading = false;
   String? _error;
   bool _needsVerify = false;
-  int? _pendingUserId;
+  String? _pendingUserId;
   String? _verifyReason;
 
   @override
@@ -40,7 +40,7 @@ class _CreatorLoginScreenState extends ConsumerState<CreatorLoginScreen> {
       if (data['needsLoginVerification'] == true) {
         setState(() {
           _needsVerify = true;
-          _pendingUserId = data['userId'] as int?;
+          _pendingUserId = data['userId']?.toString();
           _verifyReason = data['reason'] as String?;
         });
         return;

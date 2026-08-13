@@ -11,6 +11,7 @@ class MediaItem {
   final List<Genre>? genres;
   final List<Season>? seasons;
   final bool premium;
+  final bool promoted;
   final String? trailerKey;
 
   MediaItem({
@@ -26,6 +27,7 @@ class MediaItem {
     this.genres,
     this.seasons,
     this.premium = false,
+    this.promoted = false,
     this.trailerKey,
   });
 
@@ -34,29 +36,49 @@ class MediaItem {
       id: json['id'] as int,
       title: json['title'] as String? ?? json['name'] as String? ?? '',
       posterPath: json['poster_path'] as String? ?? json['poster'] as String?,
-      backdropPath: json['backdrop_path'] as String? ?? json['backdrop'] as String?,
+      backdropPath:
+          json['backdrop_path'] as String? ?? json['backdrop'] as String?,
       overview: json['overview'] as String?,
-      voteAverage: (json['vote_average'] as num?)?.toDouble() ?? (json['rating'] as num?)?.toDouble(),
-      releaseDate: json['release_date'] as String? ?? json['first_air_date'] as String? ?? json['year'] as String?,
+      voteAverage:
+          (json['vote_average'] as num?)?.toDouble() ??
+          (json['rating'] as num?)?.toDouble(),
+      releaseDate:
+          json['release_date'] as String? ??
+          json['first_air_date'] as String? ??
+          json['year'] as String?,
       mediaType: json['media_type'] as String?,
       runtime: json['runtime'] as int?,
-      genres: (json['genres'] as List?)?.map((g) => g is Map<String, dynamic> ? Genre.fromJson(g) : Genre(id: 0, name: g as String)).toList(),
-      seasons: (json['seasons'] as List?)?.map((s) => Season.fromJson(s as Map<String, dynamic>)).toList(),
+      genres: (json['genres'] as List?)
+          ?.map(
+            (g) => g is Map<String, dynamic>
+                ? Genre.fromJson(g)
+                : Genre(id: 0, name: g as String),
+          )
+          .toList(),
+      seasons: (json['seasons'] as List?)
+          ?.map((s) => Season.fromJson(s as Map<String, dynamic>))
+          .toList(),
       premium: json['premium'] as bool? ?? false,
+      promoted: json['promoted'] as bool? ?? false,
       trailerKey: json['trailer_key'] as String?,
     );
   }
 
   String? get posterUrl => posterPath != null
-      ? (posterPath!.startsWith('http') ? posterPath : 'https://image.tmdb.org/t/p/w500$posterPath')
+      ? (posterPath!.startsWith('http')
+            ? posterPath
+            : 'https://image.tmdb.org/t/p/w500$posterPath')
       : null;
   String? get backdropUrl => backdropPath != null
-      ? (backdropPath!.startsWith('http') ? backdropPath : 'https://image.tmdb.org/t/p/w1280$backdropPath')
+      ? (backdropPath!.startsWith('http')
+            ? backdropPath
+            : 'https://image.tmdb.org/t/p/w1280$backdropPath')
       : null;
   int get year => releaseDate != null && releaseDate!.length >= 4
       ? int.tryParse(releaseDate!.substring(0, 4)) ?? 0
       : 0;
-  String get ratingFormatted => voteAverage != null ? voteAverage!.toStringAsFixed(1) : 'N/A';
+  String get ratingFormatted =>
+      voteAverage != null ? voteAverage!.toStringAsFixed(1) : 'N/A';
   bool get isTV => mediaType == 'tv';
 }
 
@@ -66,10 +88,8 @@ class Genre {
 
   Genre({required this.id, required this.name});
 
-  factory Genre.fromJson(Map<String, dynamic> json) => Genre(
-    id: json['id'] as int,
-    name: json['name'] as String,
-  );
+  factory Genre.fromJson(Map<String, dynamic> json) =>
+      Genre(id: json['id'] as int, name: json['name'] as String);
 }
 
 class Season {
@@ -79,7 +99,13 @@ class Season {
   final String? posterPath;
   final int? episodeCount;
 
-  Season({required this.id, required this.seasonNumber, this.name, this.posterPath, this.episodeCount});
+  Season({
+    required this.id,
+    required this.seasonNumber,
+    this.name,
+    this.posterPath,
+    this.episodeCount,
+  });
 
   factory Season.fromJson(Map<String, dynamic> json) => Season(
     id: json['id'] as int,
@@ -98,7 +124,14 @@ class Episode {
   final String? stillPath;
   final int? runtime;
 
-  Episode({required this.id, required this.episodeNumber, this.name, this.overview, this.stillPath, this.runtime});
+  Episode({
+    required this.id,
+    required this.episodeNumber,
+    this.name,
+    this.overview,
+    this.stillPath,
+    this.runtime,
+  });
 
   factory Episode.fromJson(Map<String, dynamic> json) => Episode(
     id: json['id'] as int,

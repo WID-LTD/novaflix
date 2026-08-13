@@ -28,7 +28,7 @@ class AuthService {
       throw AuthException(
         'login_verify',
         data['message'] ?? 'Please verify this sign-in',
-        userId: data['userId'] as int?,
+        userId: data['userId']?.toString(),
         reason: data['reason'] as String?,
       );
     }
@@ -40,7 +40,7 @@ class AuthService {
     return User.fromJson(userData, token: token);
   }
 
-  Future<User> loginVerify(int userId, String code) async {
+  Future<User> loginVerify(String userId, String code) async {
     final res = await _api.loginVerify(userId, code);
     final data = res.data as Map<String, dynamic>;
 
@@ -52,7 +52,7 @@ class AuthService {
     return User.fromJson(userData, token: token);
   }
 
-  Future<User> verifyEmail(int userId, String code) async {
+  Future<User> verifyEmail(String userId, String code) async {
     final res = await _api.verifyEmail(userId, code);
     final data = res.data as Map<String, dynamic>;
 
@@ -65,7 +65,7 @@ class AuthService {
     throw AuthException('verify_failed', 'Verification failed');
   }
 
-  Future<void> resendVerification(int userId) async {
+  Future<void> resendVerification(String userId) async {
     await _api.resendVerification(userId);
   }
 
@@ -92,7 +92,7 @@ class AuthService {
 class AuthException implements Exception {
   final String code;
   final String message;
-  final int? userId;
+  final String? userId;
   final String? reason;
   AuthException(this.code, this.message, {this.userId, this.reason});
 

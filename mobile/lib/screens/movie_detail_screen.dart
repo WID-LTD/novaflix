@@ -12,23 +12,33 @@ import '../providers/downloads_provider.dart';
 import '../widgets/ui/index.dart';
 import '../widgets/features/index.dart';
 
-final _movieDetailProvider = FutureProvider.family<MediaItem?, int>((ref, id) async {
+final _movieDetailProvider = FutureProvider.family<MediaItem?, int>((
+  ref,
+  id,
+) async {
   final api = ref.read(apiServiceProvider);
   try {
     final res = await api.getDetails(id, 'movie');
-    final data = res.data['data'] as Map<String, dynamic>? ?? res.data as Map<String, dynamic>;
+    final data =
+        res.data['data'] as Map<String, dynamic>? ??
+        res.data as Map<String, dynamic>;
     return MediaItem.fromJson(data);
   } catch (_) {
     return null;
   }
 });
 
-final _similarProvider = FutureProvider.family<List<MediaItem>, int>((ref, id) async {
+final _similarProvider = FutureProvider.family<List<MediaItem>, int>((
+  ref,
+  id,
+) async {
   final api = ref.read(apiServiceProvider);
   try {
     final res = await api.getSimilarRecommendations(id);
     final data = res.data['data'] as List? ?? [];
-    return data.map((e) => MediaItem.fromJson(e as Map<String, dynamic>)).toList();
+    return data
+        .map((e) => MediaItem.fromJson(e as Map<String, dynamic>))
+        .toList();
   } catch (_) {
     return [];
   }
@@ -56,7 +66,11 @@ class MovieDetailScreen extends ConsumerWidget {
               const SizedBox(height: 16),
               Text('Error loading details', style: AppTypography.bodyMd),
               const SizedBox(height: 16),
-              AppButton(label: 'Go Back', onPressed: () => context.pop(), fullWidth: false),
+              AppButton(
+                label: 'Go Back',
+                onPressed: () => context.pop(),
+                fullWidth: false,
+              ),
             ],
           ),
         ),
@@ -75,7 +89,10 @@ class MovieDetailScreen extends ConsumerWidget {
                     fit: StackFit.expand,
                     children: [
                       if (item.backdropUrl != null)
-                        CachedNetworkImage(imageUrl: item.backdropUrl!, fit: BoxFit.cover)
+                        CachedNetworkImage(
+                          imageUrl: item.backdropUrl!,
+                          fit: BoxFit.cover,
+                        )
                       else
                         Container(color: AppColors.surfaceContainerHigh),
                       Container(
@@ -97,16 +114,33 @@ class MovieDetailScreen extends ConsumerWidget {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(item.title, style: AppTypography.headlineMd.copyWith(color: Colors.white)),
+                                  Text(
+                                    item.title,
+                                    style: AppTypography.headlineMd.copyWith(
+                                      color: Colors.white,
+                                    ),
+                                  ),
                                   const SizedBox(height: 8),
                                   Row(
                                     children: [
-                                      RatingBadge(rating: item.voteAverage ?? 0),
+                                      RatingBadge(
+                                        rating: item.voteAverage ?? 0,
+                                      ),
                                       const SizedBox(width: 12),
-                                      Text('${item.year}', style: const TextStyle(color: Colors.white70)),
+                                      Text(
+                                        '${item.year}',
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                        ),
+                                      ),
                                       if (item.runtime != null) ...[
                                         const SizedBox(width: 12),
-                                        Text('${item.runtime! ~/ 60}h ${item.runtime! % 60}m', style: const TextStyle(color: Colors.white70)),
+                                        Text(
+                                          '${item.runtime! ~/ 60}h ${item.runtime! % 60}m',
+                                          style: const TextStyle(
+                                            color: Colors.white70,
+                                          ),
+                                        ),
                                       ],
                                     ],
                                   ),
@@ -121,25 +155,63 @@ class MovieDetailScreen extends ConsumerWidget {
                 ),
               ),
               SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1440),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: AppButton(
-                              label: 'Watch Now',
-                              onPressed: () => context.push('/watch?id=${item.id}&type=${item.mediaType ?? 'movie'}'),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Consumer(
-                            builder: (_, ref2, __) {
-                              final watchlist = ref2.watch(watchlistProvider);
-                              final inWatchlist = watchlist.isInWatchlist(item.id, item.isTV ? 'tv' : 'movie');
-                              return Container(
+                          Row(
+                            children: [
+                              Expanded(
+                                child: AppButton(
+                                  label: 'Watch Now',
+                                  onPressed: () => context.push(
+                                    '/watch?id=${item.id}&type=${item.mediaType ?? 'movie'}',
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Consumer(
+                                builder: (_, ref2, __) {
+                                  final watchlist = ref2.watch(
+                                    watchlistProvider,
+                                  );
+                                  final inWatchlist = watchlist.isInWatchlist(
+                                    item.id,
+                                    item.isTV ? 'tv' : 'movie',
+                                  );
+                                  return Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surfaceContainerHigh,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: IconButton(
+                                      icon: Icon(
+                                        inWatchlist
+                                            ? Icons.bookmark
+                                            : Icons.bookmark_border,
+                                        color: inWatchlist
+                                            ? AppColors.primary
+                                            : AppColors.onSurfaceVariant,
+                                      ),
+                                      onPressed: () => ref2
+                                          .read(watchlistProvider.notifier)
+                                          .toggle(
+                                            item.id,
+                                            item.isTV ? 'tv' : 'movie',
+                                          ),
+                                    ),
+                                  );
+                                },
+                              ),
+                              const SizedBox(width: 12),
+                              Container(
                                 width: 48,
                                 height: 48,
                                 decoration: BoxDecoration(
@@ -147,86 +219,106 @@ class MovieDetailScreen extends ConsumerWidget {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: IconButton(
-                                  icon: Icon(
-                                    inWatchlist ? Icons.bookmark : Icons.bookmark_border,
-                                    color: inWatchlist ? AppColors.primary : AppColors.onSurfaceVariant,
+                                  icon: const Icon(
+                                    Icons.download_outlined,
+                                    color: AppColors.onSurfaceVariant,
                                   ),
-                                  onPressed: () => ref2.read(watchlistProvider.notifier).toggle(item.id, item.isTV ? 'tv' : 'movie'),
+                                  onPressed: () =>
+                                      _handleDownload(context, ref, item),
                                 ),
-                              );
-                            },
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 12),
-                          Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: AppColors.surfaceContainerHigh,
-                              borderRadius: BorderRadius.circular(8),
+                          const SizedBox(height: 24),
+                          if (item.overview != null &&
+                              item.overview!.isNotEmpty) ...[
+                            Text('Synopsis', style: AppTypography.headlineSm),
+                            const SizedBox(height: 8),
+                            Text(
+                              item.overview!,
+                              style: AppTypography.bodyMd.copyWith(
+                                color: AppColors.onSurfaceVariant,
+                              ),
                             ),
-                            child: IconButton(
-                              icon: const Icon(Icons.download_outlined, color: AppColors.onSurfaceVariant),
-                              onPressed: () => _handleDownload(context, ref, item),
+                          ],
+                          const SizedBox(height: 24),
+                          if (item.genres != null &&
+                              item.genres!.isNotEmpty) ...[
+                            Text('Genres', style: AppTypography.headlineSm),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: item.genres!
+                                  .map(
+                                    (g) => Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.surfaceContainerHigh,
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: AppColors.outlineVariant,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        g.name,
+                                        style: AppTypography.bodySm,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
                             ),
+                          ],
+                          const SizedBox(height: 24),
+                          if (item.voteAverage != null) ...[
+                            Row(
+                              children: [
+                                const Text(
+                                  'Rating: ',
+                                  style: TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                                Text(
+                                  '${item.voteAverage!.toStringAsFixed(1)}/10',
+                                  style: AppTypography.bodyMd,
+                                ),
+                              ],
+                            ),
+                          ],
+                          const SizedBox(height: 24),
+                          if (item.seasons != null &&
+                              item.seasons!.isNotEmpty) ...[
+                            Text('Seasons', style: AppTypography.headlineSm),
+                            const SizedBox(height: 8),
+                            SeasonEpisodeSelector(
+                              showId: item.id,
+                              seasons: item.seasons!,
+                            ),
+                          ],
+                          const SizedBox(height: 24),
+                          CommentSection(
+                            contentId: item.id,
+                            contentType: item.isTV ? 'tv' : 'movie',
+                          ),
+                          const SizedBox(height: 24),
+                          similar.when(
+                            data: (items) => items.isNotEmpty
+                                ? ContentRow(
+                                    title: 'More Like This',
+                                    items: items,
+                                  )
+                                : const SizedBox.shrink(),
+                            loading: () => const SizedBox(
+                              height: 200,
+                              child: LoadingSpinner(logo: true),
+                            ),
+                            error: (_, __) => const SizedBox.shrink(),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 24),
-                      if (item.overview != null && item.overview!.isNotEmpty) ...[
-                        Text('Synopsis', style: AppTypography.headlineSm),
-                        const SizedBox(height: 8),
-                        Text(item.overview!, style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant)),
-                      ],
-                      const SizedBox(height: 24),
-                      if (item.genres != null && item.genres!.isNotEmpty) ...[
-                        Text('Genres', style: AppTypography.headlineSm),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: item.genres!.map((g) => Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: AppColors.surfaceContainerHigh,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: AppColors.outlineVariant),
-                            ),
-                            child: Text(g.name, style: AppTypography.bodySm),
-                          )).toList(),
-                        ),
-                      ],
-                      const SizedBox(height: 24),
-                      if (item.voteAverage != null) ...[
-                        Row(
-                          children: [
-                            const Text('Rating: ', style: TextStyle(fontWeight: FontWeight.w600)),
-                            Text('${item.voteAverage!.toStringAsFixed(1)}/10', style: AppTypography.bodyMd),
-                          ],
-                        ),
-                      ],
-                      const SizedBox(height: 24),
-                      if (item.seasons != null && item.seasons!.isNotEmpty) ...[
-                        Text('Seasons', style: AppTypography.headlineSm),
-                        const SizedBox(height: 8),
-                        SeasonEpisodeSelector(
-                          showId: item.id,
-                          seasons: item.seasons!,
-                        ),
-                      ],
-                      const SizedBox(height: 24),
-                      CommentSection(
-                        contentId: item.id,
-                        contentType: item.isTV ? 'tv' : 'movie',
-                      ),
-                      const SizedBox(height: 24),
-                      similar.when(
-                        data: (items) => items.isNotEmpty
-                            ? ContentRow(title: 'More Like This', items: items)
-                            : const SizedBox.shrink(),
-                        loading: () => const SizedBox(height: 200, child: LoadingSpinner(logo: true)),
-                        error: (_, __) => const SizedBox.shrink(),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -237,7 +329,11 @@ class MovieDetailScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _handleDownload(BuildContext context, WidgetRef ref, MediaItem item) async {
+  Future<void> _handleDownload(
+    BuildContext context,
+    WidgetRef ref,
+    MediaItem item,
+  ) async {
     final auth = ref.read(authProvider);
     if (auth.status != AuthStatus.authenticated) {
       context.push('/login');
@@ -277,11 +373,15 @@ class MovieDetailScreen extends ConsumerWidget {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Downloading ${item.title} (${allEpisodes.length} episodes)...'),
+          content: Text(
+            'Downloading ${item.title} (${allEpisodes.length} episodes)...',
+          ),
           duration: const Duration(seconds: 3),
         ),
       );
-      ref.read(downloadsProvider.notifier).startDownload(
+      ref
+          .read(downloadsProvider.notifier)
+          .startDownload(
             contentId: item.id,
             type: 'tv',
             title: item.title,
@@ -291,9 +391,14 @@ class MovieDetailScreen extends ConsumerWidget {
           );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Downloading ${item.title}...'), duration: const Duration(seconds: 3)),
+        SnackBar(
+          content: Text('Downloading ${item.title}...'),
+          duration: const Duration(seconds: 3),
+        ),
       );
-      ref.read(downloadsProvider.notifier).startDownload(
+      ref
+          .read(downloadsProvider.notifier)
+          .startDownload(
             contentId: item.id,
             type: 'movie',
             title: item.title,

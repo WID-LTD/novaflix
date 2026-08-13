@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
-import '../theme/app_typography.dart';
+import '../widgets/ui/index.dart';
 
 class CreatorCatalogScreen extends StatelessWidget {
   const CreatorCatalogScreen({super.key});
@@ -10,7 +10,11 @@ class CreatorCatalogScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Content Catalog')),
-      body: Center(child: Text('Catalog management coming soon', style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant))),
+      body: const ComingSoonView(
+        icon: Icons.video_library,
+        title: 'Content Catalog',
+        description: 'Manage your content catalog',
+      ),
     );
   }
 }
