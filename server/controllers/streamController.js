@@ -35,14 +35,14 @@ function getCachedSegment(key) {
   return entry
 }
 
-async function parseMasterManifest(masterUrl) {
+async function parseMasterManifest(masterUrl, plan) {
   const response = await axios.get(masterUrl, {
     headers: { 'User-Agent': UA, Referer: 'https://nextgencloudfabric.com/' },
     timeout: 15000,
   })
   const body = response.data
   const baseUrl = masterUrl.substring(0, masterUrl.lastIndexOf('/') + 1)
-  const variants = []
+  let variants = []
   const lines = body.split('\n')
   let currentStreamInf = null
 
@@ -227,7 +227,7 @@ export async function manifestInfo(req, res) {
       ? 'https://' + url.replace('/api/proxy/', '')
       : url
 
-    const variants = await parseMasterManifest(cdnUrl)
+    const variants = await parseMasterManifest(cdnUrl, plan)
     let duration = 0
 
     if (id && type) {

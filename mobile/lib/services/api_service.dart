@@ -127,8 +127,10 @@ class ApiService {
   Future<Response> getMe() => get('/auth/me');
   Future<Response> forgotPassword(String email) =>
       post('/auth/forgot-password', data: {'email': email});
-  Future<Response> resetPassword(String token, String password) =>
-      post('/auth/reset-password', data: {'token': token, 'password': password});
+  Future<Response> resetPassword(String token, String password) => post(
+    '/auth/reset-password',
+    data: {'token': token, 'password': password},
+  );
   Future<Response> updateProfile(Map<String, dynamic> data) =>
       put('/user/profile', data: data);
   Future<Response> getUserStats() => get('/user/stats');
@@ -328,15 +330,18 @@ class ApiService {
   Future<Response> getPaymentStatus() => get('/payment/status');
   Future<Response> getGatewayInfo() => get('/payment/gateway-info');
 
-  Future<Response> sendTip(String creatorId, double amount, {String? message}) =>
-      post(
-        '/tips',
-        data: {
-          'creatorId': creatorId,
-          'amount': amount,
-          if (message != null) 'message': message,
-        },
-      );
+  Future<Response> sendTip(
+    String creatorId,
+    double amount, {
+    String? message,
+  }) => post(
+    '/tips',
+    data: {
+      'creatorId': creatorId,
+      'amount': amount,
+      if (message != null) 'message': message,
+    },
+  );
   Future<Response> createPayoutRecipient(Map<String, dynamic> data) =>
       post('/payouts/recipient', data: data);
   Future<Response> requestWithdraw(double amount) =>
@@ -496,7 +501,8 @@ class ApiService {
   Future<Response> adminGetCreators() => get('/admin/creators');
   Future<Response> adminUpdateUserRole(String userId, String role) =>
       put('/admin/users/$userId/role', data: {'role': role});
-  Future<Response> adminBanUser(String userId) => post('/admin/users/$userId/ban');
+  Future<Response> adminBanUser(String userId) =>
+      post('/admin/users/$userId/ban');
   Future<Response> adminSendNewsletter(String subject, String content) => post(
     '/admin/newsletter/send',
     data: {'subject': subject, 'content': content},
@@ -599,5 +605,53 @@ class ApiService {
       get('/interactions/following', params: {'userId': userId});
   Future<Response> getFanLeaderboard(String creatorId) =>
       get('/fan/$creatorId/leaderboard');
-  Future<Response> getFanStatus(String creatorId) => get('/fan/$creatorId/status');
+  Future<Response> getFanStatus(String creatorId) =>
+      get('/fan/$creatorId/status');
+}
+
+/// Converts a caught exception into a short, human-friendly message for UI
+/// error banners. Server-provided error text is preferred (e.g. "Invalid
+/// credentials"); network/timeout failures are described without leaking
+/// internal details.
+String friendlyErrorMessage(Object e) {
+  if (e is DioException) {
+    final resp = e.response;
+    if (resp != null) {
+      final data = resp.data;
+      if (data is Map) {
+        final msg = (data['error'] ?? data['message']) as String?;
+        if (msg != null && msg.isNotEmpty) return msg;
+      }
+      if (resp.statusCode == 401) return 'Invalid credentials';
+      if (resp.statusCode == 429) {
+        return 'Too many attempts. Please try again later.';
+      }
+      return 'Something went wrong (${resp.statusCode}). Please try again.';
+    }
+
+    final errText = (e.error?.toString() ?? e.message ?? '').toLowerCase();
+    final unreachable =
+        errText.contains('refused') || errText.contains('failed to connect');
+
+    switch (e.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+      case DioExceptionType.transformTimeout:
+        return "Can't connect to the server. Please check your internet connection and try again.";
+      case DioExceptionType.connectionError:
+      case DioExceptionType.unknown:
+        if (unreachable) {
+          return "Can't connect to the server. Please try again later.";
+        }
+        return 'No internet connection. Check your connection and try again.';
+      case DioExceptionType.badCertificate:
+        return "Can't connect securely to the server.";
+      case DioExceptionType.cancel:
+        return 'Request cancelled.';
+      case DioExceptionType.badResponse:
+        return 'Something went wrong. Please try again.';
+    }
+  }
+  return 'Something went wrong. Please try again.';
 }

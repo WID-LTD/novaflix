@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -47,11 +46,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (_step < 3) {
       setState(() => _step++);
     } else {
-      ref.read(authProvider.notifier).register(
-        _emailCtl.text.trim(),
-        _passwordCtl.text,
-        _nameCtl.text.trim(),
-      );
+      ref
+          .read(authProvider.notifier)
+          .register(
+            _emailCtl.text.trim(),
+            _passwordCtl.text,
+            _nameCtl.text.trim(),
+          );
     }
   }
 
@@ -74,7 +75,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final authState = ref.watch(authProvider);
 
     if (authState.status == AuthStatus.authenticated) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => context.go('/profiles'));
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => context.go('/profiles'),
+      );
     }
 
     final maxWidth = MediaQuery.sizeOf(context).width;
@@ -87,44 +90,53 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           const Positioned.fill(child: ObliqueColumnsBackdrop()),
           SafeArea(
             child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
-                child: authState.status == AuthStatus.needsVerification
-                    ? _buildVerifyCard(authState)
-                    : ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 560),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Image.asset(
-                              'assets/brand/leter-mark-logo.png',
-                              width: logoWidth,
-                              height: logoWidth / 2,
-                              fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) => const SizedBox(height: 110),
-                            ),
-                            Transform.translate(
-                              offset: const Offset(0, -108),
-                              child: Column(
-                                children: [
-                                  Text(
-                                    'Join the Cinematic Experience',
-                                    style: AppTypography.bodyMd.copyWith(
-                                      color: AppColors.onSurfaceVariant,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  _progressBar(),
-                                ],
+              child: ScrollConfiguration(
+                behavior: ScrollConfiguration.of(
+                  context,
+                ).copyWith(scrollbars: false),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 40,
+                  ),
+                  child: authState.status == AuthStatus.needsVerification
+                      ? _buildVerifyCard(authState)
+                      : ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 560),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Image.asset(
+                                'assets/brand/leter-mark-logo.png',
+                                width: logoWidth,
+                                height: logoWidth / 2,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) =>
+                                    const SizedBox(height: 110),
                               ),
-                            ),
-                            Transform.translate(
-                              offset: const Offset(0, -100),
-                              child: _formCard(authState),
-                            ),
-                          ],
+                              Transform.translate(
+                                offset: const Offset(0, -108),
+                                child: Column(
+                                  children: [
+                                    Text(
+                                      'Join the Cinematic Experience',
+                                      style: AppTypography.bodyMd.copyWith(
+                                        color: AppColors.onSurfaceVariant,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    _progressBar(),
+                                  ],
+                                ),
+                              ),
+                              Transform.translate(
+                                offset: const Offset(0, -100),
+                                child: _formCard(authState),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
+                ),
               ),
             ),
           ),
@@ -156,46 +168,59 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   Widget _formCard(AuthState state) {
-    return BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: const Color(0x99131313),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 24),
-          ],
-        ),
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          child: _step == 1
-              ? _step1(state)
-              : _step == 2
-                  ? _step2(state)
-                  : _step3(state),
-        ),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 24),
+        ],
+      ),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: _step == 1
+            ? _step1(state)
+            : _step == 2
+            ? _step2(state)
+            : _step3(state),
       ),
     );
   }
 
   Widget _step1(AuthState state) {
-    final canContinue = _emailCtl.text.trim().isNotEmpty && _passwordCtl.text.isNotEmpty;
+    final canContinue =
+        _emailCtl.text.trim().isNotEmpty && _passwordCtl.text.isNotEmpty;
     return Column(
       key: const ValueKey(1),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Create Account', style: AppTypography.headlineMd),
         const SizedBox(height: 4),
-        Text('Step 1 of 3 — Credentials', style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant)),
+        Text(
+          'Step 1 of 3 — Credentials',
+          style: AppTypography.bodyMd.copyWith(
+            color: AppColors.onSurfaceVariant,
+          ),
+        ),
         const SizedBox(height: 20),
         if (state.error != null) _errorBanner(state.error!),
         const SizedBox(height: 20),
-        AppInput(controller: _emailCtl, label: 'Email', hint: 'Enter your email', keyboardType: TextInputType.emailAddress),
+        AppInput(
+          controller: _emailCtl,
+          label: 'Email',
+          hint: 'Enter your email',
+          keyboardType: TextInputType.emailAddress,
+        ),
         const SizedBox(height: 16),
-        AppInput(controller: _passwordCtl, label: 'Password', hint: 'Create a password', obscureText: true),
+        AppInput(
+          controller: _passwordCtl,
+          label: 'Password',
+          hint: 'Create a password',
+          obscureText: true,
+        ),
         const SizedBox(height: 24),
         Align(
           alignment: Alignment.centerRight,
@@ -217,11 +242,20 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       children: [
         Text('About You', style: AppTypography.headlineMd),
         const SizedBox(height: 4),
-        Text('Step 2 of 3 — Details', style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant)),
+        Text(
+          'Step 2 of 3 — Details',
+          style: AppTypography.bodyMd.copyWith(
+            color: AppColors.onSurfaceVariant,
+          ),
+        ),
         const SizedBox(height: 20),
         if (state.error != null) _errorBanner(state.error!),
         const SizedBox(height: 20),
-        AppInput(controller: _nameCtl, label: 'Display Name', hint: 'How should we call you?'),
+        AppInput(
+          controller: _nameCtl,
+          label: 'Display Name',
+          hint: 'How should we call you?',
+        ),
         const SizedBox(height: 16),
         AppInput(
           controller: _ageCtl,
@@ -264,8 +298,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       children: [
         Text('Taste Profile', style: AppTypography.headlineMd),
         const SizedBox(height: 4),
-        Text('Select 3 genres to personalize your experience.',
-          style: AppTypography.labelMd.copyWith(color: AppColors.onSurfaceVariant)),
+        Text(
+          'Select 3 genres to personalize your experience.',
+          style: AppTypography.labelMd.copyWith(
+            color: AppColors.onSurfaceVariant,
+          ),
+        ),
         const SizedBox(height: 20),
         if (state.error != null) _errorBanner(state.error!),
         const SizedBox(height: 16),
@@ -288,18 +326,28 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       : AppColors.surfaceContainer,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: selected ? AppColors.primaryContainer : Colors.transparent,
+                    color: selected
+                        ? AppColors.primaryContainer
+                        : Colors.transparent,
                   ),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(g.$2, color: selected ? AppColors.primary : AppColors.onSurfaceVariant, size: 18),
+                    Icon(
+                      g.$2,
+                      color: selected
+                          ? AppColors.primary
+                          : AppColors.onSurfaceVariant,
+                      size: 18,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       g.$1,
                       style: AppTypography.labelMd.copyWith(
-                        color: selected ? AppColors.primary : AppColors.onSurface,
+                        color: selected
+                            ? AppColors.primary
+                            : AppColors.onSurface,
                       ),
                     ),
                   ],
@@ -337,90 +385,101 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   Widget _buildVerifyCard(AuthState state) {
-    return BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-      child: Container(
-        width: double.infinity,
-        constraints: const BoxConstraints(maxWidth: 440),
-        padding: const EdgeInsets.all(28),
-        decoration: BoxDecoration(
-          color: const Color(0x99131313),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 24),
-          ],
-        ),
-        child: Column(
-          children: [
-            const Icon(Icons.mark_email_unread, size: 56, color: AppColors.primary),
-            const SizedBox(height: 16),
-            Text('Verify your email', style: AppTypography.headlineMd),
-            const SizedBox(height: 8),
-            Text(
-              '6-digit code sent to ${state.pendingEmail ?? ''}',
-              style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant),
-              textAlign: TextAlign.center,
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(maxWidth: 440),
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 24),
+        ],
+      ),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.mark_email_unread,
+            size: 56,
+            color: AppColors.primary,
+          ),
+          const SizedBox(height: 16),
+          Text('Verify your email', style: AppTypography.headlineMd),
+          const SizedBox(height: 8),
+          Text(
+            '6-digit code sent to ${state.pendingEmail ?? ''}',
+            style: AppTypography.bodyMd.copyWith(
+              color: AppColors.onSurfaceVariant,
             ),
-            const SizedBox(height: 24),
-            TextField(
-              controller: _codeCtl,
-              keyboardType: TextInputType.number,
-              maxLength: 6,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.onSurface,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          TextField(
+            controller: _codeCtl,
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: AppColors.onSurface,
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 8,
+            ),
+            decoration: InputDecoration(
+              counterText: '',
+              hintText: '000000',
+              hintStyle: TextStyle(
+                color: AppColors.onSurfaceVariant.withValues(alpha: 0.4),
                 fontSize: 24,
-                fontWeight: FontWeight.bold,
                 letterSpacing: 8,
               ),
-              decoration: InputDecoration(
-                counterText: '',
-                hintText: '000000',
-                hintStyle: TextStyle(
-                  color: AppColors.onSurfaceVariant.withValues(alpha: 0.4),
-                  fontSize: 24,
-                  letterSpacing: 8,
+              filled: true,
+              fillColor: AppColors.surfaceContainerLow,
+              contentPadding: const EdgeInsets.symmetric(vertical: 16),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(
+                  color: AppColors.outlineVariant.withValues(alpha: 0.3),
                 ),
-                filled: true,
-                fillColor: AppColors.surfaceContainerLow,
-                contentPadding: const EdgeInsets.symmetric(vertical: 16),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: AppColors.outlineVariant.withValues(alpha: 0.3)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: AppColors.primaryContainer),
-                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.primaryContainer),
               ),
             ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: AppButton(
-                label: 'Verify Email',
-                onPressed: _codeCtl.text.length == 6
-                    ? () => ref.read(authProvider.notifier).verifyEmail(_codeCtl.text)
-                    : null,
-                loading: state.status == AuthStatus.loading,
-              ),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: AppButton(
+              label: 'Verify Email',
+              onPressed: _codeCtl.text.length == 6
+                  ? () => ref
+                        .read(authProvider.notifier)
+                        .verifyEmail(_codeCtl.text)
+                  : null,
+              loading: state.status == AuthStatus.loading,
             ),
-            if (state.error != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                state.error!,
-                style: const TextStyle(color: AppColors.error, fontSize: 13),
-                textAlign: TextAlign.center,
-              ),
-            ],
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: () => ref.read(authProvider.notifier).resendVerification(),
-              child: const Text('Resend code', style: TextStyle(color: AppColors.onSurfaceVariant)),
+          ),
+          if (state.error != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              state.error!,
+              style: const TextStyle(color: AppColors.error, fontSize: 13),
+              textAlign: TextAlign.center,
             ),
           ],
-        ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () =>
+                ref.read(authProvider.notifier).resendVerification(),
+            child: const Text(
+              'Resend code',
+              style: TextStyle(color: AppColors.onSurfaceVariant),
+            ),
+          ),
+        ],
       ),
     );
   }

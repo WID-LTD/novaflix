@@ -227,6 +227,8 @@ GoRouter appRouter(WidgetRef ref) {
           movieId: int.tryParse(state.uri.queryParameters['id'] ?? ''),
           mediaType: state.uri.queryParameters['type'],
           streamUrl: state.uri.queryParameters['url'],
+          season: state.uri.queryParameters['season'],
+          episode: state.uri.queryParameters['episode'],
         ),
       ),
 
@@ -263,9 +265,7 @@ GoRouter appRouter(WidgetRef ref) {
           GoRoute(
             path: '/discover',
             pageBuilder: (_, s) => NoTransitionPage(
-              child: DiscoverScreen(
-                initialSort: s.uri.queryParameters['sort'],
-              ),
+              child: DiscoverScreen(initialSort: s.uri.queryParameters['sort']),
             ),
           ),
           GoRoute(
@@ -419,9 +419,7 @@ GoRouter appRouter(WidgetRef ref) {
           GoRoute(
             path: '/chat',
             pageBuilder: (_, s) => NoTransitionPage(
-              child: ChatScreen(
-                otherUserId: s.uri.queryParameters['with'],
-              ),
+              child: ChatScreen(otherUserId: s.uri.queryParameters['with']),
             ),
           ),
           GoRoute(
@@ -439,9 +437,7 @@ GoRouter appRouter(WidgetRef ref) {
           GoRoute(
             path: '/user/:id',
             pageBuilder: (_, s) => NoTransitionPage(
-              child: PublicProfileScreen(
-                userId: s.pathParameters['id'] ?? '',
-              ),
+              child: PublicProfileScreen(userId: s.pathParameters['id'] ?? ''),
             ),
           ),
 

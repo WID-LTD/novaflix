@@ -1,8 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/user.dart';
+import '../services/api_service.dart';
 import '../services/auth_service.dart';
 
-enum AuthStatus { unknown, unauthenticated, authenticated, needsVerification, needsLoginVerification, loading }
+enum AuthStatus {
+  unknown,
+  unauthenticated,
+  authenticated,
+  needsVerification,
+  needsLoginVerification,
+  loading,
+}
 
 class AuthState {
   final AuthStatus status;
@@ -79,7 +87,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (e) {
       state = state.copyWith(
         status: AuthStatus.unauthenticated,
-        error: e.toString(),
+        error: friendlyErrorMessage(e),
       );
     }
   }
@@ -111,7 +119,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (e) {
       state = state.copyWith(
         status: AuthStatus.unauthenticated,
-        error: e.toString(),
+        error: friendlyErrorMessage(e),
       );
     }
   }
@@ -127,7 +135,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (e) {
       state = state.copyWith(
         status: AuthStatus.needsLoginVerification,
-        error: e.toString(),
+        error: friendlyErrorMessage(e),
       );
     }
   }
@@ -143,7 +151,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (e) {
       state = state.copyWith(
         status: AuthStatus.needsVerification,
-        error: e.toString(),
+        error: friendlyErrorMessage(e),
       );
     }
   }
@@ -154,7 +162,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       await _authService.resendVerification(userId);
     } catch (e) {
-      state = state.copyWith(error: e.toString());
+      state = state.copyWith(error: friendlyErrorMessage(e));
     }
   }
 
