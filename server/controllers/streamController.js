@@ -167,6 +167,55 @@ function setCookieFrom(headers, collect) {
   } catch {}
 }
 
+// MPEG-TS packets are 188 bytes and every packet starts with the 0x47 sync
+// byte. Ad-placeholder PNGs never exhibit this pattern, so it is definitive
+// proof of real video without needing ffmpeg.
+function looksLikeTsVideo(buf) {
+  if (!buf || buf.length < 188 * 2) return false
+  const max = Math.min(10, Math.floor(buf.length / 188))
+  for (let i = 0; i < max; i++) {
+    if (buf[i * 188] !== 0x47) return false
+  }
+  return true
+}
+
+function looksLikeMp4(buf) {
+  return !!buf && buf.length > 12 && buf.subarray(4, 8).toString('latin1') === 'ftyp'
+}
+
+function looksLikeImage(buf) {
+  if (!buf || buf.length < 12) return false
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return true // PNG
+  if (buf[0] === 0xff && buf[1] === 0xd8) return true // JPEG
+  if (buf.toString('latin1', 0, 4) === 'GIF8') return true // GIF
+  if (buf.toString('latin1', 0, 4) === 'RIFF' && buf.toString('latin1', 8, 12) === 'WEBP') return true // WEBP
+  return false
+}
+
+// Fetch the first ~4KB of a URL so segment bytes can be inspected (Range is
+// advisory; some CDNs return the whole body, which is fine for a probe).
+async function fetchPrefix(url, headers, extra = {}) {
+  try {
+    const res = await axios({
+      url,
+      method: 'GET',
+      headers: { ...headers, Range: 'bytes=0-4095', ...extra },
+      timeout: 6000,
+      maxRedirects: 5,
+      validateStatus: () => true,
+      responseType: 'arraybuffer',
+    })
+    return {
+      status: res.status,
+      ct: (res.headers['content-type'] || '').toLowerCase(),
+      buf: Buffer.from(res.data || []),
+      headers: res.headers,
+    }
+  } catch {
+    return { status: 0, ct: '', buf: Buffer.alloc(0), headers: {} }
+  }
+}
+
 // Byte-level verification with ffmpeg. Content-type checks are fooled by
 // ad-only CDNs that serve 1x1 PNG segments under a video/* content-type.
 // ffmpeg fails to find a decodable video codec in those cases. Also captures
@@ -274,6 +323,12 @@ async function probeStreamUrlUncached(streamUrl, ffmpegPath) {
     if (!isM3u8) {
       if (ct.startsWith('image/')) return { ok: false, reason: 'ad-only', ct, steps }
       if (ct.startsWith('video/') || ct.includes('octet-stream') || ct.includes('mp4')) {
+        const pre = await fetchPrefix(streamUrl, hdrs)
+        push(`direct-prefix ${pre.status} ct=${pre.ct} bytes=${pre.buf.length}`)
+        if (looksLikeTsVideo(pre.buf) || looksLikeMp4(pre.buf)) {
+          return { ok: true, reason: 'ok', ct, steps }
+        }
+        if (looksLikeImage(pre.buf)) return { ok: false, reason: 'ad-only', ct, steps }
         const ff = await ffmpegProbePlayable(streamUrl, hdrs, ffmpegPath)
         push(`ffmpeg(mp4) ok=${ff.ok} ${ff.detail || ''}`)
         return { ok: ff.ok, reason: ff.ok ? 'ok' : ff.reason, duration: ff.duration, ct, steps, ...(ff.ok ? {} : { detail: ff.detail }) }
@@ -297,28 +352,21 @@ async function probeStreamUrlUncached(streamUrl, ffmpegPath) {
     const variantBase = variantUrl.substring(0, variantUrl.lastIndexOf('/') + 1)
     const segUrl = segLine.startsWith('http') ? segLine : new URL(segLine, variantBase).href
 
-    const seg = await new Promise((resolve, reject) => {
-      axios({
-        url: segUrl,
-        method: 'GET',
-        headers: hdrs,
-        timeout: 5000,
-        maxRedirects: 5,
-        validateStatus: () => true,
-        responseType: 'stream',
-      }).then((r) => {
-        if (r.data && typeof r.data.destroy === 'function') r.data.destroy()
-        resolve(r)
-      }).catch(reject)
-    })
+    const seg = await fetchPrefix(segUrl, hdrs)
     setCookieFrom(seg.headers, cookies)
-    if (seg.status !== 200) return { ok: false, reason: seg.status === 404 ? 'expired' : 'blocked', status: seg.status, steps }
-    const sct = (seg.headers['content-type'] || '').toLowerCase()
-    push(`segment ${seg.status} ct=${sct} cookies=${cookies.join(',') || 'none'}`)
-    if (sct.startsWith('image/')) return { ok: false, reason: 'ad-only', ct: sct, steps }
+    if (seg.status !== 200 && seg.status !== 206) return { ok: false, reason: seg.status === 404 ? 'expired' : 'blocked', status: seg.status, steps }
+    const sct = seg.ct
+    push(`segment ${seg.status} ct=${sct} bytes=${seg.buf.length} cookies=${cookies.join(',') || 'none'}`)
+    if (sct.startsWith('image/') || looksLikeImage(seg.buf)) return { ok: false, reason: 'ad-only', ct: sct, steps }
     if (sct.startsWith('text/html')) return { ok: false, reason: 'blocked', ct: sct, steps }
 
-    // Content-type is video-ish — confirm a real decodable stream with ffmpeg.
+    // Real MPEG-TS/MP4 segments are provable from their bytes alone; ffmpeg is
+    // only needed for ambiguous payloads (some CDNs serve PNG ad-images with a
+    // video/* content-type, and those never carry TS sync bytes / ftyp).
+    if (looksLikeTsVideo(seg.buf) || looksLikeMp4(seg.buf)) {
+      return { ok: true, reason: 'ok', ct: sct, cookies, steps }
+    }
+
     const ff = await ffmpegProbePlayable(streamUrl, { ...hdrs, ...(cookies.length ? { Cookie: cookies.join('; ') } : {}) }, ffmpegPath)
     push(`ffmpeg ok=${ff.ok} codec=${ff.hasVideo ? 'video' : 'none'} dur=${ff.duration ? ff.duration + 's' : 'unknown'} ${ff.detail || ''}`)
     return {
