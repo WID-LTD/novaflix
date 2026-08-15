@@ -1,4 +1,6 @@
-const DEFAULT_TTL = 60 * 60 * 1000
+// Stream sources rotate and carry time-limited CDN tokens, so a short TTL
+// keeps served URLs fresh (a 60-min cache served dead/stale tokens).
+const DEFAULT_TTL = 10 * 60 * 1000
 const MAX_ENTRIES = 500
 
 const store = new Map()

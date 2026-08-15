@@ -192,7 +192,7 @@ class ApiService {
       if (season != null) 'season': season,
       if (episode != null) 'episode': episode,
     },
-    options: Options(receiveTimeout: const Duration(seconds: 40)),
+    options: Options(receiveTimeout: const Duration(seconds: 55)),
   );
   Future<Response> getManifestInfo(
     String url, {

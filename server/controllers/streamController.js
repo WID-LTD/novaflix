@@ -134,7 +134,7 @@ function headersWithCookies(url, cookies) {
 }
 
 const PROBE_CACHE_MAX = 200
-const PROBE_CACHE_TTL = 5 * 60 * 1000
+const PROBE_CACHE_TTL = 60 * 1000
 const probeCache = new Map()
 function cacheProbe(url, result) {
   if (probeCache.size >= PROBE_CACHE_MAX) {
@@ -454,7 +454,7 @@ export async function source(req, res) {
     try {
       result = await Promise.race([
         getStreamUrl(id, type || 'movie', season || null, episode || null),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout of 30000ms exceeded')), 30000)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout of 45000ms exceeded')), 45000)),
       ])
     } catch (e) {
       return res.json({ success: false, error: e.message })
@@ -931,7 +931,8 @@ function isValidVideoContentType(ct) {
 }
 
 function isSegmentUrl(url) {
-  return !url.endsWith('.m3u8') && !url.endsWith('.m3u')
+  const path = url.split('?')[0]
+  return !path.endsWith('.m3u8') && !path.endsWith('.m3u')
 }
 
 async function tryFfmpegFetch(url, ffmpegPath) {
@@ -983,15 +984,21 @@ export async function streamCreatorUpload(req, res) {
 }
 
 export async function proxy(req, res) {
-  const fullPath = req.params[0]
-  if (!fullPath) return res.status(400).send('path required')
+  // Rebuild the full upstream URL from the original request so query strings
+  // (e.g. tnmr.org's required ?t=&s=&e= token) survive. req.params only holds
+  // the path portion; the query is parsed into req.query and would be lost.
+  const PROXY_PREFIX = '/api/proxy/'
+  const marker = req.originalUrl.indexOf(PROXY_PREFIX)
+  const rawPath = marker >= 0
+    ? req.originalUrl.slice(marker + PROXY_PREFIX.length)
+    : req.params[0]
 
-  const url = 'https://' + fullPath
+  const url = 'https://' + rawPath
   let hostname = ''
   try { hostname = new URL(url).hostname } catch { return res.status(502).send('Invalid URL') }
 
   // Check segment cache for non-m3u8 URLs
-  const isM3u8 = url.endsWith('.m3u8') || url.endsWith('.m3u')
+  const isM3u8 = url.split('?')[0].endsWith('.m3u8') || url.split('?')[0].endsWith('.m3u')
   if (!isM3u8) {
     const cached = getCachedSegment(url)
     if (cached) {

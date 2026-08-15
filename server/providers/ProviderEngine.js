@@ -2,7 +2,7 @@ import { cacheGet, cacheSet } from './cache.js'
 
 const STREAM_PRIORITY_MAX = 5
 const BACKUP_GRACE_MS = 6000
-const STREAM_SETTLE_MS = 12000
+const STREAM_SETTLE_MS = 15000
 const EMBED_SETTLE_MS = 14000
 
 export default class ProviderEngine {
