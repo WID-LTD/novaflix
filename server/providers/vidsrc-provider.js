@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { verifyHlsUrl } from './verify.js'
+import { isBlocked, reportFailure, reportSuccess } from './providerHealth.js'
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 
@@ -10,6 +11,11 @@ const DOMAINS = [
   'vidsrc.cc',
   'vidsrc.sbs',
   'vidsrc.me',
+  'vidsrc.xyz',
+  'vidsrc.dev',
+  'vidsrc.rip',
+  'vidsrc.vc',
+  'vidsrc.ink',
 ]
 
 export default {
@@ -17,13 +23,25 @@ export default {
   priority: 3,
 
   async resolve(tmdbId, type, season, episode) {
+    const candidates = DOMAINS.filter(d => !isBlocked(`https://${d}/`))
+    if (candidates.length === 0) throw new Error('vidsrc-multi: all domains blacklisted')
+
+    const attempts = await Promise.allSettled(
+      candidates.map(domain => tryDomain(domain, tmdbId, type, season, episode))
+    )
+
     const errors = []
-    for (const domain of DOMAINS) {
-      try {
-        const result = await tryDomain(domain, tmdbId, type, season, episode)
-        if (result) return result
-      } catch (e) {
-        errors.push(`${domain}: ${e.message?.slice(0, 60)}`)
+    for (let i = 0; i < candidates.length; i++) {
+      const a = attempts[i]
+      const domain = candidates[i]
+      if (a.status === 'fulfilled' && a.value) {
+        reportSuccess(`https://${domain}/`)
+        return a.value
+      }
+      const reason = a.status === 'rejected' ? String(a.reason?.message || a.reason) : 'no stream found'
+      errors.push(`${domain}: ${reason.slice(0, 60)}`)
+      if (!reason.includes('no stream found')) {
+        reportFailure(`https://${domain}/`, reason.slice(0, 40))
       }
     }
     throw new Error('vidsrc-multi: ' + errors.join('; '))

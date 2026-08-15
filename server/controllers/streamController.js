@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url'
 import { spawn } from 'child_process'
 import { getStreamUrl } from '../scraper.mjs'
 import { cacheClear, cacheStats } from '../providers/cache.js'
+import { reportFailure, reportSuccess } from '../providers/providerHealth.js'
 import { getActiveSessionCount, getUploadById } from '../db.js'
 import { streamFile } from '../lib/r2.js'
 import { PLAN_FEATURES } from './planUtils.js'
@@ -453,7 +454,7 @@ export async function source(req, res) {
     try {
       result = await Promise.race([
         getStreamUrl(id, type || 'movie', season || null, episode || null),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout of 18000ms exceeded')), 18000)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout of 30000ms exceeded')), 30000)),
       ])
     } catch (e) {
       return res.json({ success: false, error: e.message })
@@ -467,45 +468,77 @@ export async function source(req, res) {
 
     const probeResults = []
     const ffmpegPath = req.app.locals.ffmpegPath
-    let chosen = result.streamUrl ? { streamUrl: result.streamUrl, provider: result.provider, subtitles: result.subtitles || [] } : null
+    const primary = result.streamUrl
+      ? { streamUrl: result.streamUrl, provider: result.provider, subtitles: result.subtitles || [] }
+      : null
+    const backupList = (result.backups || []).filter((b) => b.streamUrl)
+    let chosen = primary
     let chosenProbe = null
 
     if (chosen) {
       const primaryProbe = await probeStreamUrl(chosen.streamUrl, ffmpegPath)
       probeResults.push({ provider: chosen.provider, host: hostOf(chosen.streamUrl), streamUrl: chosen.streamUrl, ...primaryProbe })
-      if (!primaryProbe.ok) {
-        chosen = null
-        for (const backup of (result.backups || []).slice(0, 2)) {
-          if (!backup.streamUrl || chosen) continue
-          const bp = await probeStreamUrl(backup.streamUrl, ffmpegPath)
-          probeResults.push({ provider: backup.provider, host: hostOf(backup.streamUrl), streamUrl: backup.streamUrl, ...bp })
-          if (bp.ok) {
-            chosen = { streamUrl: backup.streamUrl, provider: backup.provider, subtitles: backup.subtitles || [] }
-            chosenProbe = bp
-          }
-        }
-      } else {
+      if (primaryProbe.ok) {
+        reportSuccess(chosen.streamUrl)
         chosenProbe = primaryProbe
+      } else {
+        if (!['blocked'].includes(primaryProbe.reason)) reportFailure(chosen.streamUrl, primaryProbe.reason)
+        chosen = null
+      }
+    }
+
+    if (!chosen && backupList.length > 0) {
+      // Verify-before-serve: probe every backup in parallel and take the first
+      // stream that actually delivers real video (rejecting ad-only/expired/dead).
+      const backupProbes = await Promise.allSettled(
+        backupList.map(async (b) => {
+          const bp = await probeStreamUrl(b.streamUrl, ffmpegPath)
+          probeResults.push({ provider: b.provider, host: hostOf(b.streamUrl), streamUrl: b.streamUrl, ...bp })
+          if (bp.ok) reportSuccess(b.streamUrl)
+          else if (!['blocked'].includes(bp.reason)) reportFailure(b.streamUrl, bp.reason)
+          return { b, bp }
+        })
+      )
+      const verified = backupProbes
+        .filter((x) => x.status === 'fulfilled' && x.value && x.value.bp.ok)
+        .map((x) => x.value)
+      if (verified.length > 0) {
+        chosen = {
+          streamUrl: verified[0].b.streamUrl,
+          provider: verified[0].b.provider,
+          subtitles: verified[0].b.subtitles || [],
+        }
+        chosenProbe = verified[0].bp
       }
     }
 
     const probeSteps = probeResults.flatMap((r) => (r.steps || []).map((s) => `[${r.provider}] ${s}`))
 
     if (!chosen || !chosen.streamUrl) {
-      if (result.embedUrl) {
-        const embedProxy = `/api/proxy-embed?url=${encodeURIComponent(result.embedUrl)}`
+      const embedProxy = (u) => `/api/proxy-embed?url=${encodeURIComponent(u)}`
+      const embedCandidates = []
+      if (result.embedUrl) embedCandidates.push({ url: result.embedUrl, provider: result.provider })
+      for (const b of result.backups || []) {
+        if (b.embedUrl && embedCandidates.length < 3) embedCandidates.push({ url: b.embedUrl, provider: b.provider })
+      }
+
+      if (embedCandidates.length > 0) {
         console.log(`[api/source] id=${id} type=${type || 'movie'} -> embed fallback (${probeResults.map((r) => r.reason).join(', ')})`)
-        const resolved = await resolveEmbedStream(result.embedUrl)
-        if (resolved.ok && resolved.streamUrl) {
+        const attempts = await Promise.allSettled(
+          embedCandidates.map(async (c) => ({ c, resolved: await resolveEmbedStream(c.url) }))
+        )
+        const ok = attempts.find((a) => a.status === 'fulfilled' && a.value?.resolved?.ok && a.value.resolved.streamUrl)
+        if (ok) {
+          const { c, resolved } = ok.value
           console.log(`[api/source] id=${id} embed resolved -> ${resolved.streamUrl.slice(0, 60)}`)
           return res.json({
             success: true,
             streamUrl: `/api/proxy/${resolved.streamUrl.replace('https://', '')}`,
-            embedUrl: embedProxy,
+            embedUrl: embedProxy(c.url),
             directUrl: resolved.streamUrl,
             headers: resolved.headers,
             subtitles: (result.subtitles || []).map((s) => ({ label: s.label, file: toProxy(s.file) })),
-            provider: result.provider,
+            provider: c.provider,
             providerMode: 'hls',
             backups: [],
             probe: probeResults,
@@ -516,11 +549,15 @@ export async function source(req, res) {
             totalProviders: result.totalProviders || 0,
           })
         }
-        console.log(`[api/source] id=${id} embed not resolvable (${resolved.reason}) -> embed page`)
+        const reason = attempts
+          .map((a) => (a.status === 'fulfilled' ? a.value.resolved.reason : String(a.reason?.message || a.reason)))
+          .filter(Boolean)
+          .join('; ')
+        console.log(`[api/source] id=${id} embed not resolvable (${reason}) -> embed page`)
         return res.json({
           success: true,
           streamUrl: null,
-          embedUrl: embedProxy,
+          embedUrl: embedProxy(result.embedUrl),
           directUrl: null,
           headers: null,
           subtitles: (result.subtitles || []).map((s) => ({ label: s.label, file: toProxy(s.file) })),
@@ -528,7 +565,7 @@ export async function source(req, res) {
           providerMode: 'embed',
           backups: [],
           probe: probeResults,
-          debug: { steps: [...probeSteps, `[embed] resolve failed: ${resolved.reason}`] },
+          debug: { steps: [...probeSteps, `[embed] resolve failed: ${reason}`] },
           fromCache: result.fromCache || false,
           elapsed: result.elapsed || 0,
           attempted: result.attempted || 0,
@@ -547,7 +584,7 @@ export async function source(req, res) {
         console.warn(`[api/source] id=${id} type=${type || 'movie'} -> soft fail (${primaryReason}), handing direct URL to native clients`)
         return res.json({
           success: true,
-          streamUrl: null,
+          streamUrl: `/api/proxy/${result.streamUrl.replace('https://', '')}`,
           embedUrl: result.embedUrl ? `/api/proxy-embed?url=${encodeURIComponent(result.embedUrl)}` : null,
           directUrl: result.streamUrl,
           headers: softHeaders,

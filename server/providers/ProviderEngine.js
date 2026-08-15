@@ -1,7 +1,9 @@
 import { cacheGet, cacheSet } from './cache.js'
 
 const STREAM_PRIORITY_MAX = 5
-const BACKUP_GRACE_MS = 2000
+const BACKUP_GRACE_MS = 6000
+const STREAM_SETTLE_MS = 12000
+const EMBED_SETTLE_MS = 14000
 
 export default class ProviderEngine {
   constructor() {
@@ -61,15 +63,26 @@ export default class ProviderEngine {
     )
 
     const settled = Promise.allSettled(tasks)
-    const winner = await Promise.race([winnerPromise, settled.then(() => null)])
+    const firstStream = await Promise.race([
+      winnerPromise,
+      new Promise(r => setTimeout(() => r(null), STREAM_SETTLE_MS)),
+      settled.then(() => null),
+    ])
 
     // Give slower providers a short window to contribute backup streams after a
     // winner is found, so the probe/failover in source() has real alternatives.
-    if (winner) {
+    if (firstStream) {
       await Promise.race([settled, new Promise(r => setTimeout(r, BACKUP_GRACE_MS))])
     }
 
-    if (winner) return winner
+    // Prefer the highest-priority provider that actually returned a stream,
+    // instead of the fastest-to-resolve. A fast-but-broken provider (e.g. one
+    // serving ad placeholders) must not always win the race.
+    const streamResults = allResults.filter(r => r.streamUrl)
+    if (streamResults.length > 0) {
+      streamResults.sort((a, b) => (a.priority || 99) - (b.priority || 99))
+      return streamResults[0]
+    }
 
     if (allResults.length > 0) {
       const best = allResults.find(r => r.streamUrl) || allResults[0]
@@ -91,7 +104,11 @@ export default class ProviderEngine {
     )
 
     Promise.allSettled(tasks).then(() => resolveWinner(null))
-    return await winnerPromise
+    const winner = await Promise.race([
+      winnerPromise,
+      new Promise(r => setTimeout(() => r(null), EMBED_SETTLE_MS)),
+    ])
+    return winner
   }
 
   async runProvider(p, tmdbId, type, season, episode, allResults) {
@@ -101,6 +118,7 @@ export default class ProviderEngine {
       const elapsed = Date.now() - pStart
       if (result?.streamUrl || result?.embedUrl) {
         result.provider = p.name
+        result.priority = p.priority || 99
         result.elapsed = elapsed
         allResults.push(result)
         console.log(`[engine] ${p.name} -> ${result.streamUrl ? '✅ stream' : result.embedUrl ? '🔄 embed' : '❌'} (${elapsed}ms)`)

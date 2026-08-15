@@ -184,14 +184,15 @@ class ApiService {
     String type, {
     int? season,
     int? episode,
-  }) => get(
+  }) => _dio.get(
     '/source',
-    params: {
+    queryParameters: {
       'id': id,
       'type': type,
       if (season != null) 'season': season,
       if (episode != null) 'episode': episode,
     },
+    options: Options(receiveTimeout: const Duration(seconds: 40)),
   );
   Future<Response> getManifestInfo(
     String url, {
