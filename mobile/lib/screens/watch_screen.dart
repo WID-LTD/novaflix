@@ -250,7 +250,13 @@ class WatchScreen extends ConsumerWidget {
               ),
               const SizedBox(width: 12),
               TextButton(
-                onPressed: () => context.pop(),
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go('/home');
+                  }
+                },
                 child: const Text('Go Back'),
               ),
             ],
