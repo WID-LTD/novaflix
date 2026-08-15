@@ -2,6 +2,7 @@ class StreamSource {
   final bool success;
   final String? streamUrl;
   final String? directUrl;
+  final Map<String, String>? headers;
   final List<Subtitle>? subtitles;
   final String? error;
   final String? releaseDate;
@@ -10,6 +11,7 @@ class StreamSource {
     required this.success,
     this.streamUrl,
     this.directUrl,
+    this.headers,
     this.subtitles,
     this.error,
     this.releaseDate,
@@ -19,6 +21,9 @@ class StreamSource {
     success: json['success'] as bool? ?? false,
     streamUrl: json['streamUrl'] as String? ?? json['stream_url'] as String?,
     directUrl: json['directUrl'] as String?,
+    headers: (json['headers'] as Map<String, dynamic>?)?.map(
+      (k, v) => MapEntry(k, '$v'),
+    ),
     subtitles: (json['subtitles'] as List?)?.map((s) => Subtitle.fromJson(s as Map<String, dynamic>)).toList(),
     error: json['error'] as String?,
     releaseDate: json['releaseDate'] as String?,

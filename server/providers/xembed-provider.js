@@ -5,7 +5,7 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 
 export default {
   name: 'xembed',
-  priority: 15,
+  priority: 4,
 
   async resolve(tmdbId, type, season, episode) {
     const embedUrl = season

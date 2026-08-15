@@ -14,7 +14,7 @@ const DOMAINS = [
 
 export default {
   name: 'vidsrc-multi',
-  priority: 10,
+  priority: 3,
 
   async resolve(tmdbId, type, season, episode) {
     const errors = []

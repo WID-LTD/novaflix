@@ -48,6 +48,9 @@ class _AdItem {
 
 class VideoPlayer extends ConsumerStatefulWidget {
   final String streamUrl;
+  final Map<String, String>? httpHeaders;
+  final String? errorReason;
+  final String? fallbackUrl;
   final List<VideoSubtitle> subtitles;
   final String? title;
   final void Function(double progress)? onProgress;
@@ -61,6 +64,9 @@ class VideoPlayer extends ConsumerStatefulWidget {
   const VideoPlayer({
     super.key,
     required this.streamUrl,
+    this.httpHeaders,
+    this.errorReason,
+    this.fallbackUrl,
     this.subtitles = const [],
     this.title,
     this.onProgress,
@@ -105,9 +111,19 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
   Timer? _controlsTimer;
   Timer? _progressTimer;
 
+  bool _debugOverlay = false;
+  final List<String> _debugLog = [];
+  static const int _maxDebugLines = 80;
+  Timer? _stallTimer;
+  double _lastProgressAt = 0;
+
   @override
   void initState() {
     super.initState();
+    _debug('init: url=${widget.streamUrl}');
+    _debug('init: headers=${widget.httpHeaders?.keys.join(',') ?? 'none'}');
+    _debug('init: errorReason=${widget.errorReason}');
+    _debug('init: fallbackUrl=${widget.fallbackUrl}');
     _controller = VideoController(_player);
     _bindStreams();
     _progressTimer = Timer.periodic(const Duration(seconds: 5), (_) {
@@ -115,6 +131,29 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
     });
     _loadAds();
     _open();
+  }
+
+  void _debug(String msg) {
+    _debugLog.add(msg);
+    if (_debugLog.length > _maxDebugLines) _debugLog.removeAt(0);
+    debugPrint('[vp] $msg');
+  }
+
+  void _toggleDebugOverlay() {
+    if (mounted) setState(() => _debugOverlay = !_debugOverlay);
+  }
+
+  void _startStallWatch() {
+    _stallTimer?.cancel();
+    _lastProgressAt = _currentTime;
+    _stallTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted || _loading || _error != null) return;
+      if (_playing && _currentTime == _lastProgressAt) {
+        _debug('WARN stall: no progress for 5s (pos=${_currentTime.toStringAsFixed(1)}s)');
+      } else {
+        _lastProgressAt = _currentTime;
+      }
+    });
   }
 
   void _bindStreams() {
@@ -125,24 +164,43 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
     }));
     _subs.add(_player.stream.duration.listen((d) {
       if (!mounted) return;
+      _debug('stream duration=${d.inMilliseconds}ms');
       setState(() => _duration = d.inMilliseconds / 1000);
       widget.onDuration?.call(_duration);
     }));
     _subs.add(_player.stream.error.listen((e) {
       if (!mounted) return;
-      if (e != null) {
-        setState(() {
-          _error = 'Failed to load video stream';
-          _loading = false;
-        });
-      }
+      _debug('ERROR stream.error -> $e');
+      setState(() {
+        _error = _mapError(e);
+        _loading = false;
+      });
     }));
     _subs.add(_player.stream.playing.listen((p) {
       if (!mounted) return;
+      _debug('stream playing=$p');
       setState(() => _playing = p);
       _showPauseAd = false;
-      if (p) _resetControlsTimer();
+      if (p) {
+        _resetControlsTimer();
+        _startStallWatch();
+      }
     }));
+    _subs.add(_player.stream.log.listen((line) => _debug('mpv: $line')));
+  }
+
+  String _mapError(String raw) {
+    final r = raw.toLowerCase();
+    if (r.contains('404') || r.contains('not found') || r.contains('expired')) {
+      return 'Stream link has expired or is unavailable';
+    }
+    if (r.contains('403') || r.contains('forbidden') || r.contains('access denied')) {
+      return 'Stream provider is blocking playback';
+    }
+    if (r.contains('ad') || r.contains('image')) {
+      return 'This title is currently serving ad placeholders and cannot be played';
+    }
+    return widget.errorReason ?? 'Failed to load video stream';
   }
 
   Future<void> _open() async {
@@ -150,17 +208,43 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
       _loading = true;
       _error = null;
     });
+    final started = DateTime.now();
+    final primary = widget.streamUrl;
+    _debug('open: start $primary');
     try {
-      await _player.open(Media(widget.streamUrl));
+      final headers = widget.httpHeaders;
+      await _player.open(
+        headers != null && headers.isNotEmpty
+            ? Media(primary, httpHeaders: headers)
+            : Media(primary),
+      );
+      _debug('open: done in ${DateTime.now().difference(started).inMilliseconds}ms');
       _player.setVolume(_muted ? 0 : _volume);
       _player.setRate(_playbackRate);
       if (mounted) {
         setState(() => _loading = false);
       }
-    } catch (_) {
+    } catch (e) {
+      _debug('open: ERROR primary -> $e');
+      final fallback = widget.fallbackUrl;
+      if (fallback != null && fallback.isNotEmpty && fallback != primary) {
+        _debug('open: retrying via fallback $fallback');
+        try {
+          await _player.open(Media(fallback));
+          _debug('open: fallback OK');
+          _player.setVolume(_muted ? 0 : _volume);
+          _player.setRate(_playbackRate);
+          if (mounted) {
+            setState(() => _loading = false);
+          }
+          return;
+        } catch (e2) {
+          _debug('open: fallback ALSO failed -> $e2');
+        }
+      }
       if (mounted) {
         setState(() {
-          _error = 'Failed to load video stream';
+          _error = _mapError('$e');
           _loading = false;
         });
       }
@@ -330,6 +414,7 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
 
   @override
   void dispose() {
+    _stallTimer?.cancel();
     for (final s in _subs) {
       s.cancel();
     }
@@ -351,6 +436,7 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
             GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTapDown: (_) => _resetControlsTimer(),
+              onLongPress: _toggleDebugOverlay,
               child: Video(
                 controller: _controller,
                 controls: NoVideoControls,
@@ -389,7 +475,53 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
                 child: Center(child: _buildFlash()),
               ),
 
+            if (_debugOverlay) _buildDebugOverlay(),
+
             _buildControlBar(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDebugOverlay() {
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black.withValues(alpha: 0.92),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Text(
+                    'Debug — tap video again to close',
+                    style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white70),
+                  onPressed: _toggleDebugOverlay,
+                ),
+              ],
+            ),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _debugLog.length,
+                itemBuilder: (context, i) {
+                  final lineIndex = _debugLog.length - 1 - i;
+                  if (lineIndex < 0) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                    child: Text(
+                      _debugLog[lineIndex],
+                      style: const TextStyle(color: Colors.white70, fontSize: 11, fontFamily: 'monospace'),
+                    ),
+                  );
+                },
+              ),
+            ),
           ],
         ),
       ),
@@ -408,7 +540,12 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
           const Text('Playback Error',
               style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
-          Text(_error!, style: const TextStyle(color: Colors.white54, fontSize: 13)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(_error!,
+                style: const TextStyle(color: Colors.white54, fontSize: 13),
+                textAlign: TextAlign.center),
+          ),
           const SizedBox(height: 12),
           ElevatedButton(
             onPressed: _open,

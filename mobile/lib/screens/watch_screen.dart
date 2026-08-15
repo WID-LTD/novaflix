@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:media_kit/media_kit.dart';
 import '../core/config.dart';
 import '../theme/app_colors.dart';
-import '../theme/app_typography.dart';
 import '../models/media_item.dart';
 import '../services/api_service.dart';
 import '../providers/auth_provider.dart';
@@ -144,12 +143,23 @@ class WatchScreen extends ConsumerWidget {
                 ),
                 error: (e, _) => _buildError(context, friendlyErrorMessage(e)),
                 data: (src) {
-                  var url = resolveStreamUrl(
-                    streamUrl ?? src['streamUrl'] as String? ?? '',
-                  );
+                  String? direct;
+                  Map<String, String>? directHeaders;
+                  final rawDirect = src['directUrl'] as String? ?? '';
+                  final rawHeaders = src['headers'] as Map<String, dynamic>?;
+                  if (rawDirect.isNotEmpty) {
+                    direct = resolveStreamUrl(rawDirect);
+                    if (rawHeaders != null) {
+                      directHeaders = rawHeaders.map(
+                        (k, v) => MapEntry(k, '$v'),
+                      );
+                    }
+                  }
+                  var url = direct ?? '';
                   if (url.isEmpty) {
-                    final direct = src['directUrl'] as String? ?? '';
-                    if (direct.isNotEmpty) url = resolveStreamUrl(direct);
+                    url = resolveStreamUrl(
+                      streamUrl ?? src['streamUrl'] as String? ?? '',
+                    );
                   }
                   if (url.isEmpty) {
                     return _buildError(
@@ -157,12 +167,24 @@ class WatchScreen extends ConsumerWidget {
                       src['error'] as String? ?? 'Could not load video source',
                     );
                   }
+                  final proxyRaw = src['streamUrl'] as String? ?? '';
+                  final isDirect = direct != null && direct.isNotEmpty && url == direct;
+                  final fallbackRaw = isDirect ? proxyRaw : rawDirect;
+                  final fallbackUrl = fallbackRaw.isNotEmpty
+                      ? resolveStreamUrl(fallbackRaw)
+                      : null;
+                  debugPrint(
+                    '[watch] url=$url direct=$isDirect fallback=$fallbackUrl error=${src['error']}',
+                  );
                   return Padding(
                     padding: const EdgeInsets.all(12),
                     child: Column(
                       children: [
                         VideoPlayer(
                           streamUrl: url,
+                          httpHeaders: url == direct ? directHeaders : null,
+                          errorReason: src['error'] as String?,
+                          fallbackUrl: fallbackUrl == url ? null : fallbackUrl,
                           title: episodeInfo != null
                               ? '${detail.valueOrNull?.title} - $episodeInfo'
                               : detail.valueOrNull?.title,

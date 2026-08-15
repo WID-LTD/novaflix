@@ -1,6 +1,7 @@
 import { cacheGet, cacheSet } from './cache.js'
 
 const STREAM_PRIORITY_MAX = 5
+const BACKUP_GRACE_MS = 2000
 
 export default class ProviderEngine {
   constructor() {
@@ -59,8 +60,15 @@ export default class ProviderEngine {
       })
     )
 
-    Promise.allSettled(tasks).then(() => resolveWinner(null))
-    const winner = await winnerPromise
+    const settled = Promise.allSettled(tasks)
+    const winner = await Promise.race([winnerPromise, settled.then(() => null)])
+
+    // Give slower providers a short window to contribute backup streams after a
+    // winner is found, so the probe/failover in source() has real alternatives.
+    if (winner) {
+      await Promise.race([settled, new Promise(r => setTimeout(r, BACKUP_GRACE_MS))])
+    }
+
     if (winner) return winner
 
     if (allResults.length > 0) {

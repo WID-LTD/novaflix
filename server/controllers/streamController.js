@@ -37,7 +37,7 @@ function getCachedSegment(key) {
 
 async function parseMasterManifest(masterUrl, plan) {
   const response = await axios.get(masterUrl, {
-    headers: { 'User-Agent': UA, Referer: 'https://nextgencloudfabric.com/' },
+    headers: headersForStream(masterUrl),
     timeout: 15000,
   })
   const body = response.data
@@ -92,6 +92,254 @@ function formatSize(bytes) {
   return `${size.toFixed(1)} ${units[i]}`
 }
 
+function hostOf(url) {
+  try {
+    return new URL(url).hostname
+  } catch {
+    return ''
+  }
+}
+
+// Maps a CDN host to the Referer it expects. Clients attach these headers when
+// playing a stream directly (bypassing the Render-hosted proxy, which these
+// CDNs routinely block).
+function refererForHost(host) {
+  if (!host) return 'https://nextgencloudfabric.com/'
+  if (host.includes('1x2.space') || host.includes('meadowlane') || host.includes('ibyteimg')) {
+    return 'https://play.xpass.top/'
+  }
+  if (host.includes('shegu') || host.includes('febbox')) return 'https://febbox.com/'
+  if (host.includes('nextgencloudfabric') || host.includes('remoteconsulting')) return 'https://nextgencloudfabric.com/'
+  if (host.includes('xpass')) return 'https://play.xpass.top/'
+  return 'https://nextgencloudfabric.com/'
+}
+
+function headersForStream(url) {
+  const referer = refererForHost(hostOf(url))
+  return {
+    'User-Agent': UA,
+    Referer: referer,
+    Origin: referer.replace(/\/$/, ''),
+  }
+}
+
+// Merge cookies captured during probing into the playback headers. Some CDNs
+// authorize real (non-ad) segments only after a session cookie is set.
+function headersWithCookies(url, cookies) {
+  const h = headersForStream(url)
+  const cs = (cookies || []).filter(Boolean)
+  if (cs.length) h.Cookie = cs.join('; ')
+  return h
+}
+
+const PROBE_CACHE_MAX = 200
+const PROBE_CACHE_TTL = 5 * 60 * 1000
+const probeCache = new Map()
+function cacheProbe(url, result) {
+  if (probeCache.size >= PROBE_CACHE_MAX) {
+    const oldest = probeCache.keys().next().value
+    probeCache.delete(oldest)
+  }
+  probeCache.set(url, { result, ts: Date.now() })
+}
+function getCachedProbe(url) {
+  const entry = probeCache.get(url)
+  if (!entry) return null
+  if (Date.now() - entry.ts > PROBE_CACHE_TTL) {
+    probeCache.delete(url)
+    return null
+  }
+  return entry.result
+}
+
+function setCookieFrom(headers, collect) {
+  try {
+    const sc = headers['set-cookie']
+    if (!sc) return
+    const list = Array.isArray(sc) ? sc : [sc]
+    for (const c of list) {
+      const name = String(c).split('=')[0]
+      if (name && name.trim() && !collect.some((x) => x.startsWith(name + '='))) {
+        collect.push(String(c).split(';')[0].trim())
+      }
+    }
+  } catch {}
+}
+
+// Byte-level verification with ffmpeg. Content-type checks are fooled by
+// ad-only CDNs that serve 1x1 PNG segments under a video/* content-type.
+// ffmpeg fails to find a decodable video codec in those cases. Also captures
+// the real Duration so a bogus-length playlist can be rejected.
+function ffmpegProbePlayable(streamUrl, headers, ffmpegPath) {
+  return new Promise((resolve) => {
+    const hdrStr = Object.entries(headers || {})
+      .map(([k, v]) => `${k}: ${v}\r\n`)
+      .join('')
+    const args = [
+      '-headers', hdrStr,
+      '-allowed_extensions', 'ALL',
+      '-t', '2',
+      '-i', streamUrl,
+      '-f', 'null',
+      '-',
+    ]
+    let stderr = ''
+    let probe
+    try {
+      probe = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'] })
+    } catch (e) {
+      return resolve({ ok: false, reason: 'ffmpeg-spawn-error', detail: String(e.message || e).slice(0, 100) })
+    }
+    const killer = setTimeout(() => {
+      try { probe.kill('SIGKILL') } catch {}
+    }, 12000)
+    probe.stderr.on('data', (d) => {
+      stderr += d.toString()
+      if (stderr.length > 6000) stderr = stderr.slice(-6000)
+    })
+    probe.on('close', (code) => {
+      clearTimeout(killer)
+      const hasVideo = /Stream #\d+:\d+(?:\(\d+\))?: Video: (h264|hevc|av1|vp9|mpeg2video|mpeg4|vp8|vc1)/i.test(stderr)
+      const hasError = /(Invalid data found|error while decoding|unable to decode|no video stream|could not find codec|decoder not found|failed to open|https protocol not found|HTTP error|not found|Forbidden|Access Denied)/i.test(stderr)
+      const durMatch = stderr.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/)
+      const duration = durMatch
+        ? parseInt(durMatch[1]) * 3600 + parseInt(durMatch[2]) * 60 + parseFloat(durMatch[3])
+        : 0
+      if (code === 0 && hasVideo) {
+        resolve({ ok: true, reason: 'ok', duration, hasVideo })
+      } else if (code === 0 && !hasVideo) {
+        resolve({ ok: false, reason: 'ad-only', detail: 'no decodable video stream', hasVideo: false, duration })
+      } else {
+        resolve({
+          ok: false,
+          reason: /404|not found/i.test(stderr) ? 'expired' : hasError ? 'unplayable' : 'ad-only',
+          detail: `${code === null ? 'timeout' : 'exit ' + code}: ${stderr.slice(-200)}`,
+          duration,
+        })
+      }
+    })
+    probe.on('error', (e) => {
+      clearTimeout(killer)
+      resolve({ ok: false, reason: 'ffmpeg-error', detail: String(e.message || e).slice(0, 100) })
+    })
+  })
+}
+
+// Health check for an HLS/direct stream. Free-tier CDNs serve playlists whose
+// "segments" are 1x1 PNG ad-images (unplayable) or return expired 404s /
+// anti-bot blocks; the player then sits on a black screen showing a (fake)
+// duration. This walks master -> variant -> segment, captures Set-Cookie (some
+// CDNs authorize real segments only after a cookie is set), then runs a 2s
+// ffmpeg decode to confirm a real video stream exists.
+async function probeStreamUrl(streamUrl, ffmpegPath) {
+  const cached = getCachedProbe(streamUrl)
+  if (cached) return cached
+  const started = Date.now()
+  const result = await probeStreamUrlUncached(streamUrl, ffmpegPath)
+  result.ms = Date.now() - started
+  cacheProbe(streamUrl, result)
+  console.log(`[probe] ${result.ok ? 'OK' : 'FAIL'} reason=${result.reason} ${streamUrl.substring(0, 90)} (${result.ms}ms)${result.duration ? ` dur=${result.duration}s` : ''}`)
+  return result
+}
+
+async function probeStreamUrlUncached(streamUrl, ffmpegPath) {
+  const hdrs = headersForStream(streamUrl)
+  const steps = []
+  const cookies = []
+  const fetchOpts = (timeout) => ({
+    headers: hdrs,
+    timeout,
+    maxRedirects: 5,
+    validateStatus: (s) => s >= 200 && s < 400,
+    responseType: 'text',
+  })
+  const push = (s) => { steps.push(s); console.log(`[probe:step] ${s}`) }
+
+  try {
+    let master = null
+    try {
+      master = await axios.get(streamUrl, fetchOpts(5000))
+    } catch (firstErr) {
+      // CDNs are flaky; retry once before giving up.
+      master = await axios.get(streamUrl, fetchOpts(6000))
+    }
+    setCookieFrom(master.headers, cookies)
+    if (master.status !== 200) return { ok: false, reason: master.status === 404 ? 'expired' : 'blocked', status: master.status, steps }
+    const body = String(master.data || '')
+    const ct = (master.headers['content-type'] || '').toLowerCase()
+    const isM3u8 = body.includes('#EXTM3U') || ct.includes('mpegurl') || ct.includes('m3u8')
+    push(`master ${master.status} ct=${ct} bytes=${body.length} cookies=${cookies.join(',') || 'none'}`)
+
+    if (!isM3u8) {
+      if (ct.startsWith('image/')) return { ok: false, reason: 'ad-only', ct, steps }
+      if (ct.startsWith('video/') || ct.includes('octet-stream') || ct.includes('mp4')) {
+        const ff = await ffmpegProbePlayable(streamUrl, hdrs, ffmpegPath)
+        push(`ffmpeg(mp4) ok=${ff.ok} ${ff.detail || ''}`)
+        return { ok: ff.ok, reason: ff.ok ? 'ok' : ff.reason, duration: ff.duration, ct, steps, ...(ff.ok ? {} : { detail: ff.detail }) }
+      }
+      return { ok: false, reason: 'unknown-type', ct, steps }
+    }
+
+    const masterBase = streamUrl.substring(0, streamUrl.lastIndexOf('/') + 1)
+    const variantLine = body.split('\n').map((l) => l.trim()).find((l) => l && !l.startsWith('#'))
+    if (!variantLine) return { ok: false, reason: 'no-variants', steps }
+    const variantUrl = variantLine.startsWith('http') ? variantLine : new URL(variantLine, masterBase).href
+
+    const variant = await axios.get(variantUrl, fetchOpts(5000))
+    setCookieFrom(variant.headers, cookies)
+    if (variant.status !== 200) return { ok: false, reason: variant.status === 404 ? 'expired' : 'blocked', status: variant.status, steps }
+    const vbody = String(variant.data || '')
+    const vct = (variant.headers['content-type'] || '').toLowerCase()
+    push(`variant ${variant.status} ct=${vct} bytes=${vbody.length}`)
+    const segLine = vbody.split('\n').map((l) => l.trim()).find((l) => l && !l.startsWith('#'))
+    if (!segLine) return { ok: false, reason: 'no-segments', steps }
+    const variantBase = variantUrl.substring(0, variantUrl.lastIndexOf('/') + 1)
+    const segUrl = segLine.startsWith('http') ? segLine : new URL(segLine, variantBase).href
+
+    const seg = await new Promise((resolve, reject) => {
+      axios({
+        url: segUrl,
+        method: 'GET',
+        headers: hdrs,
+        timeout: 5000,
+        maxRedirects: 5,
+        validateStatus: () => true,
+        responseType: 'stream',
+      }).then((r) => {
+        if (r.data && typeof r.data.destroy === 'function') r.data.destroy()
+        resolve(r)
+      }).catch(reject)
+    })
+    setCookieFrom(seg.headers, cookies)
+    if (seg.status !== 200) return { ok: false, reason: seg.status === 404 ? 'expired' : 'blocked', status: seg.status, steps }
+    const sct = (seg.headers['content-type'] || '').toLowerCase()
+    push(`segment ${seg.status} ct=${sct} cookies=${cookies.join(',') || 'none'}`)
+    if (sct.startsWith('image/')) return { ok: false, reason: 'ad-only', ct: sct, steps }
+    if (sct.startsWith('text/html')) return { ok: false, reason: 'blocked', ct: sct, steps }
+
+    // Content-type is video-ish — confirm a real decodable stream with ffmpeg.
+    const ff = await ffmpegProbePlayable(streamUrl, { ...hdrs, ...(cookies.length ? { Cookie: cookies.join('; ') } : {}) }, ffmpegPath)
+    push(`ffmpeg ok=${ff.ok} codec=${ff.hasVideo ? 'video' : 'none'} dur=${ff.duration ? ff.duration + 's' : 'unknown'} ${ff.detail || ''}`)
+    return {
+      ok: ff.ok,
+      reason: ff.ok ? 'ok' : ff.reason,
+      duration: ff.duration,
+      ct: sct,
+      cookies,
+      steps,
+      ...(ff.ok ? {} : { detail: ff.detail }),
+    }
+  } catch (err) {
+    const codes = err.errors ? err.errors.map((e) => e.code || e.message).filter(Boolean).slice(0, 3) : []
+    return {
+      ok: false,
+      reason: 'unreachable',
+      error: `${err.code || err.message || 'unknown'}${codes.length ? ' [' + codes.join(', ') + ']' : ''}`.slice(0, 160),
+      steps,
+    }
+  }
+}
+
 export async function source(req, res) {
   const { id, type, season, episode } = req.query
   if (!id) return res.status(400).json({ error: 'TMDB ID is required' })
@@ -143,64 +391,154 @@ export async function source(req, res) {
       return res.json({ success: false, error: e.message })
     }
 
-    if (result.streamUrl) {
-      try {
-        const headCheck = await axios({
-          url: result.streamUrl,
-          method: 'HEAD',
-          timeout: 5000,
-          validateStatus: () => true,
-          headers: { 'User-Agent': UA, Referer: 'https://play.xpass.top/' },
-        })
-        const ct = (headCheck.headers['content-type'] || '').toLowerCase()
-        if (ct.includes('text/html')) {
-          console.log(`[source] HLS blocked by CDN (HTML), falling back to embed for ${id}`)
-          result.streamUrl = null
-          result.providerMode = 'embed'
-        }
-      } catch {
-        // HEAD failed — proceed anyway
-      }
-    }
-
     const toProxy = (url) => {
       if (!url) return url
       if (url.startsWith('http://') || url.startsWith('https://')) return url.replace('https://', '/api/proxy/')
       return url
     }
 
-    const streamProxy = result.streamUrl ? `/api/proxy/${result.streamUrl.replace('https://', '')}` : null
+    const probeResults = []
+    const ffmpegPath = req.app.locals.ffmpegPath
+    let chosen = result.streamUrl ? { streamUrl: result.streamUrl, provider: result.provider, subtitles: result.subtitles || [] } : null
+    let chosenProbe = null
+
+    if (chosen) {
+      const primaryProbe = await probeStreamUrl(chosen.streamUrl, ffmpegPath)
+      probeResults.push({ provider: chosen.provider, host: hostOf(chosen.streamUrl), streamUrl: chosen.streamUrl, ...primaryProbe })
+      if (!primaryProbe.ok) {
+        chosen = null
+        for (const backup of (result.backups || []).slice(0, 2)) {
+          if (!backup.streamUrl || chosen) continue
+          const bp = await probeStreamUrl(backup.streamUrl, ffmpegPath)
+          probeResults.push({ provider: backup.provider, host: hostOf(backup.streamUrl), streamUrl: backup.streamUrl, ...bp })
+          if (bp.ok) {
+            chosen = { streamUrl: backup.streamUrl, provider: backup.provider, subtitles: backup.subtitles || [] }
+            chosenProbe = bp
+          }
+        }
+      } else {
+        chosenProbe = primaryProbe
+      }
+    }
+
+    const probeSteps = probeResults.flatMap((r) => (r.steps || []).map((s) => `[${r.provider}] ${s}`))
+
+    if (!chosen || !chosen.streamUrl) {
+      if (result.embedUrl) {
+        const embedProxy = `/api/proxy-embed?url=${encodeURIComponent(result.embedUrl)}`
+        console.log(`[api/source] id=${id} type=${type || 'movie'} -> embed fallback (${probeResults.map((r) => r.reason).join(', ')})`)
+        return res.json({
+          success: true,
+          streamUrl: null,
+          embedUrl: embedProxy,
+          directUrl: null,
+          headers: null,
+          subtitles: (result.subtitles || []).map((s) => ({ label: s.label, file: toProxy(s.file) })),
+          provider: result.provider,
+          providerMode: 'embed',
+          backups: [],
+          probe: probeResults,
+          debug: { steps: probeSteps },
+          fromCache: result.fromCache || false,
+          elapsed: result.elapsed || 0,
+          attempted: result.attempted || 0,
+          totalProviders: result.totalProviders || 0,
+        })
+      }
+
+      // Failures that are universal (the stream itself is bad) vs. failures that
+      // may be server-IP-specific (CDN blocking Render's datacenter). For the
+      // latter, still hand native clients the direct URL + headers so they can
+      // try from their residential IP; the proxy path stays dead either way.
+      const primaryReason = probeResults[0]?.reason || ''
+      const softFail = ['blocked', 'unreachable'].includes(primaryReason)
+      if (softFail && result.streamUrl) {
+        const softHeaders = headersWithCookies(result.streamUrl, probeResults[0]?.cookies)
+        console.warn(`[api/source] id=${id} type=${type || 'movie'} -> soft fail (${primaryReason}), handing direct URL to native clients`)
+        return res.json({
+          success: true,
+          streamUrl: null,
+          embedUrl: result.embedUrl ? `/api/proxy-embed?url=${encodeURIComponent(result.embedUrl)}` : null,
+          directUrl: result.streamUrl,
+          headers: softHeaders,
+          subtitles: (result.subtitles || []).map((s) => ({ label: s.label, file: toProxy(s.file) })),
+          provider: result.provider,
+          providerMode: 'direct',
+          backups: [],
+          probe: probeResults,
+          debug: { steps: probeSteps },
+          fromCache: result.fromCache || false,
+          elapsed: result.elapsed || 0,
+          attempted: result.attempted || 0,
+          totalProviders: result.totalProviders || 0,
+        })
+      }
+
+      const reasons = probeResults.length > 0 ? probeResults.map((r) => r.reason).join(', ') : 'no stream source'
+      console.error(`[api/source] no playable source for id=${id} type=${type || 'movie'} season=${season || '-'} episode=${episode || '-'} reasons=${reasons}`)
+      return res.json({
+        success: false,
+        error: reasons.includes('ad-only')
+          ? 'This title is currently serving ad placeholders and cannot be played. Try again later or pick another title.'
+          : reasons.includes('expired')
+            ? 'The stream link for this title has expired. Try again in a moment.'
+            : reasons.includes('blocked')
+              ? 'The stream provider is blocking playback for this title.'
+              : 'No playable stream source was found for this title.',
+        probe: probeResults,
+        debug: { steps: probeSteps },
+        attempted: result.attempted || 0,
+        totalProviders: result.totalProviders || 0,
+        fromCache: result.fromCache || false,
+      })
+    }
+
+    const streamProxy = `/api/proxy/${chosen.streamUrl.replace('https://', '')}`
     const embedProxy = result.embedUrl ? `/api/proxy-embed?url=${encodeURIComponent(result.embedUrl)}` : null
-    const subtitles = (result.subtitles || []).map((s) => ({
+    const subtitles = (chosen.subtitles || []).map((s) => ({
       label: s.label,
       file: toProxy(s.file),
     }))
+
+    const backupHeaders = (url) => {
+      const bp = probeResults.find((r) => r.ok && r.streamUrl === url)
+      return headersWithCookies(url, bp?.cookies)
+    }
 
     const backups = (result.backups || []).slice(0, 5).map((b) => ({
       streamUrl: b.streamUrl,
       embedUrl: b.embedUrl,
       provider: b.provider,
+      directUrl: b.streamUrl || null,
+      headers: b.streamUrl ? backupHeaders(b.streamUrl) : null,
       subtitles: (b.subtitles || []).map((s) => ({
         label: s.label,
         file: toProxy(s.file),
       })),
     }))
 
+    const playHeaders = headersWithCookies(chosen.streamUrl, chosenProbe?.cookies)
+
     const response = {
       success: true,
       streamUrl: streamProxy,
       embedUrl: embedProxy,
-      directUrl: result.streamUrl,
+      directUrl: chosen.streamUrl,
+      headers: playHeaders,
+      duration: chosenProbe?.duration || null,
       subtitles,
-      provider: result.provider,
-      providerMode: result.providerMode || (result.streamUrl ? 'hls' : 'embed'),
+      provider: chosen.provider,
+      providerMode: 'hls',
       backups,
+      probe: probeResults,
+      debug: { steps: probeSteps },
       fromCache: result.fromCache || false,
       elapsed: result.elapsed || 0,
       attempted: result.attempted || 0,
       totalProviders: result.totalProviders || 0,
     }
 
+    console.log(`[api/source] id=${id} type=${type || 'movie'} season=${season || '-'} episode=${episode || '-'} -> provider=${response.provider} mode=hls dur=${response.duration || 'unknown'}s probe=${JSON.stringify(probeResults.map((r) => r.reason))} cookies=${(chosenProbe?.cookies || []).length}`)
     res.json(response)
   } catch (err) {
     console.error(`[api/source] id=${id} type=${type || 'movie'} season=${season || '-'} episode=${episode || '-'}: ${err.message}`)

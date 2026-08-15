@@ -1,11 +1,21 @@
 import ProviderEngine from './providers/ProviderEngine.js'
 
 import xpassProvider from './providers/xpass-provider.js'
+import nextgenProvider from './providers/nextgen-provider.js'
+import vidsrcProvider from './providers/vidsrc-provider.js'
+import xembedProvider from './providers/xembed-provider.js'
+import embedapiProvider from './providers/embedapi-provider.js'
+import vidsrcpmProvider from './providers/vidsrcpm-provider.js'
 import embedProvider from './providers/embed-provider.js'
 
 const engine = new ProviderEngine()
 
+engine.register(nextgenProvider)
 engine.register(xpassProvider)
+engine.register(vidsrcProvider)
+engine.register(xembedProvider)
+engine.register(embedapiProvider)
+engine.register(vidsrcpmProvider)
 engine.register(embedProvider)
 
 export async function getStreamUrl(tmdbId, type = 'movie', season = null, episode = null) {

@@ -5,7 +5,7 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 
 export default {
   name: 'vidsrc-pm',
-  priority: 20,
+  priority: 5,
 
   async resolve(tmdbId, type, season, episode) {
     const url = `https://vidsrc.pm/embed/source-api.php?tmdb=${tmdbId}`
