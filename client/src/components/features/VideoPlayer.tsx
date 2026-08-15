@@ -21,6 +21,22 @@ interface VideoPlayerProps {
 
 const EGG_WINDOW = 2
 
+// iOS Safari/Chrome only support fullscreen on the <video> element itself
+// (via webkitEnterFullscreen); requestFullscreen() on a wrapping <div> is a
+// silent no-op there. Detect iOS including iPadOS (which reports MacIntel).
+function isIOSDevice() {
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent || ''
+  if (/iPhone|iPad|iPod/i.test(ua)) return true
+  return /MacIntel/i.test(navigator.platform || '') && navigator.maxTouchPoints > 1
+}
+
+interface WebkitVideoElement extends HTMLVideoElement {
+  webkitEnterFullscreen?: () => void
+  webkitExitFullscreen?: () => void
+  webkitDisplayingFullscreen?: boolean
+}
+
 export default function VideoPlayer({
   streamUrl,
   subtitles = [],
@@ -300,13 +316,25 @@ export default function VideoPlayer({
   }
 
   const toggleFullscreen = async () => {
-    if (!containerRef.current) return
-    if (!document.fullscreenElement) {
-      await containerRef.current.requestFullscreen()
-      setFullscreen(true)
-    } else {
-      await document.exitFullscreen()
-      setFullscreen(false)
+    const container = containerRef.current
+    const video = videoRef.current as WebkitVideoElement | null
+    if (!container && !video) return
+    try {
+      if (isIOSDevice() && video) {
+        if (document.fullscreenElement || video.webkitDisplayingFullscreen) {
+          video.webkitExitFullscreen?.()
+        } else {
+          video.webkitEnterFullscreen?.()
+        }
+      } else if (!document.fullscreenElement) {
+        await container?.requestFullscreen()
+        setFullscreen(true)
+      } else {
+        await document.exitFullscreen()
+        setFullscreen(false)
+      }
+    } catch {
+      // Some browsers reject fullscreen requests outside a user gesture.
     }
   }
 
@@ -346,6 +374,28 @@ export default function VideoPlayer({
     }
     video.currentTime = Math.min(duration, video.currentTime + 10)
   }
+
+  useEffect(() => {
+    const syncFullscreen = () => {
+      const video = videoRef.current as WebkitVideoElement | null
+      const inFullscreen =
+        !!document.fullscreenElement ||
+        (isIOSDevice() && !!video?.webkitDisplayingFullscreen)
+      setFullscreen(inFullscreen)
+    }
+    document.addEventListener('fullscreenchange', syncFullscreen)
+    document.addEventListener('webkitfullscreenchange', syncFullscreen)
+    if (isIOSDevice()) {
+      document.addEventListener('webkitbeginfullscreen', syncFullscreen)
+      document.addEventListener('webkitendfullscreen', syncFullscreen)
+    }
+    return () => {
+      document.removeEventListener('fullscreenchange', syncFullscreen)
+      document.removeEventListener('webkitfullscreenchange', syncFullscreen)
+      document.removeEventListener('webkitbeginfullscreen', syncFullscreen)
+      document.removeEventListener('webkitendfullscreen', syncFullscreen)
+    }
+  }, [])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

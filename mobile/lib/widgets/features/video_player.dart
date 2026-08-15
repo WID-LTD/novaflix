@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -93,6 +94,7 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
   double _volume = 1;
   bool _showControls = true;
   bool _loading = true;
+  bool _fullscreen = false;
   String? _error;
   double _playbackRate = 1;
   bool _showSettings = false;
@@ -407,6 +409,42 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
     setState(() => _showSettings = false);
   }
 
+  Future<void> _toggleFullscreen() async {
+    if (!mounted) return;
+    if (_fullscreen) {
+      Navigator.of(context).pop();
+      return;
+    }
+    setState(() => _fullscreen = true);
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: true,
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+        pageBuilder: (_, _, _) => _FullscreenPlayer(
+          onExit: _exitFullscreen,
+          child: _buildPlayerBody(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _exitFullscreen() async {
+    if (!mounted) return;
+    setState(() => _fullscreen = false);
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  }
+
   Future<void> _skipForward() async {
     if (widget.isFreeTier) {
       final api = ref.read(apiServiceProvider);
@@ -486,57 +524,61 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
       borderRadius: BorderRadius.circular(4),
       child: AspectRatio(
         aspectRatio: 16 / 9,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapDown: (_) => _resetControlsTimer(),
-              onLongPress: _toggleDebugOverlay,
-              child: Video(
-                controller: _controller,
-                controls: NoVideoControls,
-                wakelock: true,
+        child: _buildPlayerBody(),
+      ),
+    );
+  }
+
+  Widget _buildPlayerBody() {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (_) => _resetControlsTimer(),
+          onLongPress: _toggleDebugOverlay,
+          child: Video(
+            controller: _controller,
+            controls: NoVideoControls,
+            wakelock: true,
+          ),
+        ),
+
+        if (_loading && _error == null)
+          Container(
+            color: Colors.black54,
+            alignment: Alignment.center,
+            child: SizedBox(
+              width: 40,
+              height: 40,
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation(AppColors.primary),
+                strokeWidth: 2,
               ),
             ),
+          ),
 
-            if (_loading && _error == null)
-              Container(
-                color: Colors.black54,
-                alignment: Alignment.center,
-                child: SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation(AppColors.primary),
-                    strokeWidth: 2,
-                  ),
-                ),
-              ),
+        if (_error != null) _buildError(),
 
-            if (_error != null) _buildError(),
+        if (_showPauseAd) _buildPauseAd(),
 
-            if (_showPauseAd) _buildPauseAd(),
+        if (_currentAd != null) _buildMidRollAd(),
 
-            if (_currentAd != null) _buildMidRollAd(),
+        if (_activeEggs.isNotEmpty && _currentAd == null && !_showPauseAd)
+          Positioned.fill(child: _buildEggOverlays()),
 
-            if (_activeEggs.isNotEmpty && _currentAd == null && !_showPauseAd)
-              Positioned.fill(child: _buildEggOverlays()),
+        if (_flashKey != null)
+          Positioned(
+            top: 24,
+            left: 0,
+            right: 0,
+            child: Center(child: _buildFlash()),
+          ),
 
-            if (_flashKey != null)
-              Positioned(
-                top: 24,
-                left: 0,
-                right: 0,
-                child: Center(child: _buildFlash()),
-              ),
+        if (_debugOverlay) _buildDebugOverlay(),
 
-            if (_debugOverlay) _buildDebugOverlay(),
-
-            _buildControlBar(),
-          ],
-        ),
-      ),
+        _buildControlBar(),
+      ],
     );
   }
 
@@ -770,6 +812,11 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
                   ),
                   const SizedBox(width: 4),
                   _settingsBtn(),
+                  const SizedBox(width: 4),
+                  _iconBtn(
+                    _fullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+                    _toggleFullscreen,
+                  ),
                 ],
               ),
             ],
@@ -854,6 +901,43 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
       child: Padding(
         padding: const EdgeInsets.all(8),
         child: Icon(icon, color: Colors.white, size: 22),
+      ),
+    );
+  }
+}
+
+class _FullscreenPlayer extends StatelessWidget {
+  final Widget child;
+  final VoidCallback onExit;
+
+  const _FullscreenPlayer({required this.child, required this.onExit});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: PopScope(
+        canPop: true,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) onExit();
+        },
+        child: SafeArea(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              child,
+              Positioned(
+                top: 8,
+                right: 8,
+                child: IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.fullscreen_exit, color: Colors.white),
+                  tooltip: 'Exit fullscreen',
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
