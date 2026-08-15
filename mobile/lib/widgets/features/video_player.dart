@@ -116,6 +116,7 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
   static const int _maxDebugLines = 80;
   Timer? _stallTimer;
   double _lastProgressAt = 0;
+  bool _triedFallback = false;
 
   @override
   void initState() {
@@ -168,13 +169,23 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
       setState(() => _duration = d.inMilliseconds / 1000);
       widget.onDuration?.call(_duration);
     }));
-    _subs.add(_player.stream.error.listen((e) {
+    _subs.add(_player.stream.error.listen((e) async {
       if (!mounted) return;
       _debug('ERROR stream.error -> $e');
-      setState(() {
-        _error = _mapError(e);
-        _loading = false;
-      });
+      // A fatal stream error after open (e.g. CDN 403 without headers) — fall
+      // back to the proxy URL once before surfacing an error to the user.
+      final recovered = await _tryFallback();
+      if (recovered) {
+        _debug('stream.error: recovered via fallback');
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
+      if (mounted) {
+        setState(() {
+          _error = _mapError(e);
+          _loading = false;
+        });
+      }
     }));
     _subs.add(_player.stream.playing.listen((p) {
       if (!mounted) return;
@@ -203,7 +214,34 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
     return widget.errorReason ?? 'Failed to load video stream';
   }
 
+  // Attempts to open the proxy fallback URL once (guarded by [_triedFallback]
+  // so retries never loop). Returns true only if the fallback opened cleanly.
+  Future<bool> _tryFallback() async {
+    final fallback = widget.fallbackUrl;
+    if (_triedFallback || fallback == null || fallback.isEmpty) return false;
+    if (fallback == widget.streamUrl) return false;
+    _triedFallback = true;
+    _debug('open: retrying via fallback $fallback');
+    try {
+      await _player.open(Media(fallback));
+      _debug('open: fallback OK');
+      _player.setVolume(_muted ? 0 : _volume);
+      _player.setRate(_playbackRate);
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = null;
+        });
+      }
+      return true;
+    } catch (e) {
+      _debug('open: fallback ALSO failed -> $e');
+      return false;
+    }
+  }
+
   Future<void> _open() async {
+    _triedFallback = false;
     setState(() {
       _loading = true;
       _error = null;
@@ -226,23 +264,8 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
       }
     } catch (e) {
       _debug('open: ERROR primary -> $e');
-      final fallback = widget.fallbackUrl;
-      if (fallback != null && fallback.isNotEmpty && fallback != primary) {
-        _debug('open: retrying via fallback $fallback');
-        try {
-          await _player.open(Media(fallback));
-          _debug('open: fallback OK');
-          _player.setVolume(_muted ? 0 : _volume);
-          _player.setRate(_playbackRate);
-          if (mounted) {
-            setState(() => _loading = false);
-          }
-          return;
-        } catch (e2) {
-          _debug('open: fallback ALSO failed -> $e2');
-        }
-      }
-      if (mounted) {
+      final ok = await _tryFallback();
+      if (!ok && mounted) {
         setState(() {
           _error = _mapError('$e');
           _loading = false;
