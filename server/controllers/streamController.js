@@ -340,6 +340,74 @@ async function probeStreamUrlUncached(streamUrl, ffmpegPath) {
   }
 }
 
+const EMBED_RESOLVE_MAX = 200
+const EMBED_RESOLVE_TTL = 60 * 1000
+const embedResolveCache = new Map()
+
+// Resolves a JW Player embed page into a direct HLS/MP4 stream so native
+// clients (desktop app) can play embed fallbacks without a browser. Returns
+// { ok:false, reason } when the embed has no playable source (e.g. /video/error).
+async function resolveEmbedStream(embedUrl) {
+  const cached = embedResolveCache.get(embedUrl)
+  if (cached && Date.now() - cached.ts < EMBED_RESOLVE_TTL) return cached.result
+  const result = await resolveEmbedStreamUncached(embedUrl)
+  if (embedResolveCache.size >= EMBED_RESOLVE_MAX) embedResolveCache.clear()
+  embedResolveCache.set(embedUrl, { result, ts: Date.now() })
+  return result
+}
+
+async function resolveEmbedStreamUncached(embedUrl) {
+  try {
+    const pageRes = await axios.get(embedUrl, {
+      headers: { 'User-Agent': UA, Referer: embedUrl, Accept: 'text/html' },
+      timeout: 8000,
+      validateStatus: () => true,
+      responseType: 'text',
+    })
+    const html = typeof pageRes.data === 'string' ? pageRes.data : JSON.stringify(pageRes.data)
+    const pm = html.match(/"playlist"\s*:\s*"([^"]+)/)
+    if (!pm) return { ok: false, reason: 'no-playlist' }
+
+    const playlistUrl = new URL(pm[1], embedUrl).href
+    const plRes = await axios.get(playlistUrl, {
+      headers: { 'User-Agent': UA, Referer: embedUrl },
+      timeout: 8000,
+      validateStatus: () => true,
+      responseType: 'text',
+    })
+    if (plRes.status !== 200) return { ok: false, reason: `playlist ${plRes.status}` }
+
+    let pl = plRes.data
+    if (typeof pl === 'string') {
+      try {
+        pl = JSON.parse(pl)
+      } catch {
+        return { ok: false, reason: 'bad-playlist-json' }
+      }
+    }
+    const file = pl?.playlist?.[0]?.sources?.[0]?.file
+    if (!file) return { ok: false, reason: 'no-source' }
+    if (String(file).includes('/video/error') || String(file).includes('/error')) {
+      return { ok: false, reason: 'unavailable' }
+    }
+    if (!String(file).includes('.m3u8') && !String(file).includes('.mp4')) {
+      return { ok: false, reason: `non-stream: ${String(file).slice(0, 30)}` }
+    }
+
+    const streamUrl = new URL(file, playlistUrl).href
+    const cookies = []
+    const setCookies = plRes.headers['set-cookie']
+    if (setCookies) {
+      for (const c of Array.isArray(setCookies) ? setCookies : [setCookies]) {
+        cookies.push(String(c).split(';')[0])
+      }
+    }
+    return { ok: true, streamUrl, headers: headersWithCookies(streamUrl, cookies) }
+  } catch (e) {
+    return { ok: false, reason: `error: ${e.message?.slice(0, 40) || 'unknown'}` }
+  }
+}
+
 export async function source(req, res) {
   const { id, type, season, episode } = req.query
   if (!id) return res.status(400).json({ error: 'TMDB ID is required' })
@@ -427,6 +495,28 @@ export async function source(req, res) {
       if (result.embedUrl) {
         const embedProxy = `/api/proxy-embed?url=${encodeURIComponent(result.embedUrl)}`
         console.log(`[api/source] id=${id} type=${type || 'movie'} -> embed fallback (${probeResults.map((r) => r.reason).join(', ')})`)
+        const resolved = await resolveEmbedStream(result.embedUrl)
+        if (resolved.ok && resolved.streamUrl) {
+          console.log(`[api/source] id=${id} embed resolved -> ${resolved.streamUrl.slice(0, 60)}`)
+          return res.json({
+            success: true,
+            streamUrl: `/api/proxy/${resolved.streamUrl.replace('https://', '')}`,
+            embedUrl: embedProxy,
+            directUrl: resolved.streamUrl,
+            headers: resolved.headers,
+            subtitles: (result.subtitles || []).map((s) => ({ label: s.label, file: toProxy(s.file) })),
+            provider: result.provider,
+            providerMode: 'hls',
+            backups: [],
+            probe: probeResults,
+            debug: { steps: [...probeSteps, `[embed] resolved ${resolved.streamUrl.slice(0, 80)}`] },
+            fromCache: result.fromCache || false,
+            elapsed: result.elapsed || 0,
+            attempted: result.attempted || 0,
+            totalProviders: result.totalProviders || 0,
+          })
+        }
+        console.log(`[api/source] id=${id} embed not resolvable (${resolved.reason}) -> embed page`)
         return res.json({
           success: true,
           streamUrl: null,
@@ -438,7 +528,7 @@ export async function source(req, res) {
           providerMode: 'embed',
           backups: [],
           probe: probeResults,
-          debug: { steps: probeSteps },
+          debug: { steps: [...probeSteps, `[embed] resolve failed: ${resolved.reason}`] },
           fromCache: result.fromCache || false,
           elapsed: result.elapsed || 0,
           attempted: result.attempted || 0,

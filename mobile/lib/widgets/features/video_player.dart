@@ -117,6 +117,8 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
   Timer? _stallTimer;
   double _lastProgressAt = 0;
   bool _triedFallback = false;
+  Timer? _noStartTimer;
+  static const int _noStartTimeoutSeconds = 12;
 
   @override
   void initState() {
@@ -153,6 +155,34 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
         _debug('WARN stall: no progress for 5s (pos=${_currentTime.toStringAsFixed(1)}s)');
       } else {
         _lastProgressAt = _currentTime;
+      }
+    });
+  }
+
+  // Surfaces a clear error if playback never starts (position stuck at ~0s),
+  // which is what happens when a provider serves ad-image segments or a dead
+  // stream. Prevents an endless silent black screen.
+  void _startNoStartWatch() {
+    _noStartTimer?.cancel();
+    _debug('no-start watch started (${_noStartTimeoutSeconds}s)');
+    int ticks = 0;
+    _noStartTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      if (_currentTime > 0.5 || _error != null) {
+        _noStartTimer?.cancel();
+        return;
+      }
+      ticks++;
+      if (ticks >= _noStartTimeoutSeconds) {
+        _noStartTimer?.cancel();
+        _debug(
+          'NO-START: no playback start in ${_noStartTimeoutSeconds}s (pos=${_currentTime.toStringAsFixed(2)}s playing=$_playing)',
+        );
+        setState(() {
+          _error =
+              'Playback did not start. The stream may be serving ad placeholders or is unavailable.';
+          _loading = false;
+        });
       }
     });
   }
@@ -222,6 +252,7 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
     if (fallback == widget.streamUrl) return false;
     _triedFallback = true;
     _debug('open: retrying via fallback $fallback');
+    _startNoStartWatch();
     try {
       await _player.open(Media(fallback));
       _debug('open: fallback OK');
@@ -242,6 +273,7 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
 
   Future<void> _open() async {
     _triedFallback = false;
+    _startNoStartWatch();
     setState(() {
       _loading = true;
       _error = null;
@@ -438,6 +470,7 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
   @override
   void dispose() {
     _stallTimer?.cancel();
+    _noStartTimer?.cancel();
     for (final s in _subs) {
       s.cancel();
     }

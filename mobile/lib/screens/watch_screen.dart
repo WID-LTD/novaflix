@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:media_kit/media_kit.dart';
 import '../core/config.dart';
 import '../theme/app_colors.dart';
 import '../models/media_item.dart';
@@ -162,9 +161,12 @@ class WatchScreen extends ConsumerWidget {
                     );
                   }
                   if (url.isEmpty) {
+                    final embed = src['embedUrl'] as String? ?? '';
                     return _buildError(
                       context,
-                      src['error'] as String? ?? 'Could not load video source',
+                      embed.isNotEmpty
+                          ? 'This title uses an embedded stream that could not be resolved for desktop playback. Try again later.'
+                          : src['error'] as String? ?? 'Could not load video source',
                     );
                   }
                   final proxyRaw = src['streamUrl'] as String? ?? '';
