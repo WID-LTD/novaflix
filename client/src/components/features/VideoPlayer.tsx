@@ -70,6 +70,13 @@ export default function VideoPlayer({
   const [playbackRate, setPlaybackRate] = useState(1)
   const [showSettings, setShowSettings] = useState(false)
   const [activeSubtitle, setActiveSubtitle] = useState<string>('off')
+  const [quality, setQuality] = useState<number>(-1)
+  const [levels, setLevels] = useState<Array<{ index: number; label: string }>>([])
+  const [aspect, setAspect] = useState<'16:9' | '9:16' | '4:3' | '2.35:1'>('16:9')
+  const [fit, setFit] = useState<'contain' | 'cover' | 'fill'>('contain')
+  const [seekHint, setSeekHint] = useState<string | null>(null)
+  const seekHintTimer = useRef<ReturnType<typeof setTimeout>>()
+  const tapTimer = useRef<ReturnType<typeof setTimeout>>()
 
   // Ad state
   const [ads, setAds] = useState<AdItem[]>([])
@@ -165,6 +172,17 @@ export default function VideoPlayer({
       hls.attachMedia(video)
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         setLoading(false)
+        const seen = new Set<number>()
+        const lvls = (hls.levels || [])
+          .map((l, i) => ({ index: i, height: l.height || 0 }))
+          .filter((l) => {
+            if (!l.height || seen.has(l.height)) return false
+            seen.add(l.height)
+            return true
+          })
+          .sort((a, b) => b.height - a.height)
+          .map((l) => ({ index: l.index, label: `${l.height}p` }))
+        setLevels(lvls)
         video.play().catch(() => setPlaying(false))
       })
       hls.on(Hls.Events.ERROR, (_, data) => {
@@ -358,6 +376,69 @@ export default function VideoPlayer({
     setShowSettings(false)
   }
 
+  const handleQualityChange = (idx: number) => {
+    const hls = hlsRef.current
+    if (!hls || levels.length === 0) return
+    // -1 = auto; otherwise lock to the chosen level.
+    hls.currentLevel = idx === -1 ? -1 : idx
+    hls.nextLevel = idx === -1 ? -1 : idx
+    setQuality(idx)
+    setShowSettings(false)
+  }
+
+  const showSeekHint = (label: string) => {
+    setSeekHint(label)
+    if (seekHintTimer.current) clearTimeout(seekHintTimer.current)
+    seekHintTimer.current = setTimeout(() => setSeekHint(null), 700)
+  }
+
+  const handleTapZone = (clientX: number, rect: DOMRect) => {
+    const video = videoRef.current
+    if (!video) return
+    const frac = (clientX - rect.left) / rect.width
+    if (frac < 1 / 3) {
+      video.currentTime = Math.max(0, video.currentTime - 10)
+      showSeekHint('−10s')
+    } else if (frac > 2 / 3) {
+      video.currentTime = Math.min(duration, video.currentTime + 10)
+      showSeekHint('+10s')
+    } else {
+      togglePlay()
+    }
+  }
+
+  const handleSurfaceClick = () => {
+    // Debounce so a double-tap doesn't also fire a single toggle.
+    if (tapTimer.current) {
+      clearTimeout(tapTimer.current)
+      tapTimer.current = undefined
+      return
+    }
+    tapTimer.current = setTimeout(() => {
+      tapTimer.current = undefined
+      togglePlay()
+      resetControlsTimer()
+    }, 250)
+  }
+
+  const handleSurfaceDoubleClick = (e: React.MouseEvent<HTMLVideoElement>) => {
+    if (tapTimer.current) {
+      clearTimeout(tapTimer.current)
+      tapTimer.current = undefined
+    }
+    handleTapZone(e.clientX, e.currentTarget.getBoundingClientRect())
+  }
+
+  const handleWheelVolume = (e: React.WheelEvent<HTMLDivElement>) => {
+    const video = videoRef.current
+    if (!video) return
+    const delta = e.deltaY < 0 ? 0.05 : -0.05
+    const v = Math.max(0, Math.min(1, video.volume + delta))
+    video.volume = v
+    setVolume(v)
+    setMuted(v === 0)
+  }
+
   const handleSkipForward = async () => {
     const video = videoRef.current
     if (!video) return
@@ -394,6 +475,13 @@ export default function VideoPlayer({
       document.removeEventListener('webkitfullscreenchange', syncFullscreen)
       document.removeEventListener('webkitbeginfullscreen', syncFullscreen)
       document.removeEventListener('webkitendfullscreen', syncFullscreen)
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (tapTimer.current) clearTimeout(tapTimer.current)
+      if (seekHintTimer.current) clearTimeout(seekHintTimer.current)
     }
   }, [])
 
@@ -460,13 +548,17 @@ export default function VideoPlayer({
     onCollectEgg?.(e.id)
   }
 
+  const aspectRatioMap = { '16:9': 16 / 9, '9:16': 9 / 16, '4:3': 4 / 3, '2.35:1': 2.35 } as const
+
   return (
     <div
       ref={containerRef}
       id="tour-player"
       className="relative bg-black rounded-2xl overflow-hidden group"
+      style={{ aspectRatio: aspectRatioMap[aspect] }}
       onMouseMove={resetControlsTimer}
       onMouseLeave={() => playing && setShowControls(false)}
+      onWheel={handleWheelVolume}
     >
       {/* Pause Ad Overlay (free tier only) */}
       {showPauseAd && (
@@ -490,8 +582,10 @@ export default function VideoPlayer({
 
       <video
         ref={videoRef}
-        className={`w-full aspect-video object-contain cursor-pointer ${currentAd || showPauseAd ? 'pointer-events-none' : ''}`}
-        onClick={togglePlay}
+        className={`w-full h-full cursor-pointer ${currentAd || showPauseAd ? 'pointer-events-none' : ''}`}
+        style={{ objectFit: fit }}
+        onClick={handleSurfaceClick}
+        onDoubleClick={handleSurfaceDoubleClick}
         playsInline
         poster={undefined}
       />
@@ -529,6 +623,12 @@ export default function VideoPlayer({
         <div className="absolute top-6 left-1/2 -translate-x-1/2 z-30 bg-accent text-black text-sm font-semibold px-4 py-2 rounded-full shadow-2xl flex items-center gap-2 animate-bounce">
           <Icon name="key" size="sm" />
           Key found! {flashKey.hint ? `"${flashKey.hint}"` : 'Reward unlocked'}
+        </div>
+      )}
+
+      {seekHint && (
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 bg-black/70 backdrop-blur-sm text-white text-lg font-bold px-5 py-2 rounded-xl border border-white/10">
+          {seekHint}
         </div>
       )}
 
@@ -627,8 +727,66 @@ export default function VideoPlayer({
                 <Icon name="settings" />
               </button>
               {showSettings && (
-                <div className="absolute bottom-full right-0 mb-2 bg-surface-secondary border border-white/10 rounded-xl p-2 min-w-[140px] shadow-2xl">
-                  <p className="text-xs text-gray-400 px-2 pt-1 pb-2 font-medium">Speed</p>
+                <div className="absolute bottom-full right-0 mb-2 bg-surface-secondary border border-white/10 rounded-xl p-2 min-w-[170px] shadow-2xl max-h-[70vh] overflow-y-auto">
+                  <p className="text-xs text-gray-400 px-2 pt-1 pb-2 font-medium">Quality</p>
+                  <button
+                    onClick={() => handleQualityChange(-1)}
+                    className={`w-full text-left px-2 py-1.5 text-sm rounded-lg transition-colors ${
+                      quality === -1
+                        ? 'text-accent bg-accent/10'
+                        : 'text-gray-300 hover:bg-white/5'
+                    }`}
+                  >
+                    Auto
+                  </button>
+                  {levels.map((l) => (
+                    <button
+                      key={l.index}
+                      onClick={() => handleQualityChange(l.index)}
+                      className={`w-full text-left px-2 py-1.5 text-sm rounded-lg transition-colors ${
+                        quality === l.index
+                          ? 'text-accent bg-accent/10'
+                          : 'text-gray-300 hover:bg-white/5'
+                      }`}
+                    >
+                      {l.label}
+                    </button>
+                  ))}
+                  {levels.length === 0 && (
+                    <p className="text-[11px] text-gray-500 px-2 pb-1">Auto only (no HLS variants)</p>
+                  )}
+
+                  <p className="text-xs text-gray-400 px-2 pt-2 pb-2 font-medium">Screen</p>
+                  {(Object.keys(aspectRatioMap) as Array<'16:9' | '9:16' | '4:3' | '2.35:1'>).map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => setAspect(r)}
+                      className={`w-full text-left px-2 py-1.5 text-sm rounded-lg transition-colors ${
+                        aspect === r ? 'text-accent bg-accent/10' : 'text-gray-300 hover:bg-white/5'
+                      }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+
+                  <p className="text-xs text-gray-400 px-2 pt-2 pb-2 font-medium">Fit</p>
+                  {[
+                    { v: 'contain', label: 'Fit / Letterbox' },
+                    { v: 'cover', label: 'Fill / Crop' },
+                    { v: 'fill', label: 'Stretch' },
+                  ].map((f) => (
+                    <button
+                      key={f.v}
+                      onClick={() => setFit(f.v as 'contain' | 'cover' | 'fill')}
+                      className={`w-full text-left px-2 py-1.5 text-sm rounded-lg transition-colors ${
+                        fit === f.v ? 'text-accent bg-accent/10' : 'text-gray-300 hover:bg-white/5'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+
+                  <p className="text-xs text-gray-400 px-2 pt-2 pb-2 font-medium">Speed</p>
                   {speeds.map((s) => (
                     <button
                       key={s}

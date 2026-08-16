@@ -54,6 +54,7 @@ const extraItems: NavItem[] = [
   { to: '/pricing', icon: 'workspace_premium', label: 'Plans' },
   { to: '/store', icon: 'shopping_bag', label: 'Merch Store' },
   { to: '/learn', icon: 'school', label: 'E-Learning' },
+  { to: '/download-app', icon: 'smartphone', label: 'Get the App' },
   { to: '/watch-party', icon: 'diversity_3', label: 'Watch Party', auth: true },
 ]
 

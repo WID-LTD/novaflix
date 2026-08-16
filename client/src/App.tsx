@@ -9,6 +9,7 @@ import CreatorGuard from './components/layout/CreatorGuard'
 import Skeleton from './components/ui/Skeleton'
 
 const Landing = lazy(() => import('./pages/Landing'))
+const DownloadApp = lazy(() => import('./pages/DownloadApp'))
 const Splash = lazy(() => import('./pages/Splash'))
 const Home = lazy(() => import('./pages/Home'))
 const Search = lazy(() => import('./pages/Search'))
@@ -124,6 +125,7 @@ export default function App() {
         <Route path="/" element={<Splash />} />
         <Route path="/splash" element={<Splash />} />
         <Route path="/landing" element={<Landing />} />
+        <Route path="/download-app" element={<DownloadApp />} />
         <Route path="/login" element={<Login />} />
         <Route path="/oauth/callback" element={<OAuthCallback />} />
         <Route path="/register" element={<Register />} />

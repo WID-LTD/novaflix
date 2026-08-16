@@ -214,6 +214,13 @@ export default function WatchParty() {
   const [showControls, setShowControls] = useState(true)
   const [loading, setLoading] = useState(true)
   const [cursorHidden, setCursorHidden] = useState(false)
+  const [quality, setQuality] = useState<number>(-1)
+  const [levels, setLevels] = useState<Array<{ index: number; label: string }>>([])
+  const [fit, setFit] = useState<'contain' | 'cover' | 'fill'>('contain')
+  const [seekHint, setSeekHint] = useState<string | null>(null)
+  const seekHintTimer = useRef<ReturnType<typeof setTimeout>>()
+  const tapTimer = useRef<ReturnType<typeof setTimeout>>()
+  const [showPartySettings, setShowPartySettings] = useState(false)
 
   const [joinInput, setJoinInput] = useState('')
 
@@ -528,6 +535,17 @@ export default function WatchParty() {
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         setLoading(false)
         setPlayerReady(true)
+        const seen = new Set<number>()
+        const lvls = (hls.levels || [])
+          .map((l, i) => ({ index: i, height: l.height || 0 }))
+          .filter((l) => {
+            if (!l.height || seen.has(l.height)) return false
+            seen.add(l.height)
+            return true
+          })
+          .sort((a, b) => b.height - a.height)
+          .map((l) => ({ index: l.index, label: `${l.height}p` }))
+        setLevels(lvls)
         video.play().catch(() => setPlaying(false))
       })
       hls.on(Hls.Events.ERROR, (_, data) => {
@@ -703,6 +721,70 @@ export default function WatchParty() {
     }
   }, [playing])
 
+  const handleQualityChange = (idx: number) => {
+    const hls = hlsRef.current
+    if (!hls || levels.length === 0) return
+    hls.currentLevel = idx === -1 ? -1 : idx
+    hls.nextLevel = idx === -1 ? -1 : idx
+    setQuality(idx)
+  }
+
+  const showSeekHint = (label: string) => {
+    setSeekHint(label)
+    if (seekHintTimer.current) clearTimeout(seekHintTimer.current)
+    seekHintTimer.current = setTimeout(() => setSeekHint(null), 700)
+  }
+
+  const handleSurfaceClick = () => {
+    if (tapTimer.current) {
+      clearTimeout(tapTimer.current)
+      tapTimer.current = undefined
+      return
+    }
+    tapTimer.current = setTimeout(() => {
+      tapTimer.current = undefined
+      togglePlay()
+      resetControls()
+    }, 250)
+  }
+
+  const handleSurfaceDoubleClick = (e: React.MouseEvent<HTMLVideoElement>) => {
+    if (tapTimer.current) {
+      clearTimeout(tapTimer.current)
+      tapTimer.current = undefined
+    }
+    const video = videoRef.current
+    if (!video) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const frac = (e.clientX - rect.left) / rect.width
+    if (frac < 1 / 3) {
+      video.currentTime = Math.max(0, video.currentTime - 10)
+      showSeekHint('−10s')
+    } else if (frac > 2 / 3) {
+      video.currentTime = Math.min(duration, video.currentTime + 10)
+      showSeekHint('+10s')
+    } else {
+      togglePlay()
+    }
+  }
+
+  const handleWheelVolume = (e: React.WheelEvent<HTMLDivElement>) => {
+    const video = videoRef.current
+    if (!video) return
+    const delta = e.deltaY < 0 ? 0.05 : -0.05
+    const v = Math.max(0, Math.min(1, video.volume + delta))
+    video.volume = v
+    setVolume(v)
+    setMuted(v === 0)
+  }
+
+  useEffect(() => {
+    return () => {
+      if (tapTimer.current) clearTimeout(tapTimer.current)
+      if (seekHintTimer.current) clearTimeout(seekHintTimer.current)
+    }
+  }, [])
+
   const togglePlay = () => {
     const video = videoRef.current
     if (!video) return
@@ -814,20 +896,29 @@ export default function WatchParty() {
     return (
       <div
         ref={containerRef}
-        className="fixed inset-0 bg-black z-50"
+        className="fixed inset-0 bg-black z-50 flex items-center justify-center"
         onMouseMove={resetControls}
         onMouseLeave={() => playing && setShowControls(false)}
+        onWheel={handleWheelVolume}
       >
         <video
           ref={videoRef}
-          className="w-full h-full object-contain cursor-default"
-          onClick={togglePlay}
+          className="w-full h-full cursor-default"
+          style={{ objectFit: fit }}
+          onClick={handleSurfaceClick}
+          onDoubleClick={handleSurfaceDoubleClick}
           playsInline
         />
 
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/60">
             <div className="w-12 h-12 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+
+        {seekHint && (
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 bg-black/70 backdrop-blur-sm text-white text-lg font-bold px-5 py-2 rounded-xl border border-white/10 pointer-events-none">
+            {seekHint}
           </div>
         )}
 
@@ -892,6 +983,58 @@ export default function WatchParty() {
                 {muted || volume === 0 ? <Icon name="volume_off" size="sm" /> : <Icon name="volume_up" size="sm" />}
               </button>
               <input type="range" min={0} max={1} step={0.05} value={muted ? 0 : volume} onChange={handleVolumeChange} className="w-16 h-1 accent-accent" />
+              <div className="relative">
+                <button
+                  onClick={() => setShowPartySettings(!showPartySettings)}
+                  className="text-white/70 hover:text-white transition-colors w-8 h-8 flex items-center justify-center"
+                  aria-label="Settings"
+                >
+                  <Icon name="settings" size="sm" />
+                </button>
+                {showPartySettings && (
+                  <div className="absolute bottom-full right-0 mb-2 bg-black/90 backdrop-blur-md border border-white/10 rounded-xl p-2 min-w-[160px] shadow-2xl">
+                    <p className="text-xs text-white/40 px-2 pt-1 pb-1 font-medium">Quality</p>
+                    <button
+                      onClick={() => handleQualityChange(-1)}
+                      className={`w-full text-left px-2 py-1.5 text-sm rounded-lg transition-colors ${
+                        quality === -1 ? 'text-accent bg-accent/10' : 'text-white/70 hover:bg-white/10'
+                      }`}
+                    >
+                      Auto
+                    </button>
+                    {levels.map((l) => (
+                      <button
+                        key={l.index}
+                        onClick={() => handleQualityChange(l.index)}
+                        className={`w-full text-left px-2 py-1.5 text-sm rounded-lg transition-colors ${
+                          quality === l.index ? 'text-accent bg-accent/10' : 'text-white/70 hover:bg-white/10'
+                        }`}
+                      >
+                        {l.label}
+                      </button>
+                    ))}
+                    {levels.length === 0 && (
+                      <p className="text-[11px] text-white/40 px-2 pb-1">Auto only (no HLS variants)</p>
+                    )}
+                    <p className="text-xs text-white/40 px-2 pt-2 pb-1 font-medium">Crop / Fit</p>
+                    {[
+                      { v: 'contain', label: 'Fit / Letterbox' },
+                      { v: 'cover', label: 'Fill / Crop' },
+                      { v: 'fill', label: 'Stretch' },
+                    ].map((f) => (
+                      <button
+                        key={f.v}
+                        onClick={() => setFit(f.v as 'contain' | 'cover' | 'fill')}
+                        className={`w-full text-left px-2 py-1.5 text-sm rounded-lg transition-colors ${
+                          fit === f.v ? 'text-accent bg-accent/10' : 'text-white/70 hover:bg-white/10'
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button onClick={toggleFullscreen} className="text-white/70 hover:text-white transition-colors w-8 h-8 flex items-center justify-center" aria-label={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
                 {fullscreen ? <Icon name="fullscreen_exit" size="sm" /> : <Icon name="fullscreen" size="sm" />}
               </button>

@@ -48,6 +48,12 @@ export default function TopNav() {
         <SearchLightbox open variant="navbar" onClose={() => setSearchOpen(false)} />
       ) : (
         <div className="flex items-center gap-4 shrink-0">
+          <Link
+            to="/download-app"
+            className="hidden md:flex items-center gap-1.5 font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors"
+          >
+            <Icon name="smartphone" size="sm" /> Get App
+          </Link>
           <button onClick={() => setSearchOpen(true)} className="text-on-surface-variant hover:text-primary transition-colors p-2" aria-label="Search">
             <Icon name="search" />
           </button>

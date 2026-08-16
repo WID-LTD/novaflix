@@ -65,6 +65,9 @@ export default function Landing() {
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link to="/login" className="bg-primary-container text-on-primary-container px-8 py-3.5 rounded-xl font-semibold text-lg hover:brightness-110 transition-colors">Start Free Trial</Link>
             <a href="#features" className="bg-surface-variant/20 text-on-surface px-8 py-3.5 rounded-xl font-semibold text-lg hover:bg-surface-variant/40 transition-colors border border-outline/20">Explore Features</a>
+            <Link to="/download-app" className="bg-surface-variant/20 text-on-surface px-8 py-3.5 rounded-xl font-semibold text-lg hover:bg-surface-variant/40 transition-colors border border-outline/20 flex items-center justify-center gap-2">
+              <Icon name="smartphone" size="sm" /> Get the App
+            </Link>
           </div>
           <p className="text-sm text-gray-500 mt-4">No credit card required. Free plan available forever.</p>
         </div>
