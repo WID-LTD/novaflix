@@ -142,19 +142,22 @@ class WatchScreen extends ConsumerWidget {
                 ),
                 error: (e, _) => _buildError(context, friendlyErrorMessage(e)),
                 data: (src) {
-                  String? direct;
-                  Map<String, String>? directHeaders;
-                  final rawDirect = src['directUrl'] as String? ?? '';
                   final rawHeaders = src['headers'] as Map<String, dynamic>?;
-                  if (rawDirect.isNotEmpty) {
-                    direct = resolveStreamUrl(rawDirect);
-                    if (rawHeaders != null) {
-                      directHeaders = rawHeaders.map(
-                        (k, v) => MapEntry(k, '$v'),
-                      );
-                    }
-                  }
-                  var url = direct ?? '';
+                  final rawProxy = src['streamUrl'] as String? ?? '';
+                  final rawDirect = src['directUrl'] as String? ?? '';
+                  final mode = src['providerMode'] as String? ?? '';
+                  // 'direct' mode means the server's IP is blocked by the CDN,
+                  // so only the raw CDN URL (from the user's IP) can play. In
+                  // 'hls' mode the proxy is the reliable primary path: it adds
+                  // the browser UA/Referer server-side and rewrites the
+                  // disguised .txt/.woff2 playlist and segment names. The raw
+                  // direct URL is kept as a fallback.
+                  final preferDirect = mode == 'direct' && rawDirect.isNotEmpty;
+                  final primaryRaw = preferDirect ? rawDirect : rawProxy;
+                  final fallbackRaw = preferDirect ? rawProxy : rawDirect;
+                  var url = primaryRaw.isNotEmpty
+                      ? resolveStreamUrl(primaryRaw)
+                      : '';
                   if (url.isEmpty) {
                     url = resolveStreamUrl(
                       streamUrl ?? src['streamUrl'] as String? ?? '',
@@ -169,14 +172,17 @@ class WatchScreen extends ConsumerWidget {
                           : src['error'] as String? ?? 'Could not load video source',
                     );
                   }
-                  final proxyRaw = src['streamUrl'] as String? ?? '';
-                  final isDirect = direct != null && direct.isNotEmpty && url == direct;
-                  final fallbackRaw = isDirect ? proxyRaw : rawDirect;
+                  final direct = rawDirect.isNotEmpty
+                      ? resolveStreamUrl(rawDirect)
+                      : null;
+                  final directHeaders = rawHeaders?.map(
+                    (k, v) => MapEntry(k, '$v'),
+                  );
                   final fallbackUrl = fallbackRaw.isNotEmpty
                       ? resolveStreamUrl(fallbackRaw)
                       : null;
                   debugPrint(
-                    '[watch] url=$url direct=$isDirect fallback=$fallbackUrl error=${src['error']}',
+                    '[watch] url=$url direct=${url == direct} fallback=$fallbackUrl error=${src['error']}',
                   );
                   return Padding(
                     padding: const EdgeInsets.all(12),

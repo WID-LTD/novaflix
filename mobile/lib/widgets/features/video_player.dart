@@ -168,7 +168,7 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
     _noStartTimer?.cancel();
     _debug('no-start watch started (${_noStartTimeoutSeconds}s)');
     int ticks = 0;
-    _noStartTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+    _noStartTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
       if (!mounted) return;
       if (_currentTime > 0.5 || _error != null) {
         _noStartTimer?.cancel();
@@ -180,11 +180,20 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
         _debug(
           'NO-START: no playback start in ${_noStartTimeoutSeconds}s (pos=${_currentTime.toStringAsFixed(2)}s playing=$_playing)',
         );
-        setState(() {
-          _error =
-              'Playback did not start. The stream may be serving ad placeholders or is unavailable.';
-          _loading = false;
-        });
+        // A silent stall (position stuck at ~0) usually means the primary URL
+        // opened but delivers no frames — try the fallback once before giving up.
+        final recovered = await _tryFallback();
+        if (recovered) {
+          if (mounted) setState(() => _loading = false);
+          return;
+        }
+        if (mounted) {
+          setState(() {
+            _error =
+                'Playback did not start. The stream may be serving ad placeholders or is unavailable.';
+            _loading = false;
+          });
+        }
       }
     });
   }
