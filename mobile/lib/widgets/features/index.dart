@@ -38,42 +38,54 @@ class ContentRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              Text(title, style: AppTypography.headlineSm),
-              const Spacer(),
-              if (onSeeAll != null)
-                GestureDetector(
-                  onTap: onSeeAll,
-                  child: const Text(
-                    'See All',
-                    style: TextStyle(
-                      color: AppColors.primaryLight,
-                      fontSize: 14,
+    final isDesktop = MediaQuery.of(context).size.width >= 1024;
+    final cardWidth = isDesktop ? 220.0 : 160.0;
+    final rowHeight = cardWidth * 1.5 + 40;
+    final hPadding = isDesktop ? 64.0 : 16.0;
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1440),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(hPadding, 8, hPadding, 12),
+              child: Row(
+                children: [
+                  Text(title, style: AppTypography.headlineMd),
+                  const Spacer(),
+                  if (onSeeAll != null)
+                    GestureDetector(
+                      onTap: onSeeAll,
+                      child: Text(
+                        'See All',
+                        style: AppTypography.labelMd.copyWith(
+                          color: AppColors.primary,
+                        ),
+                      ),
                     ),
+                ],
+              ),
+            ),
+            SizedBox(
+              height: rowHeight,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: EdgeInsets.symmetric(horizontal: hPadding),
+                itemCount: items.length,
+                itemBuilder: (_, i) => Padding(
+                  padding: const EdgeInsets.only(right: 16),
+                  child: SizedBox(
+                    width: cardWidth,
+                    child: MovieCard(item: items[i], width: cardWidth, height: cardWidth * 1.5),
                   ),
                 ),
-            ],
-          ),
-        ),
-        SizedBox(
-          height: 200,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            itemCount: items.length,
-            itemBuilder: (_, i) => Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: SizedBox(width: 130, child: MovieCard(item: items[i])),
+              ),
             ),
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
@@ -150,8 +162,11 @@ class _HeroBannerState extends ConsumerState<HeroBanner> {
     if (widget.items.isEmpty) return const SizedBox(height: 400);
     final item = widget.items[_currentPage];
     final type = item.mediaType == 'tv' ? 'tv' : 'movie';
-    final width = MediaQuery.sizeOf(context).width;
-    final height = width >= 1280 ? 520.0 : (width >= 768 ? 460.0 : 400.0);
+    final size = MediaQuery.sizeOf(context);
+    final width = size.width;
+    final height = width >= 1280
+        ? size.height * 0.8
+        : (width >= 768 ? size.height * 0.7 : size.height * 0.6);
     final showControls = width >= 768 && widget.items.length > 1;
     final inWatchlist = ref
         .watch(watchlistProvider)
@@ -219,7 +234,7 @@ class _HeroBannerState extends ConsumerState<HeroBanner> {
               Positioned(
                 left: width >= 768 ? 48 : 16,
                 right: width >= 768 ? 48 : 16,
-                bottom: 48,
+                bottom: width >= 1280 ? 64 : 48,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -230,13 +245,13 @@ class _HeroBannerState extends ConsumerState<HeroBanner> {
                       ),
                       decoration: BoxDecoration(
                         color: AppColors.primaryContainer,
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
                         type == 'movie' ? 'NOW PLAYING' : 'TRENDING',
                         style: const TextStyle(
                           color: AppColors.onPrimaryContainer,
-                          fontSize: 11,
+                          fontSize: 12,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 2,
                         ),
@@ -245,11 +260,9 @@ class _HeroBannerState extends ConsumerState<HeroBanner> {
                     const SizedBox(height: 14),
                     Text(
                       item.title,
-                      style: width >= 768
-                          ? AppTypography.headlineLg.copyWith(
+                      style: width >= 1280
+                          ? AppTypography.displayLg.copyWith(
                               color: Colors.white,
-                              fontSize: 40,
-                              fontWeight: FontWeight.w800,
                             )
                           : AppTypography.headlineLg.copyWith(
                               color: Colors.white,

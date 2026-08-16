@@ -783,7 +783,7 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
           const SizedBox(height: 12),
           ElevatedButton(
             onPressed: _open,
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryContainer),
             child: const Text('Retry', style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -811,7 +811,7 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
               setState(() => _showPauseAd = false);
               _player.play();
             },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryContainer),
             child: const Text('Play', style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -842,7 +842,7 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
               const SizedBox(width: 12),
               ElevatedButton(
                 onPressed: _handleAdComplete,
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryContainer),
                 child: const Text('Watch', style: TextStyle(color: Colors.white)),
               ),
             ],

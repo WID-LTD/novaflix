@@ -223,7 +223,7 @@ class _OfflinePlayScreenState extends ConsumerState<OfflinePlayScreen> {
         const SizedBox(height: 16),
         FilledButton(
           onPressed: _initPlayback,
-          style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+          style: FilledButton.styleFrom(backgroundColor: AppColors.primaryContainer),
           child: const Text('Retry'),
         ),
       ],
@@ -297,7 +297,7 @@ class _OfflinePlayScreenState extends ConsumerState<OfflinePlayScreen> {
           const SizedBox(width: 16),
           FilledButton.icon(
             onPressed: () => context.go('/downloads'),
-            style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.primaryContainer),
             icon: const Icon(Icons.video_library, size: 18),
             label: const Text('More downloads'),
           ),

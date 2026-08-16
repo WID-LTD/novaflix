@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
-import 'animated_loader.dart';
 
 export 'animated_loader.dart';
 
@@ -212,16 +211,19 @@ class AppBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
       decoration: BoxDecoration(
         color: (color ?? AppColors.primary).withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(9999),
+        border: Border.all(
+          color: (color ?? AppColors.primary).withValues(alpha: 0.4),
+        ),
       ),
       child: Text(
         label,
         style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
           color: color ?? AppColors.primary,
           letterSpacing: 0.5,
         ),
@@ -240,22 +242,22 @@ class PremiumBadge extends StatelessWidget {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: size * 0.5, vertical: 2),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [AppColors.primary, AppColors.primaryLight],
+        gradient: const LinearGradient(
+          colors: [AppColors.primaryContainer, AppColors.primaryAccent],
         ),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(9999),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.star, size: size * 0.75, color: Colors.white),
+          Icon(Icons.star, size: size * 0.75, color: Colors.black),
           const SizedBox(width: 2),
           Text(
-            'PREMIUM',
+            'Premium',
             style: TextStyle(
               fontSize: size * 0.5,
               fontWeight: FontWeight.w700,
-              color: Colors.white,
+              color: Colors.black,
               letterSpacing: 0.5,
             ),
           ),
@@ -275,8 +277,8 @@ class RatingBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final pct = rating / maxRating;
     final color = pct >= 0.7
-        ? AppColors.secondary
-        : (pct >= 0.4 ? Colors.orange : AppColors.error);
+        ? AppColors.primaryContainer
+        : (pct >= 0.5 ? AppColors.primary : Colors.red.shade400);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
@@ -318,16 +320,89 @@ class LoadingSpinner extends StatelessWidget {
   Widget build(BuildContext context) {
     if (logo) {
       return Center(
-        child: AnimatedLoader(
-          size: size * 4,
-          color: color ?? AppColors.primary,
-        ),
+        child: _LogoSpinner(size: size * 4, color: color ?? AppColors.primary),
       );
     }
     return Center(
       child: CircularProgressIndicator(
         strokeWidth: 3,
         valueColor: AlwaysStoppedAnimation(color ?? AppColors.primary),
+      ),
+    );
+  }
+}
+
+class _LogoSpinner extends StatefulWidget {
+  final double size;
+  final Color color;
+
+  const _LogoSpinner({required this.size, required this.color});
+
+  @override
+  State<_LogoSpinner> createState() => _LogoSpinnerState();
+}
+
+class _LogoSpinnerState extends State<_LogoSpinner>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _cw;
+  late final AnimationController _ccw;
+
+  @override
+  void initState() {
+    super.initState();
+    _cw = AnimationController(vsync: this, duration: const Duration(seconds: 2))
+      ..repeat();
+    _ccw = AnimationController(vsync: this, duration: const Duration(seconds: 3))
+      ..repeat();
+  }
+
+  @override
+  void dispose() {
+    _cw.dispose();
+    _ccw.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: widget.size,
+      height: widget.size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          RotationTransition(
+            turns: _cw,
+            child: Image.asset(
+              'assets/brand/nova-logo.png',
+              width: widget.size,
+              fit: BoxFit.contain,
+            ),
+          ),
+          RotationTransition(
+            turns: _ccw,
+            child: Image.asset(
+              'assets/brand/flix-logo.png',
+              width: widget.size * 0.75,
+              fit: BoxFit.contain,
+            ),
+          ),
+          Container(
+            width: 14,
+            height: 14,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: widget.color,
+              boxShadow: [
+                BoxShadow(
+                  color: widget.color.withValues(alpha: 0.5),
+                  blurRadius: 16,
+                  spreadRadius: 4,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -354,13 +429,74 @@ class AppSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerHighest.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(borderRadius),
+    return Shimmer(
+      child: Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: AppColors.surfaceContainerHighest.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(borderRadius),
+        ),
       ),
+    );
+  }
+}
+
+class Shimmer extends StatefulWidget {
+  final Widget child;
+
+  const Shimmer({super.key, required this.child});
+
+  @override
+  State<Shimmer> createState() => _ShimmerState();
+}
+
+class _ShimmerState extends State<Shimmer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<Alignment> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller =
+        AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))
+          ..repeat();
+    _animation = AlignmentTween(
+      begin: const Alignment(-1.5, 0),
+      end: const Alignment(1.5, 0),
+    ).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      child: widget.child,
+      builder: (_, child) {
+        return ShaderMask(
+          blendMode: BlendMode.srcATop,
+          shaderCallback: (bounds) => LinearGradient(
+            begin: _animation.value,
+            end: -_animation.value,
+            colors: const [
+              Color(0x00FFFFFF),
+              Color(0x66FFFFFF),
+              Color(0x00FFFFFF),
+            ],
+            stops: const [0.35, 0.5, 0.65],
+          ).createShader(bounds),
+          child: child,
+        );
+      },
     );
   }
 }
@@ -383,33 +519,85 @@ class AppModal extends StatelessWidget {
     required Widget content,
     List<Widget>? actions,
   }) {
-    return showModalBottomSheet<T>(
+    return showGeneralDialog<T>(
       context: context,
-      backgroundColor: AppColors.surfaceContainer,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) =>
-          AppModal(title: title, content: content, actions: actions),
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.black.withValues(alpha: 0.8),
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (_, __, ___) => AppModal(title: title, content: content, actions: actions),
+      transitionBuilder: (_, anim, __, child) {
+        return FadeTransition(
+          opacity: anim,
+          child: ScaleTransition(scale: anim, child: child),
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: AppTypography.headlineSm),
-          const SizedBox(height: 16),
-          content,
-          if (actions != null) ...[
-            const SizedBox(height: 16),
-            Row(mainAxisAlignment: MainAxisAlignment.end, children: actions!),
-          ],
-        ],
+    final maxH = MediaQuery.of(context).size.height * 0.9;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            width: 512,
+            constraints: BoxConstraints(maxHeight: maxH),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainer,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.6),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 20, 12, 20),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(title, style: AppTypography.headlineSm),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 22),
+                        color: AppColors.onSurfaceVariant,
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1, color: Colors.white12),
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: content,
+                  ),
+                ),
+                if (actions != null) ...[
+                  const Divider(height: 1, color: Colors.white12),
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: actions!,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -431,45 +619,47 @@ class AppTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 40,
-      child: scrollable
-          ? ListView(scrollDirection: Axis.horizontal, children: _buildTabs())
-          : Row(children: _buildTabs()),
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: SizedBox(
+        height: 36,
+        child: scrollable
+            ? ListView(scrollDirection: Axis.horizontal, children: _buildTabs())
+            : Row(children: _buildTabs()),
+      ),
     );
   }
 
   List<Widget> _buildTabs() {
     return List.generate(tabs.length, (i) {
       final isActive = i == activeIndex;
-      return Padding(
-        padding: const EdgeInsets.only(right: 8),
-        child: GestureDetector(
-          onTap: () => onChanged(i),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: isActive
-                  ? AppColors.primary.withValues(alpha: 0.2)
-                  : AppColors.transparent,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: isActive ? AppColors.primary : AppColors.outlineVariant,
-              ),
-            ),
-            child: Text(
-              tabs[i],
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: isActive
-                    ? AppColors.primary
-                    : AppColors.onSurfaceVariant,
-              ),
+      final tab = GestureDetector(
+        onTap: () => onChanged(i),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          alignment: Alignment.center,
+          padding: EdgeInsets.symmetric(horizontal: scrollable ? 20 : 8),
+          decoration: BoxDecoration(
+            color: isActive ? AppColors.primaryContainer : AppColors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            tabs[i],
+            style: TextStyle(
+              fontFamily: 'JetBrains Mono',
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: isActive ? Colors.white : AppColors.onSurfaceVariant,
             ),
           ),
         ),
       );
+      return scrollable ? Padding(padding: const EdgeInsets.only(right: 4), child: tab) : Expanded(child: tab);
     });
   }
 }

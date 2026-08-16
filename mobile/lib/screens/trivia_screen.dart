@@ -1091,7 +1091,7 @@ class _CosmeticCard extends StatelessWidget {
                 onPressed: canBuy ? onBuy : null,
                 style: TextButton.styleFrom(
                   padding: EdgeInsets.zero,
-                  backgroundColor: AppColors.primary,
+                  backgroundColor: AppColors.primaryContainer,
                   foregroundColor: canBuy
                       ? AppColors.white
                       : AppColors.onSurfaceVariant,

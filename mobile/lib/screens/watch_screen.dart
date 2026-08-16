@@ -251,7 +251,7 @@ class WatchScreen extends ConsumerWidget {
                   '/watch?id=$movieId&type=$mediaType${season != null ? '&season=$season' : ''}${episode != null ? '&episode=$episode' : ''}',
                 ),
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
+                  backgroundColor: AppColors.primaryContainer,
                 ),
                 child: const Text('Retry'),
               ),

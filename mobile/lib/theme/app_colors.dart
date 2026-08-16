@@ -11,10 +11,11 @@ class AppColors {
   static const Color surfaceVariant = Color(0xFF353534);
   static const Color onSurface = Color(0xFFE5E2E1);
   static const Color onSurfaceVariant = Color(0xFFE9BCB6);
-  static const Color primary = Color(0xFFE50914);
+  static const Color primary = Color(0xFFFFB4AA);
   static const Color primaryPink = Color(0xFFFFB4AA);
   static const Color primaryContainer = Color(0xFFE50914);
   static const Color accent = Color(0xFFE50914);
+  static const Color primaryFixed = Color(0xFFFFDAD5);
   static const Color primaryLight = Color(0xFFFF4D4F);
   static const Color primaryAccent = Color(0xFFFF8A8A);
   static const Color onPrimary = Color(0xFF690003);
@@ -22,10 +23,12 @@ class AppColors {
   static const Color inversePrimary = Color(0xFFC0000C);
   static const Color secondary = Color(0xFF53E076);
   static const Color secondaryContainer = Color(0xFF02B04C);
+  static const Color secondaryFixed = Color(0xFF72FE8F);
   static const Color onSecondary = Color(0xFF003914);
   static const Color onSecondaryContainer = Color(0xFF003A14);
   static const Color tertiary = Color(0xFFC6C6C7);
   static const Color tertiaryContainer = Color(0xFF717373);
+  static const Color tertiaryFixed = Color(0xFFE2E2E2);
   static const Color onTertiary = Color(0xFF2F3131);
   static const Color onTertiaryContainer = Color(0xFFF9F9F9);
   static const Color error = Color(0xFFFFB4AB);
@@ -34,7 +37,13 @@ class AppColors {
   static const Color onErrorContainer = Color(0xFFFFDAD6);
   static const Color outline = Color(0xFFAF8782);
   static const Color outlineVariant = Color(0xFF5E3F3B);
+  static const Color surfaceBright = Color(0xFF3A3939);
+  static const Color surfaceDim = Color(0xFF131313);
+  static const Color inverseSurface = Color(0xFFE5E2E1);
+  static const Color inverseOnSurface = Color(0xFF313030);
+  static const Color surfaceTint = Color(0xFFFFB4AA);
   static const Color white = Color(0xFFFFFFFF);
   static const Color black = Color(0xFF000000);
   static const Color transparent = Color(0x00000000);
+  static const Color divider = Color(0x14FFFFFF);
 }

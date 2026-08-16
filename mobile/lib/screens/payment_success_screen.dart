@@ -49,7 +49,7 @@ class PaymentSuccessScreen extends ConsumerWidget {
                     ElevatedButton(
                       onPressed: () => context.go('/home'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
+                        backgroundColor: AppColors.primaryContainer,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
                       ),
@@ -70,7 +70,7 @@ class PaymentSuccessScreen extends ConsumerWidget {
                   const SizedBox(height: 32),
                   ElevatedButton(
                     onPressed: () => context.go('/pricing'),
-                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryContainer, foregroundColor: Colors.white),
                     child: const Text('Try Again'),
                   ),
                 ],

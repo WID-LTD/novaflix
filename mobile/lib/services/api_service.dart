@@ -229,6 +229,9 @@ class ApiService {
     String? sortBy,
     int? page,
     int? minVotes,
+    String? withCompanies,
+    String? withOriginalLanguage,
+    String? primaryReleaseDateLte,
   }) => get(
     '/discover',
     params: {
@@ -237,6 +240,9 @@ class ApiService {
       if (sortBy != null) 'sort_by': sortBy,
       if (page != null) 'page': page,
       if (minVotes != null) 'min_votes': minVotes,
+      if (withCompanies != null) 'with_companies': withCompanies,
+      if (withOriginalLanguage != null) 'with_original_language': withOriginalLanguage,
+      if (primaryReleaseDateLte != null) 'primary_release_date_lte': primaryReleaseDateLte,
     },
   );
   Future<Response> getHooksFeed({int? page}) =>

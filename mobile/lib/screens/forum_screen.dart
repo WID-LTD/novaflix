@@ -60,7 +60,7 @@ class _ForumScreenState extends ConsumerState<ForumScreen> {
       floatingActionButton: widget.topicId == null
           ? FloatingActionButton(
               onPressed: _openCreateTopicSheet,
-              backgroundColor: AppColors.primary,
+              backgroundColor: AppColors.primaryContainer,
               foregroundColor: AppColors.white,
               child: const Icon(Icons.add),
             )
@@ -664,7 +664,7 @@ class _ReplyComposerState extends ConsumerState<_ReplyComposer> {
         IconButton(
           onPressed: _sending ? null : _submit,
           style: IconButton.styleFrom(
-            backgroundColor: AppColors.primary,
+            backgroundColor: AppColors.primaryContainer,
             foregroundColor: AppColors.white,
           ),
           icon: _sending

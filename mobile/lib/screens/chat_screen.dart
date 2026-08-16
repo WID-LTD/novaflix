@@ -452,7 +452,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             IconButton(
               onPressed: _send,
               style: IconButton.styleFrom(
-                backgroundColor: AppColors.primary,
+                backgroundColor: AppColors.primaryContainer,
                 foregroundColor: AppColors.white,
               ),
               icon: const Icon(Icons.send),

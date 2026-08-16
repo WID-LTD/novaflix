@@ -357,7 +357,7 @@ class DownloadsScreen extends ConsumerWidget {
         const SizedBox(height: 16),
         FilledButton(
           onPressed: () => context.go('/home'),
-          style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+          style: FilledButton.styleFrom(backgroundColor: AppColors.primaryContainer),
           child: const Text('Browse'),
         ),
       ],
