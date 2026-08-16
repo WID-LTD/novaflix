@@ -17,17 +17,20 @@ export default function TopNav() {
   const notif = useNotifications(Boolean(user))
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-40 glass-panel h-16 flex justify-between items-center px-margin-mobile md:px-margin-desktop">
+    <header
+      className="fixed top-0 left-0 right-0 z-40 glass-panel flex justify-between items-center px-margin-mobile md:px-margin-desktop"
+      style={{ paddingTop: 'env(safe-area-inset-top, 0px)', height: 'calc(4rem + env(safe-area-inset-top, 0px))' }}
+    >
       <div className={`flex items-center gap-3 min-w-0 ${searchOpen ? 'hidden md:flex' : ''}`}>
         <button
           onClick={toggleMobileDrawer}
-          className="lg:hidden p-3 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-colors shrink-0"
+          className="lg:hidden p-3 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-colors shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
           aria-label="Open navigation menu"
         >
           <Icon name="menu" />
         </button>
         <Link to="/home" className={`flex items-center gap-2 shrink-0 ${!sidebarCollapsed ? 'lg:hidden' : ''} ${mobileDrawerOpen ? 'hidden' : ''}`}>
-          <img src="/leter-mark-logo.png" alt="" className="w-auto" style={{ height: '167px' }} />
+          <img src="/leter-mark-logo.png" alt="" className="w-auto h-6 md:h-8" />
         </Link>
         <nav className="hidden lg:flex items-center gap-6 ml-8">
           <Link to="/home" className="font-label-md text-label-md text-primary transition-colors">Home</Link>
@@ -47,14 +50,14 @@ export default function TopNav() {
       {searchOpen ? (
         <SearchLightbox open variant="navbar" onClose={() => setSearchOpen(false)} />
       ) : (
-        <div className="flex items-center gap-4 shrink-0">
+        <div className="flex items-center gap-2 md:gap-4 shrink-0">
           <Link
             to="/download-app"
-            className="hidden md:flex items-center gap-1.5 font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors"
+            className="hidden md:flex items-center gap-1.5 font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors shrink-0"
           >
             <Icon name="smartphone" size="sm" /> Get App
           </Link>
-          <button onClick={() => setSearchOpen(true)} className="text-on-surface-variant hover:text-primary transition-colors p-2" aria-label="Search">
+          <button onClick={() => setSearchOpen(true)} className="text-on-surface-variant hover:text-primary transition-colors p-2.5 flex items-center justify-center min-w-[44px] min-h-[44px]" aria-label="Search">
             <Icon name="search" />
           </button>
           {user && (
@@ -62,7 +65,8 @@ export default function TopNav() {
           )}
           <button
             onClick={() => navigate(user ? '/profile' : '/login')}
-            className="w-8 h-8 rounded-xl overflow-hidden border border-surface-variant bg-surface-container-high"
+            className="w-9 h-9 md:w-8 md:h-8 rounded-xl overflow-hidden border border-surface-variant bg-surface-container-high shrink-0"
+            aria-label={user ? 'Profile' : 'Sign in'}
           >
             {user?.avatar ? (
               <img src={user.avatar} alt="" className="w-full h-full object-cover" />

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '../../store/useStore'
 import { useAuth } from '../../lib/AuthContext'
@@ -63,6 +63,7 @@ export default function MobileDrawer() {
   const setOpen = useStore((s) => s.setMobileDrawerOpen)
   const { user, isCreator, isAdmin } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
 
   useEffect(() => {
     if (open) {
@@ -76,6 +77,11 @@ export default function MobileDrawer() {
   const handleNav = (to: string) => {
     setOpen(false)
     navigate(to)
+  }
+
+  const isActive = (to: string) => {
+    const path = to.split('?')[0]
+    return location.pathname === path
   }
 
   return (
@@ -95,31 +101,55 @@ export default function MobileDrawer() {
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed left-0 top-0 bottom-0 z-50 w-[280px] bg-surface-container-lowest border-r border-white/5 flex flex-col lg:hidden"
+            className="fixed left-0 top-0 bottom-0 z-50 w-[85vw] max-w-[300px] min-w-[260px] bg-surface-container-lowest border-r border-white/5 flex flex-col lg:hidden"
           >
-            <div className="flex items-center justify-between px-4 h-16 border-b border-white/5">
-              <img src="/leter-mark-logo.png" alt="" className="w-auto" style={{ height: '167px' }} />
+            <div className="flex items-center justify-between px-4 h-16 border-b border-white/5 shrink-0">
+              <img src="/leter-mark-logo.png" alt="" className="w-auto h-7" />
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation()
                   setOpen(false)
                 }}
-                className="p-3 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-colors"
+                className="p-3 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                 aria-label="Close navigation menu"
               >
                 <Icon name="close" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+            {user && (
+              <button
+                onClick={() => handleNav('/profile')}
+                className="flex items-center gap-3 mx-3 mt-3 px-3 py-2.5 rounded-xl bg-surface-container-high border border-white/5 text-left shrink-0"
+              >
+                <span className="w-9 h-9 rounded-full overflow-hidden bg-gradient-to-br from-primary-container to-secondary flex items-center justify-center shrink-0">
+                  {user.avatar ? (
+                    <img src={user.avatar} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <Icon name="person" size="sm" />
+                  )}
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block font-label-md text-label-md text-on-surface truncate">{user.name || 'Member'}</span>
+                  <span className="block text-xs text-on-surface-variant/60 truncate">{user.email || ''}</span>
+                </span>
+                <Icon name="chevron_right" size="sm" className="text-on-surface-variant/40 shrink-0" />
+              </button>
+            )}
+
+            <div className="flex-1 overflow-y-auto py-4 px-3 space-y-1 pb-safe">
               {mainItems.map((item) => (
                 <button
                   key={item.to}
                   onClick={() => handleNav(item.to)}
-                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-on-surface-variant/60 hover:text-on-surface hover:bg-white/5 transition-colors text-left"
+                  className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-left transition-colors ${
+                    isActive(item.to)
+                      ? 'text-primary bg-white/5'
+                      : 'text-on-surface-variant/60 hover:text-on-surface hover:bg-white/5'
+                  }`}
                 >
-                  <Icon name={item.icon} size="sm" className="shrink-0" />
+                  <Icon name={item.icon} size="sm" className={`shrink-0 ${isActive(item.to) ? 'text-primary' : ''}`} />
                   <span className="font-label-md text-label-md">{item.label}</span>
                 </button>
               ))}

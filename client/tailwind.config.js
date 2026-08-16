@@ -67,6 +67,7 @@ export default {
         'display-lg': ['64px', { lineHeight: '72px', letterSpacing: '-0.04em', fontWeight: '800' }],
         'display-md': ['48px', { lineHeight: '56px', letterSpacing: '-0.03em', fontWeight: '800' }],
         'headline-lg': ['40px', { lineHeight: '48px', letterSpacing: '-0.02em', fontWeight: '700' }],
+        'headline-lg-mobile': ['28px', { lineHeight: '36px', letterSpacing: '-0.01em', fontWeight: '700' }],
         'headline-md': ['24px', { lineHeight: '32px', fontWeight: '600' }],
         'headline-sm': ['20px', { lineHeight: '28px', fontWeight: '600' }],
         'body-lg': ['18px', { lineHeight: '28px', fontWeight: '400' }],

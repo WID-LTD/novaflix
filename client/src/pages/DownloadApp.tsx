@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom'
 import Icon from '../components/ui/Icon'
+import { STORE_URLS } from '../lib/platform'
 
 const storeBadges = [
-  { icon: 'smartphone' as const, name: 'Download on the', store: 'App Store', color: 'bg-black border-white/10', note: 'iOS 14+ · iPhone & iPad' },
-  { icon: 'android' as const, name: 'Get it on', store: 'Google Play', color: 'bg-black border-white/10', note: 'Android 8.0+ · Phones & tablets' },
+  { icon: 'smartphone' as const, name: 'Download on the', store: 'App Store', href: STORE_URLS.ios, color: 'bg-black border-white/10', note: 'iOS 14+ · iPhone & iPad' },
+  { icon: 'android' as const, name: 'Get it on', store: 'Google Play', href: STORE_URLS.android, color: 'bg-black border-white/10', note: 'Android 8.0+ · Phones & tablets' },
 ]
 
 const highlights = [
@@ -47,9 +48,10 @@ export default function DownloadApp() {
               {storeBadges.map((b, i) => (
                 <a
                   key={i}
-                  href="#"
-                  onClick={(e) => e.preventDefault()}
-                  aria-label={`${b.store} mock badge`}
+                  href={b.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`${b.store} badge`}
                   className={`${b.color} border rounded-xl px-5 py-3 flex items-center gap-3 hover:border-primary-container/50 transition-colors`}
                 >
                   <Icon name={b.icon} className="text-3xl text-white" />

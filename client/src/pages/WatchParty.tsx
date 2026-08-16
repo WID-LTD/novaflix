@@ -221,6 +221,9 @@ export default function WatchParty() {
   const seekHintTimer = useRef<ReturnType<typeof setTimeout>>()
   const tapTimer = useRef<ReturnType<typeof setTimeout>>()
   const [showPartySettings, setShowPartySettings] = useState(false)
+  const [playbackRate, setPlaybackRate] = useState(1)
+  const [aspect, setAspect] = useState<'16:9' | '9:16' | '4:3' | '2.35:1'>('16:9')
+  const [openMenu, setOpenMenu] = useState<'quality' | 'screen' | 'fit' | 'speed' | null>(null)
 
   const [joinInput, setJoinInput] = useState('')
 
@@ -727,6 +730,15 @@ export default function WatchParty() {
     hls.currentLevel = idx === -1 ? -1 : idx
     hls.nextLevel = idx === -1 ? -1 : idx
     setQuality(idx)
+    setOpenMenu(null)
+  }
+
+  const handleSpeedChange = (rate: number) => {
+    const video = videoRef.current
+    if (!video) return
+    video.playbackRate = rate
+    setPlaybackRate(rate)
+    setOpenMenu(null)
   }
 
   const showSeekHint = (label: string) => {
@@ -892,6 +904,9 @@ export default function WatchParty() {
 
   if (watching && streamUrl) {
     const progress = duration > 0 ? (currentTime / duration) * 100 : 0
+    const aspectRatioMap = { '16:9': 16 / 9, '9:16': 9 / 16, '4:3': 4 / 3, '2.35:1': 2.35 } as const
+    const qualityLabel = quality === -1 ? 'Auto' : levels.find((l) => l.index === quality)?.label || 'Auto'
+    const fitLabel = fit === 'contain' ? 'Fit / Letterbox' : fit === 'cover' ? 'Fill / Crop' : 'Stretch'
 
     return (
       <div
@@ -901,14 +916,21 @@ export default function WatchParty() {
         onMouseLeave={() => playing && setShowControls(false)}
         onWheel={handleWheelVolume}
       >
-        <video
-          ref={videoRef}
-          className="w-full h-full cursor-default"
-          style={{ objectFit: fit }}
-          onClick={handleSurfaceClick}
-          onDoubleClick={handleSurfaceDoubleClick}
-          playsInline
-        />
+        <div className="w-full h-full flex items-center justify-center">
+          <div
+            className="max-w-full max-h-full w-full h-full"
+            style={{ aspectRatio: aspectRatioMap[aspect] }}
+          >
+            <video
+              ref={videoRef}
+              className="w-full h-full cursor-default"
+              style={{ objectFit: fit }}
+              onClick={handleSurfaceClick}
+              onDoubleClick={handleSurfaceDoubleClick}
+              playsInline
+            />
+          </div>
+        </div>
 
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/60">
@@ -971,18 +993,18 @@ export default function WatchParty() {
             />
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <button onClick={togglePlay} className="text-white hover:text-accent transition-colors w-10 h-10 flex items-center justify-center" aria-label={playing ? 'Pause' : 'Play'}>
+          <div className="flex flex-wrap items-center justify-between gap-x-1 gap-y-2 sm:gap-x-2">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <button onClick={togglePlay} className="text-white hover:text-accent transition-colors w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center" aria-label={playing ? 'Pause' : 'Play'}>
                 {playing ? <Icon name="pause" /> : <Icon name="play_arrow" />}
               </button>
               <span className="text-xs text-white/70 font-mono">{formatTime(currentTime)} / {formatTime(duration)}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => { const v = videoRef.current; if (v) { v.muted = !muted; setMuted(!muted) } }} className="text-white/70 hover:text-white transition-colors w-8 h-8 flex items-center justify-center" aria-label={muted ? 'Unmute' : 'Mute'}>
+            <div className="flex items-center gap-1 sm:gap-2">
+              <button onClick={() => { const v = videoRef.current; if (v) { v.muted = !muted; setMuted(!muted) } }} className="text-white/70 hover:text-white transition-colors w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center" aria-label={muted ? 'Unmute' : 'Mute'}>
                 {muted || volume === 0 ? <Icon name="volume_off" size="sm" /> : <Icon name="volume_up" size="sm" />}
               </button>
-              <input type="range" min={0} max={1} step={0.05} value={muted ? 0 : volume} onChange={handleVolumeChange} className="w-16 h-1 accent-accent" />
+              <input type="range" min={0} max={1} step={0.05} value={muted ? 0 : volume} onChange={handleVolumeChange} className="w-12 sm:w-16 h-1 accent-accent" />
               <div className="relative">
                 <button
                   onClick={() => setShowPartySettings(!showPartySettings)}
@@ -992,46 +1014,125 @@ export default function WatchParty() {
                   <Icon name="settings" size="sm" />
                 </button>
                 {showPartySettings && (
-                  <div className="absolute bottom-full right-0 mb-2 bg-black/90 backdrop-blur-md border border-white/10 rounded-xl p-2 min-w-[160px] shadow-2xl">
-                    <p className="text-xs text-white/40 px-2 pt-1 pb-1 font-medium">Quality</p>
+                  <div className="absolute bottom-full right-0 mb-2 bg-black/90 backdrop-blur-md border border-white/10 rounded-xl p-1.5 min-w-[180px] max-w-[calc(100vw-2rem)] shadow-2xl max-h-[70vh] overflow-y-auto">
                     <button
-                      onClick={() => handleQualityChange(-1)}
-                      className={`w-full text-left px-2 py-1.5 text-sm rounded-lg transition-colors ${
-                        quality === -1 ? 'text-accent bg-accent/10' : 'text-white/70 hover:bg-white/10'
-                      }`}
+                      onClick={() => setOpenMenu(openMenu === 'quality' ? null : 'quality')}
+                      className="w-full flex items-center justify-between px-2 py-2 text-sm rounded-lg text-white/80 hover:bg-white/10 transition-colors"
                     >
-                      Auto
+                      <span>Quality</span>
+                      <span className="flex items-center gap-1 text-white/40">
+                        <span className="text-xs">{qualityLabel}</span>
+                        <Icon name={openMenu === 'quality' ? 'expand_less' : 'expand_more'} size="sm" />
+                      </span>
                     </button>
-                    {levels.map((l) => (
-                      <button
-                        key={l.index}
-                        onClick={() => handleQualityChange(l.index)}
-                        className={`w-full text-left px-2 py-1.5 text-sm rounded-lg transition-colors ${
-                          quality === l.index ? 'text-accent bg-accent/10' : 'text-white/70 hover:bg-white/10'
-                        }`}
-                      >
-                        {l.label}
-                      </button>
-                    ))}
-                    {levels.length === 0 && (
-                      <p className="text-[11px] text-white/40 px-2 pb-1">Auto only (no HLS variants)</p>
+                    {openMenu === 'quality' && (
+                      <div className="px-1 pb-1 space-y-0.5">
+                        <button
+                          onClick={() => handleQualityChange(-1)}
+                          className={`w-full text-left px-2 py-1.5 text-sm rounded-lg transition-colors ${
+                            quality === -1 ? 'text-accent bg-accent/10' : 'text-white/70 hover:bg-white/10'
+                          }`}
+                        >
+                          Auto
+                        </button>
+                        {levels.map((l) => (
+                          <button
+                            key={l.index}
+                            onClick={() => handleQualityChange(l.index)}
+                            className={`w-full text-left px-2 py-1.5 text-sm rounded-lg transition-colors ${
+                              quality === l.index ? 'text-accent bg-accent/10' : 'text-white/70 hover:bg-white/10'
+                            }`}
+                          >
+                            {l.label}
+                          </button>
+                        ))}
+                        {levels.length === 0 && (
+                          <p className="text-[11px] text-white/40 px-2 pb-1">Auto only (no HLS variants)</p>
+                        )}
+                      </div>
                     )}
-                    <p className="text-xs text-white/40 px-2 pt-2 pb-1 font-medium">Crop / Fit</p>
-                    {[
-                      { v: 'contain', label: 'Fit / Letterbox' },
-                      { v: 'cover', label: 'Fill / Crop' },
-                      { v: 'fill', label: 'Stretch' },
-                    ].map((f) => (
-                      <button
-                        key={f.v}
-                        onClick={() => setFit(f.v as 'contain' | 'cover' | 'fill')}
-                        className={`w-full text-left px-2 py-1.5 text-sm rounded-lg transition-colors ${
-                          fit === f.v ? 'text-accent bg-accent/10' : 'text-white/70 hover:bg-white/10'
-                        }`}
-                      >
-                        {f.label}
-                      </button>
-                    ))}
+
+                    <button
+                      onClick={() => setOpenMenu(openMenu === 'screen' ? null : 'screen')}
+                      className="w-full flex items-center justify-between px-2 py-2 text-sm rounded-lg text-white/80 hover:bg-white/10 transition-colors"
+                    >
+                      <span>Screen</span>
+                      <span className="flex items-center gap-1 text-white/40">
+                        <span className="text-xs">{aspect}</span>
+                        <Icon name={openMenu === 'screen' ? 'expand_less' : 'expand_more'} size="sm" />
+                      </span>
+                    </button>
+                    {openMenu === 'screen' && (
+                      <div className="px-1 pb-1 space-y-0.5">
+                        {(Object.keys(aspectRatioMap) as Array<'16:9' | '9:16' | '4:3' | '2.35:1'>).map((r) => (
+                          <button
+                            key={r}
+                            onClick={() => { setAspect(r); setOpenMenu(null) }}
+                            className={`w-full text-left px-2 py-1.5 text-sm rounded-lg transition-colors ${
+                              aspect === r ? 'text-accent bg-accent/10' : 'text-white/70 hover:bg-white/10'
+                            }`}
+                          >
+                            {r}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() => setOpenMenu(openMenu === 'fit' ? null : 'fit')}
+                      className="w-full flex items-center justify-between px-2 py-2 text-sm rounded-lg text-white/80 hover:bg-white/10 transition-colors"
+                    >
+                      <span>Fit</span>
+                      <span className="flex items-center gap-1 text-white/40">
+                        <span className="text-xs">{fitLabel}</span>
+                        <Icon name={openMenu === 'fit' ? 'expand_less' : 'expand_more'} size="sm" />
+                      </span>
+                    </button>
+                    {openMenu === 'fit' && (
+                      <div className="px-1 pb-1 space-y-0.5">
+                        {[
+                          { v: 'contain', label: 'Fit / Letterbox' },
+                          { v: 'cover', label: 'Fill / Crop' },
+                          { v: 'fill', label: 'Stretch' },
+                        ].map((f) => (
+                          <button
+                            key={f.v}
+                            onClick={() => { setFit(f.v as 'contain' | 'cover' | 'fill'); setOpenMenu(null) }}
+                            className={`w-full text-left px-2 py-1.5 text-sm rounded-lg transition-colors ${
+                              fit === f.v ? 'text-accent bg-accent/10' : 'text-white/70 hover:bg-white/10'
+                            }`}
+                          >
+                            {f.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() => setOpenMenu(openMenu === 'speed' ? null : 'speed')}
+                      className="w-full flex items-center justify-between px-2 py-2 text-sm rounded-lg text-white/80 hover:bg-white/10 transition-colors"
+                    >
+                      <span>Speed</span>
+                      <span className="flex items-center gap-1 text-white/40">
+                        <span className="text-xs">{playbackRate}x</span>
+                        <Icon name={openMenu === 'speed' ? 'expand_less' : 'expand_more'} size="sm" />
+                      </span>
+                    </button>
+                    {openMenu === 'speed' && (
+                      <div className="px-1 pb-1 space-y-0.5">
+                        {[0.5, 1, 1.5, 2].map((s) => (
+                          <button
+                            key={s}
+                            onClick={() => handleSpeedChange(s)}
+                            className={`w-full text-left px-2 py-1.5 text-sm rounded-lg transition-colors ${
+                              playbackRate === s ? 'text-accent bg-accent/10' : 'text-white/70 hover:bg-white/10'
+                            }`}
+                          >
+                            {s}x
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

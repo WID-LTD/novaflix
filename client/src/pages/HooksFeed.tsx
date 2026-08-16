@@ -209,9 +209,9 @@ export default function HooksFeed() {
 
   return (
     <div className="w-full h-screen overflow-hidden bg-black flex flex-col">
-      {/* Main feed area — player centered */}
-      <div className="flex-1 min-h-0 flex items-center justify-center px-4 md:px-6">
-        <div className="w-full h-full md:h-[92vh] md:max-h-full md:max-w-[450px] md:rounded-2xl md:border md:border-neutral-800 md:shadow-2xl relative overflow-hidden">
+      {/* Main feed area — player centered, nav buttons beside it */}
+      <div className="flex-1 min-h-0 flex items-center justify-center gap-2 md:gap-3 px-2 sm:px-4 md:px-6">
+        <div className="flex-1 min-w-0 h-full md:h-[92vh] md:max-h-full md:max-w-[450px] md:rounded-2xl md:border md:border-neutral-800 md:shadow-2xl relative overflow-hidden">
         {/* Upload Trailers — creators only */}
         {isCreator && (
           <button
@@ -283,12 +283,13 @@ export default function HooksFeed() {
           }}
         />
 
-        {/* Up / down navigation arrows — overlaid on the player */}
-        <div className="hidden md:flex flex-col gap-3 absolute right-2 top-1/2 -translate-y-1/2 z-20">
+        {/* Up / down navigation arrows — beside the player, outside it */}
+        </div>
+        <div className="flex flex-col gap-3 shrink-0">
           <button
             onClick={() => handleArrow('up')}
             disabled={activeIndex === 0}
-            className="w-10 h-10 rounded-full bg-black/40 border border-white/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 active:scale-90 transition-all disabled:opacity-30 disabled:pointer-events-none"
+            className="w-10 h-10 md:w-11 md:h-11 rounded-full bg-black/40 border border-white/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 active:scale-90 transition-all disabled:opacity-30 disabled:pointer-events-none"
             aria-label="Previous clip"
           >
             <Icon name="arrow_upward" size="sm" />
@@ -296,12 +297,11 @@ export default function HooksFeed() {
           <button
             onClick={() => handleArrow('down')}
             disabled={activeIndex >= items.length - 1}
-            className="w-10 h-10 rounded-full bg-black/40 border border-white/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 active:scale-90 transition-all disabled:opacity-30 disabled:pointer-events-none"
+            className="w-10 h-10 md:w-11 md:h-11 rounded-full bg-black/40 border border-white/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 active:scale-90 transition-all disabled:opacity-30 disabled:pointer-events-none"
             aria-label="Next clip"
           >
             <Icon name="arrow_downward" size="sm" />
           </button>
-        </div>
         </div>
       </div>
 

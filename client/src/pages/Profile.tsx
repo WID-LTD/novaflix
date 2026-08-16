@@ -82,16 +82,16 @@ export default function Profile() {
     <div className="min-h-screen px-margin-mobile md:px-margin-desktop pt-6 md:pt-10 pb-nav">
       <div className="max-w-4xl mx-auto">
         {!isPremium && (
-          <div className="bg-surface-container-high border border-primary-container/20 rounded-xl p-6 mb-8">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary-container to-secondary flex items-center justify-center">
-                <Icon name="workspace_premium" fill={true} className="w-7 h-7" />
+          <div className="bg-surface-container-high border border-primary-container/20 rounded-xl p-5 md:p-6 mb-6 md:mb-8">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-gradient-to-br from-primary-container to-secondary flex items-center justify-center shrink-0">
+                <Icon name="workspace_premium" fill={true} className="w-6 h-6 md:w-7 md:h-7" />
               </div>
-              <div className="flex-1">
+              <div className="flex-1 min-w-[160px]">
                 <h3 className="font-label-md text-label-md text-on-surface">Upgrade to Premium</h3>
                 <p className="text-on-surface-variant/60 text-sm">Unlock 4K, offline downloads, ad-free streaming</p>
               </div>
-              <Link to="/pricing">
+              <Link to="/pricing" className="shrink-0">
                 <Button size="sm">
                   <Icon name="workspace_premium" fill={true} /> View Plans
                 </Button>
@@ -100,23 +100,26 @@ export default function Profile() {
           </div>
         )}
 
-        <div className="flex items-center gap-6 mb-10">
-          <button onClick={handleAvatarClick} disabled={uploading} className="relative w-20 h-20 rounded-full overflow-hidden bg-gradient-to-br from-primary-container to-secondary flex items-center justify-center shrink-0 hover:opacity-80 transition-opacity">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 mb-6 md:mb-10">
+          <button onClick={handleAvatarClick} disabled={uploading} className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden bg-gradient-to-br from-primary-container to-secondary flex items-center justify-center shrink-0 hover:opacity-80 transition-opacity">
             {user?.avatar ? (
               <img src={user.avatar} alt={user.name || ''} className="w-full h-full object-cover" />
             ) : (
-              <Icon name="person" className="w-10 h-10" />
+              <Icon name="person" className="w-9 h-9 sm:w-10 sm:h-10" />
             )}
             {uploading && (
               <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               </div>
             )}
+            <span className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-surface-container-high border border-white/10 flex items-center justify-center">
+              <Icon name="camera_alt" size="sm" className="text-on-surface-variant" />
+            </span>
           </button>
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
-          <div className="flex-1">
-            <h1 className="text-headline-lg">{user?.name || 'Guest'}</h1>
-            <p className="text-on-surface-variant/60 text-sm mt-1">{user?.email || 'Sign in to sync across devices'}</p>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-headline-lg-mobile md:text-headline-lg truncate">{user?.name || 'Guest'}</h1>
+            <p className="text-on-surface-variant/60 text-sm mt-1 truncate">{user?.email || 'Sign in to sync across devices'}</p>
             {isPremium && (
               <div className="mt-2">
                 <PremiumBadge size="sm" />
@@ -124,44 +127,44 @@ export default function Profile() {
             )}
           </div>
           {user && (
-            <div className="flex items-center gap-2">
-              <Link to="/settings" className="p-3 rounded-xl hover:bg-white/10 transition-colors text-on-surface-variant" aria-label="Settings">
+            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+              <Link to="/settings" className="p-2.5 sm:p-3 rounded-xl hover:bg-white/10 transition-colors text-on-surface-variant min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Settings">
                 <Icon name="settings" />
               </Link>
-              <button onClick={handleLogout} className="p-3 rounded-xl hover:bg-white/10 transition-colors text-on-surface-variant" aria-label="Sign out">
+              <button onClick={handleLogout} className="p-2.5 sm:p-3 rounded-xl hover:bg-white/10 transition-colors text-on-surface-variant min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Sign out">
                 <Icon name="logout" />
               </button>
             </div>
           )}
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-gutter mb-10">
-          <div className="bg-surface-container-high border border-white/5 rounded-xl p-5">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-gutter mb-6 md:mb-10">
+          <div className="bg-surface-container-high border border-white/5 rounded-xl p-4 md:p-5">
             <Icon name="bookmark" className="text-primary-container mb-3" />
             <p className="text-2xl font-bold text-on-surface">{watchlist.length}</p>
             <p className="text-on-surface-variant/60 text-sm">Total Saved</p>
           </div>
-          <div className="bg-surface-container-high border border-white/5 rounded-xl p-5">
+          <div className="bg-surface-container-high border border-white/5 rounded-xl p-4 md:p-5">
             <Icon name="movie" className="text-primary-container mb-3" />
             <p className="text-2xl font-bold text-on-surface">{movieCount}</p>
             <p className="text-on-surface-variant/60 text-sm">Movies</p>
           </div>
-          <div className="bg-surface-container-high border border-white/5 rounded-xl p-5">
+          <div className="bg-surface-container-high border border-white/5 rounded-xl p-4 md:p-5">
             <Icon name="tv" className="text-primary-container mb-3" />
             <p className="text-2xl font-bold text-on-surface">{tvCount}</p>
             <p className="text-on-surface-variant/60 text-sm">TV Shows</p>
           </div>
-          <div className="bg-surface-container-high border border-white/5 rounded-xl p-5">
+          <div className="bg-surface-container-high border border-white/5 rounded-xl p-4 md:p-5">
             <Icon name="schedule" className="text-secondary mb-3" />
             <p className="text-2xl font-bold text-on-surface">{totalMinutes}</p>
             <p className="text-on-surface-variant/60 text-sm">Minutes Watched</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-gutter mb-10">
+        <div className="grid grid-cols-2 gap-3 md:gap-gutter mb-6 md:mb-10">
           <button
             onClick={() => openList('followers')}
-            className="bg-surface-container-high border border-white/5 rounded-xl p-5 text-left hover:border-white/15 transition-colors"
+            className="bg-surface-container-high border border-white/5 rounded-xl p-4 md:p-5 text-left hover:border-white/15 transition-colors"
           >
             <Icon name="group" className="text-primary-container mb-3" />
             <p className="text-2xl font-bold text-on-surface">{stats?.followers ?? '–'}</p>
@@ -169,7 +172,7 @@ export default function Profile() {
           </button>
           <button
             onClick={() => openList('following')}
-            className="bg-surface-container-high border border-white/5 rounded-xl p-5 text-left hover:border-white/15 transition-colors"
+            className="bg-surface-container-high border border-white/5 rounded-xl p-4 md:p-5 text-left hover:border-white/15 transition-colors"
           >
             <Icon name="person_add" className="text-secondary mb-3" />
             <p className="text-2xl font-bold text-on-surface">{stats?.following ?? '–'}</p>
@@ -184,7 +187,7 @@ export default function Profile() {
               {continueWatching.slice(0, 5).map((item) => (
                 <div
                   key={`${item.id}-${item.type}`}
-                  className="flex items-center gap-4 bg-surface-container-high border border-white/5 rounded-xl p-4"
+                  className="flex items-center gap-3 sm:gap-4 bg-surface-container-high border border-white/5 rounded-xl p-3 sm:p-4"
                 >
                   <div className="w-12 h-16 rounded-lg bg-surface-container overflow-hidden shrink-0">
                     {item.poster && (
@@ -211,15 +214,17 @@ export default function Profile() {
                       />
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      (window.location.href = `/watch?id=${item.id}&type=${item.type}${item.season ? `&season=${item.season}&episode=${item.episode}` : ''}`)
-                    }
-                  >
-                    Resume
-                  </Button>
+                  <div className="shrink-0">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        (window.location.href = `/watch?id=${item.id}&type=${item.type}${item.season ? `&season=${item.season}&episode=${item.episode}` : ''}`)
+                      }
+                    >
+                      Resume
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>

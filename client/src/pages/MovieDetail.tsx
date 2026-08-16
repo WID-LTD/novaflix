@@ -22,6 +22,7 @@ import CommentSection from '../components/features/CommentSection'
 import CastCrew from '../components/features/CastCrew'
 import CreatorCard from '../components/ui/CreatorCard'
 import ShareButton from '../components/ui/ShareButton'
+import { isMobileBrowser, routeToStore } from '../lib/platform'
 import type { MediaDetails } from '../types'
 
 export default function MovieDetail() {
@@ -32,7 +33,7 @@ export default function MovieDetail() {
   const type = (searchParams.get('type') || pathType) as 'movie' | 'tv'
   const seasonParam = searchParams.get('season')
   const episodeParam = searchParams.get('episode')
-  const { user, planFeatures } = useAuth()
+  const { user } = useAuth()
   const addToWatchlist = useStore((s) => s.addToWatchlist)
   const watchlist = useStore((s) => s.watchlist)
 
@@ -71,6 +72,14 @@ export default function MovieDetail() {
     if (type === 'tv' && !season) url += '&season=1'
     if (type === 'tv' && !episode) url += '&episode=1'
     navigate(url)
+  }
+
+  const handleDownload = () => {
+    if (isMobileBrowser()) {
+      routeToStore()
+      return
+    }
+    navigate('/download-app')
   }
 
   const handleAddToWatchlist = () => {
@@ -183,13 +192,9 @@ export default function MovieDetail() {
               <Icon name="play_arrow" fill={true} /> Play Now
             </button>
             <button
-              disabled={planFeatures.downloadDevices === 0}
-              className={`flex items-center justify-center gap-2 px-8 py-4 rounded-lg font-bold text-lg border transition-all shadow-md ${
-                planFeatures.downloadDevices === 0
-                  ? 'bg-surface-variant/20 text-on-surface/30 border-white/5 cursor-not-allowed'
-                  : 'bg-surface-variant/40 backdrop-blur-md text-on-surface border-white/10 hover:bg-surface-variant/60 active:scale-95'
-              }`}
-              title={planFeatures.downloadDevices === 0 ? 'Upgrade to download' : ''}
+              onClick={handleDownload}
+              className="flex items-center justify-center gap-2 px-8 py-4 rounded-lg font-bold text-lg border transition-all shadow-md bg-surface-variant/40 backdrop-blur-md text-on-surface border-white/10 hover:bg-surface-variant/60 active:scale-95"
+              title="Get the Novaflix app to download"
             >
               <Icon name="download" /> Download
             </button>

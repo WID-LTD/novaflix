@@ -62,8 +62,8 @@ export default function HeroBanner({ items, loading, autoPlayInterval = 6000 }: 
       <div className="relative w-full h-[60vh] md:h-[70vh] lg:h-[80vh]">
         <Skeleton variant="hero" className="w-full h-full rounded-none" />
         <div className="absolute bottom-0 left-0 right-0 p-8 md:p-16">
-          <Skeleton variant="text" className="w-96 h-12 mb-4" />
-          <Skeleton variant="text" className="w-64 h-4 mb-2" />
+          <Skeleton variant="text" className="w-full max-w-96 h-12 mb-4" />
+          <Skeleton variant="text" className="w-full max-w-64 h-4 mb-2" />
           <Skeleton variant="text" className="w-full max-w-xl h-4 mb-6" />
           <div className="flex gap-3">
             <Skeleton variant="text" className="w-32 h-10 rounded-lg" />

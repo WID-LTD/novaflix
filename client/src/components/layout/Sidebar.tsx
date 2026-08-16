@@ -88,7 +88,7 @@ export default function Sidebar() {
             >
               <Icon name="menu" />
             </button>
-            <img src="/leter-mark-logo.png" alt="" className="w-auto" style={{ height: '167px' }} />
+            <img src="/leter-mark-logo.png" alt="" className="w-auto h-8" />
           </div>
         )}
 

@@ -7,6 +7,7 @@ import { useStore } from '../store/useStore'
 import { useAuth } from '../lib/AuthContext'
 import { recordWatch, getEggs, collectEgg } from '../lib/auth'
 import { WS_ORIGIN } from '../lib/config'
+import { isMobileBrowser, routeToStore } from '../lib/platform'
 import VideoPlayer from '../components/features/VideoPlayer'
 import EmbedPlayer from '../components/features/EmbedPlayer'
 import BingePassModal from '../components/features/BingePassModal'
@@ -202,6 +203,12 @@ export default function Watch() {
   }
 
   const handleDownload = async () => {
+    // On mobile browsers, direct to the app store; on desktop, point to the app page.
+    if (isMobileBrowser()) {
+      routeToStore()
+      return
+    }
+    navigate('/download-app')
     if (!currentStreamUrl || !id || !details || isEmbedMode) return
     setDownloading(true)
     setDownloadDone(false)

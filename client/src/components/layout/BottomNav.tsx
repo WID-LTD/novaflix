@@ -67,26 +67,32 @@ export default function BottomNav() {
   }, [location.pathname, items])
 
   return (
-    <nav className="lg:hidden fixed bottom-0 left-0 w-full z-50 bg-surface-container-lowest/90 backdrop-blur-2xl border-t border-white/5"
+    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-surface-container-lowest/90 backdrop-blur-2xl border-t border-white/5"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
-      <div className="flex justify-around items-center py-2 px-2">
+      <div className="max-w-md mx-auto flex items-stretch py-1.5 px-1.5">
         {items.map((item, i) => {
           const isActive = activeIndex === i
           return (
             <NavLink
               key={item.to}
               to={item.to}
-              className={`flex flex-col items-center justify-center gap-0.5 py-1 px-3 min-w-[64px] transition-all duration-150 ${
-                isActive ? 'text-primary scale-110' : 'text-on-surface-variant/60 hover:text-on-surface'
-              }`}
+              aria-current={isActive ? 'page' : undefined}
+              className="flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 py-2 px-1 rounded-xl transition-all duration-150"
             >
-              <Icon
-                name={item.icon}
-                fill={isActive}
-                size="sm"
-              />
-              <span className="font-label-sm text-[10px] leading-tight">{item.label}</span>
+              <span
+                className={`flex flex-col items-center justify-center gap-0.5 w-full py-1 rounded-lg transition-all duration-150 ${
+                  isActive ? 'bg-white/5 text-primary' : 'text-on-surface-variant/60 hover:text-on-surface'
+                }`}
+              >
+                <Icon
+                  name={item.icon}
+                  fill={isActive}
+                  size="sm"
+                  className={isActive ? 'scale-110' : ''}
+                />
+                <span className="font-label-sm text-[10px] leading-tight text-center truncate w-full">{item.label}</span>
+              </span>
             </NavLink>
           )
         })}
