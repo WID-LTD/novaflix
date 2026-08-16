@@ -15,24 +15,37 @@ const DOWNLOADS_DIR = path.join(__dirname, '..', 'download')
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 
-// LRU segment cache
+// LRU segment cache — capped by total BYTES (segments are ~1.5MB each, so a
+// naive 500-entry cap could exceed the 512MB free instance) with a TTL long
+// enough to serve repeat/parallel segment fetches (mpv retries after timeouts,
+// rewinds, rewatches) without holding stale data forever.
 const segmentCache = new Map()
-const SEGMENT_CACHE_MAX = 500
-const SEGMENT_CACHE_TTL = 60_000
+const SEGMENT_CACHE_MAX_BYTES = 150 * 1024 * 1024
+const SEGMENT_CACHE_TTL = 30 * 60 * 1000
+let segmentCacheBytes = 0
 function cacheSegment(key, data, contentType) {
-  if (segmentCache.size >= SEGMENT_CACHE_MAX) {
+  const size = Buffer.byteLength(data)
+  if (size > SEGMENT_CACHE_MAX_BYTES) return
+  segmentCacheBytes += size
+  segmentCache.set(key, { data, contentType, time: Date.now(), size })
+  while (segmentCacheBytes > SEGMENT_CACHE_MAX_BYTES && segmentCache.size > 1) {
     const oldest = segmentCache.keys().next().value
+    const entry = segmentCache.get(oldest)
+    segmentCacheBytes -= entry.size
     segmentCache.delete(oldest)
   }
-  segmentCache.set(key, { data, contentType, time: Date.now() })
 }
 function getCachedSegment(key) {
   const entry = segmentCache.get(key)
   if (!entry) return null
   if (Date.now() - entry.time > SEGMENT_CACHE_TTL) {
     segmentCache.delete(key)
+    segmentCacheBytes -= entry.size
     return null
   }
+  // Refresh recency (LRU): re-insert so the hit moves to the newest position.
+  segmentCache.delete(key)
+  segmentCache.set(key, entry)
   return entry
 }
 
@@ -1071,68 +1084,79 @@ export async function proxy(req, res) {
     'https://p16-sg.tiktokcdn.com/',
   ]
 
-  const tryFetch = async (ref) => {
-    console.log(`[proxy] FETCH ${url.substring(0,120)}... ref=${ref || 'none'}`)
-    return axios({
-      url,
-      method: 'GET',
-      responseType: 'stream',
-      timeout: url.endsWith('.m3u8') ? 15000 : 10000,
-      headers: {
-        'User-Agent': UA,
-        Referer: ref,
-        Origin: ref.replace(/\/$/, ''),
-      },
-    })
+  // Race all fetch strategies concurrently instead of trying them one-by-one.
+  // The upstream CDNs are header-sensitive and slow, so the old sequential
+  // loop (5s bare + up to 4×10s referer attempts, repeated) could take ~35s
+  // per segment — which is what caused mpv's repeated `tls: Connection timed
+  // out` errors and audio underruns during playback.
+  const timeoutMs = isM3u8 ? 15000 : 20000
+  const validateResp = (resp) => {
+    const ct = (resp.headers['content-type'] || '').toLowerCase()
+    return resp.status === 200 && (
+      isValidVideoContentType(ct) ||
+      ct.includes('text/plain') ||
+      (isSegmentUrl(url) && !ct.includes('text/html'))
+    )
   }
 
   let response = null
   let usedReferer = ''
 
-  // Retry loop: up to 2 attempts for segment requests
-  const MAX_ATTEMPTS = isM3u8 ? 1 : 2
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    if (attempt > 1) console.log(`[proxy] retry ${attempt} for ${hostname}`)
-
-    try {
-      const bareResp = await axios({ url, method: 'GET', responseType: 'stream', timeout: 5000 })
-      const bct = bareResp.headers['content-type'] || ''
-      if (bareResp.status === 200 && (isValidVideoContentType(bct) || bct.includes('text/plain') || (isSegmentUrl(url) && !bct.includes('text/html')))) {
-        response = bareResp
-        usedReferer = 'bare'
-        console.log('[proxy] bare curl-style fetch succeeded for', hostname)
-        break
-      } else { if (bareResp.data) bareResp.data.destroy() }
-    } catch {}
-
-    if (!response) for (const ref of referers) {
-      try {
-        const resp = await tryFetch(ref)
-        console.log(`[proxy] RESP ${resp.status} ${resp.headers['content-type']} ref=${ref || 'none'}`)
-        if (resp.status === 200) {
-          const ct = resp.headers['content-type'] || ''
-          if (isValidVideoContentType(ct) || ct.includes('text/plain') || (isSegmentUrl(url) && !ct.includes('text/html'))) {
-            response = resp
-            usedReferer = ref
-            break
-          }
-          if (ct.includes('text/html')) {
-            let snippet = ''
-            resp.data.on('data', (c) => { snippet += c.toString().substring(0, 200); resp.data.destroy() })
-            resp.data.on('end', () => console.log(`[proxy] ${hostname} returned HTML from ${ref}: ${snippet.substring(0, 100)}...`))
-            resp.data.resume()
-          } else {
-            console.log(`[proxy] bad content-type ${ct} from ${ref} for ${hostname}`)
-            resp.data.destroy()
-          }
-        }
-      } catch (e) {
-        console.log(`[proxy] fetch error from ${ref}: ${e.message}`)
-      }
+  // Run one concurrent race over all strategies; abort the losers as soon as a
+  // winner is found so slow/duplicate connections don't linger (mpv opens many
+  // parallel segment fetches against the proxy).
+  const runRace = () => new Promise((resolve) => {
+    const attemptCtrls = []
+    const attemptLabels = ['bare']
+    const make = (config) => {
+      const ctrl = new AbortController()
+      attemptCtrls.push(ctrl)
+      return axios({ ...config, signal: ctrl.signal })
     }
+    const attempts = [make({ url, method: 'GET', responseType: 'stream', timeout: timeoutMs })]
+    for (const ref of referers) {
+      attempts.push(make({
+        url, method: 'GET', responseType: 'stream', timeout: timeoutMs,
+        headers: { 'User-Agent': UA, Referer: ref, Origin: ref.replace(/\/$/, '') },
+      }))
+      attemptLabels.push(ref)
+    }
+    let pending = attempts.length
+    let won = false
+    const finish = (winnerCtrl) => {
+      if (won) return
+      won = true
+      // Abort the LOSERS only — aborting the winner would kill its stream
+      // before the body is read and hang the client with a header-only 200.
+      attemptCtrls.forEach((c) => {
+        if (c !== winnerCtrl) { try { c.abort() } catch (_) {} }
+      })
+      resolve()
+    }
+    attempts.forEach((a, i) => {
+      a.then((r) => {
+        if (validateResp(r)) {
+          response = r
+          usedReferer = attemptLabels[i]
+          finish(attemptCtrls[i])
+        } else {
+          if (r.data) r.data.destroy()
+          if (--pending === 0) finish(null)
+        }
+      }).catch(() => {
+        if (--pending === 0) finish(null)
+      })
+    })
+  })
 
-    if (response) break
-    if (attempt < MAX_ATTEMPTS) await new Promise(r => setTimeout(r, 1000))
+  // Retry once on a full miss (the upstream is flaky on first touch) while
+  // keeping typical latency low — the winning attempt usually returns in ~1s.
+  for (let attempt = 1; attempt <= 2 && !response; attempt++) {
+    if (attempt > 1) {
+      console.log(`[proxy] retry ${attempt} for ${hostname}`)
+      await new Promise((r) => setTimeout(r, 1000))
+    }
+    await runRace()
   }
 
   if (!response) {
@@ -1152,6 +1176,8 @@ export async function proxy(req, res) {
     console.error(`[proxy] All proxy strategies failed for ${hostname} url=${url.substring(0,100)}`)
     return res.status(502).send('Proxy failed')
   }
+
+  console.log(`[proxy] HIT host=${hostname} kind=${isM3u8 ? 'manifest' : 'segment'} ref=${usedReferer || 'none'}`)
 
   try {
     const contentType = response.headers['content-type'] || ''
@@ -1175,13 +1201,21 @@ export async function proxy(req, res) {
         }).join('\n')
         res.send(rewritten)
       })
+      response.data.on('error', (err) => {
+        console.error('[proxy] manifest stream error:', err.message)
+        if (!res.headersSent) res.status(502).send('Manifest fetch failed')
+      })
     } else {
-      // Buffer segment for caching
+      // Buffer the segment then send it. Streaming would hang the client if
+      // the upstream returns a truncated response that never emits 'end'
+      // (some of these CDNs do), and with the concurrent race the winning
+      // fetch returns in ~1-2s, so buffering adds no meaningful latency while
+      // always completing the response. Also tee into the LRU cache.
       const chunks = []
       response.data.on('data', (c) => chunks.push(c))
       response.data.on('end', () => {
         const buf = Buffer.concat(chunks)
-        cacheSegment(url, buf, contentType)
+        try { cacheSegment(url, buf, contentType) } catch (_) {}
         res.send(buf)
       })
       response.data.on('error', (err) => {

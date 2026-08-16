@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -98,6 +99,12 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
   String? _error;
   double _playbackRate = 1;
   bool _showSettings = false;
+  BoxFit _fit = BoxFit.contain;
+  double _aspect = 16 / 9;
+  List<VideoTrack> _videoTracks = [];
+  VideoTrack? _qualityTrack;
+  String? _seekHint;
+  Timer? _seekHintTimer;
 
   final List<StreamSubscription> _subs = [];
 
@@ -184,7 +191,7 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
         // opened but delivers no frames — try the fallback once before giving up.
         final recovered = await _tryFallback();
         if (recovered) {
-          if (mounted) setState(() => _loading = false);
+          _debug('NO-START: fallback opened, waiting for playback');
           return;
         }
         if (mounted) {
@@ -201,7 +208,20 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
   void _bindStreams() {
     _subs.add(_player.stream.position.listen((p) {
       if (!mounted) return;
-      setState(() => _currentTime = p.inMilliseconds / 1000);
+      final t = p.inMilliseconds / 1000;
+      setState(() {
+        _currentTime = t;
+        // A recovered stream auto-dismisses any surfaced error — a transient
+        // hiccup must never leave the black "Playback Error" overlay up while
+        // playback is clearly running again.
+        if (_error != null && t > 1) {
+          _error = null;
+          _debug('auto-cleared error on playback resume');
+        }
+        if (_loading && t > 1) {
+          _loading = false;
+        }
+      });
       _maybeTriggerMidRoll();
     }));
     _subs.add(_player.stream.duration.listen((d) {
@@ -213,12 +233,20 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
     _subs.add(_player.stream.error.listen((e) async {
       if (!mounted) return;
       _debug('ERROR stream.error -> $e');
-      // A fatal stream error after open (e.g. CDN 403 without headers) — fall
-      // back to the proxy URL once before surfacing an error to the user.
+      // Playback was already underway — mpv frequently emits transient errors
+      // (segment TLS timeouts, a failed subtitle fetch, etc.) that it recovers
+      // from on its own. Treating those as fatal caused the player to re-open
+      // the fallback mid-stream, killing a stream that was actually playing.
+      // The stall watchdog handles genuinely dead playback.
+      if (_currentTime > 5) {
+        _debug('stream.error ignored: playback in progress');
+        return;
+      }
+      // Playback never really started (e.g. CDN 403 without headers) — try the
+      // fallback once before surfacing an error to the user.
       final recovered = await _tryFallback();
       if (recovered) {
-        _debug('stream.error: recovered via fallback');
-        if (mounted) setState(() => _loading = false);
+        _debug('stream.error: fallback opened, verifying via no-start watch');
         return;
       }
       if (mounted) {
@@ -238,6 +266,20 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
         _startStallWatch();
       }
     }));
+    _subs.add(_player.stream.tracks.listen((tracks) {
+      if (!mounted) return;
+      final seen = <String>{};
+      final list = tracks.video
+          .where((t) {
+            if (t.id == 'no') return false;
+            final key = (t.w != null && t.h != null) ? '${t.w}x${t.h}' : (t.title ?? t.id);
+            return seen.add(key);
+          })
+          .toList()
+        ..sort((a, b) => (b.h ?? 0).compareTo(a.h ?? 0));
+      _debug('tracks: ${list.map((t) => '${t.h}p').join(',')}');
+      setState(() => _videoTracks = list);
+    }));
     _subs.add(_player.stream.log.listen((line) => _debug('mpv: $line')));
   }
 
@@ -255,8 +297,12 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
     return widget.errorReason ?? 'Failed to load video stream';
   }
 
-  // Attempts to open the proxy fallback URL once (guarded by [_triedFallback]
-  // so retries never loop). Returns true only if the fallback opened cleanly.
+  // Attempts to open the fallback URL once (guarded by [_triedFallback] so
+  // retries never loop). Does NOT claim success on open() resolving — mpv
+  // resolves open() even for URLs that deliver no frames, which is why the old
+  // "recovered via fallback" path cleared the error and kept a dead stream
+  // alive. The no-start watchdog (started before open) judges real success and
+  // surfaces the error if nothing actually plays.
   Future<bool> _tryFallback() async {
     final fallback = widget.fallbackUrl;
     if (_triedFallback || fallback == null || fallback.isEmpty) return false;
@@ -266,15 +312,9 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
     _startNoStartWatch();
     try {
       await _player.open(Media(fallback));
-      _debug('open: fallback OK');
+      _debug('open: fallback OK (no-start watch will verify playback)');
       _player.setVolume(_muted ? 0 : _volume);
       _player.setRate(_playbackRate);
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _error = null;
-        });
-      }
       return true;
     } catch (e) {
       _debug('open: fallback ALSO failed -> $e');
@@ -377,7 +417,9 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
     if (!mounted) return;
     setState(() => _showControls = true);
     _controlsTimer?.cancel();
-    if (_playing) {
+    // On desktop a pointer is always available, so auto-hiding the control bar
+    // just makes controls feel "lost". Keep them visible there.
+    if (_playing && !kIsWeb && defaultTargetPlatform != TargetPlatform.linux) {
       _controlsTimer = Timer(const Duration(seconds: 3), () {
         if (mounted) setState(() => _showControls = false);
       });
@@ -418,40 +460,85 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
     setState(() => _showSettings = false);
   }
 
+  void _setQuality(VideoTrack? track) {
+    _qualityTrack = track;
+    if (track == null) {
+      _player.setVideoTrack(VideoTrack.auto());
+    } else {
+      _player.setVideoTrack(track);
+    }
+    setState(() => _showSettings = false);
+  }
+
+  void _setAspect(double a) {
+    setState(() => _aspect = a);
+  }
+
+  void _setFit(BoxFit f) {
+    setState(() => _fit = f);
+  }
+
+  void _showSeekHint(String label) {
+    _seekHintTimer?.cancel();
+    setState(() => _seekHint = label);
+    _seekHintTimer = Timer(const Duration(milliseconds: 700), () {
+      if (mounted) setState(() => _seekHint = null);
+    });
+  }
+
+  void _seekBy(double seconds) {
+    if (_currentAd != null || _duration <= 0) return;
+    final target = (_currentTime + seconds).clamp(0.0, _duration);
+    _player.seek(Duration(milliseconds: (target * 1000).round()));
+    _showSeekHint(seconds >= 0 ? '+${seconds.toStringAsFixed(0)}s' : '−${seconds.abs().toStringAsFixed(0)}s');
+  }
+
   Future<void> _toggleFullscreen() async {
     if (!mounted) return;
     if (_fullscreen) {
       Navigator.of(context).pop();
       return;
     }
-    setState(() => _fullscreen = true);
-    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    await SystemChrome.setPreferredOrientations([
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
+    // SystemChrome orientation/UI-mode calls aren't implemented on desktop
+    // (Linux) and can throw, which previously left [_fullscreen] stuck true and
+    // made the button appear dead. The route-based fullscreen still works
+    // everywhere, so those calls are best-effort only.
+    try {
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    } catch (_) {}
     if (!mounted) return;
-    await Navigator.of(context).push(
-      PageRouteBuilder(
-        opaque: true,
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
-        pageBuilder: (_, _, _) => _FullscreenPlayer(
-          onExit: _exitFullscreen,
-          child: _buildPlayerBody(),
+    setState(() => _fullscreen = true);
+    try {
+      await Navigator.of(context).push(
+        PageRouteBuilder(
+          opaque: true,
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          pageBuilder: (_, _, _) => _FullscreenPlayer(
+            onExit: _exitFullscreen,
+            child: _buildPlayerBody(),
+          ),
         ),
-      ),
-    );
+      );
+    } catch (_) {
+      if (mounted) setState(() => _fullscreen = false);
+    }
   }
 
   Future<void> _exitFullscreen() async {
     if (!mounted) return;
     setState(() => _fullscreen = false);
-    await SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-    ]);
-    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    try {
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]);
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    } catch (_) {}
   }
 
   Future<void> _skipForward() async {
@@ -523,6 +610,7 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
     }
     _controlsTimer?.cancel();
     _progressTimer?.cancel();
+    _seekHintTimer?.cancel();
     _player.dispose();
     super.dispose();
   }
@@ -532,7 +620,7 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
     return ClipRRect(
       borderRadius: BorderRadius.circular(4),
       child: AspectRatio(
-        aspectRatio: 16 / 9,
+        aspectRatio: _aspect,
         child: _buildPlayerBody(),
       ),
     );
@@ -544,12 +632,31 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
       children: [
         GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTapDown: (_) => _resetControlsTimer(),
+          onTap: () {
+            _togglePlay();
+            _resetControlsTimer();
+          },
+          onDoubleTapDown: (d) {
+            final w = context.size?.width ?? 0;
+            final frac = w <= 0 ? 0.5 : (d.localPosition.dx / w);
+            if (frac < 1 / 3) {
+              _seekBy(-10);
+            } else if (frac > 2 / 3) {
+              _seekBy(10);
+            } else {
+              _togglePlay();
+            }
+          },
+          onVerticalDragUpdate: (d) {
+            final v = (_volume - d.delta.dy / 200).clamp(0.0, 1.0);
+            _setVolume(v);
+          },
           onLongPress: _toggleDebugOverlay,
           child: Video(
             controller: _controller,
             controls: NoVideoControls,
             wakelock: true,
+            fit: _fit,
           ),
         ),
 
@@ -582,6 +689,26 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
             left: 0,
             right: 0,
             child: Center(child: _buildFlash()),
+          ),
+
+        if (_seekHint != null)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.7),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  child: Text(
+                    _seekHint!,
+                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ),
           ),
 
         if (_debugOverlay) _buildDebugOverlay(),
@@ -869,7 +996,7 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
             right: 0,
             bottom: 44,
             child: Container(
-              width: 150,
+              width: 210,
               padding: const EdgeInsets.symmetric(vertical: 8),
               decoration: BoxDecoration(
                 color: Colors.black87,
@@ -877,29 +1004,70 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                children: [0.5, 1.0, 1.5, 2.0].map((s) {
-                  return InkWell(
-                    onTap: () => _setSpeed(s),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      child: Row(
-                        children: [
-                          Text(
-                            '${s}x',
-                            style: TextStyle(
-                              color: _playbackRate == s ? AppColors.primary : Colors.white70,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _SettingsLabel('Quality'),
+                  _settingsTile(
+                    'Auto',
+                    selected: _qualityTrack == null,
+                    onTap: () => _setQuality(null),
+                  ),
+                  ..._videoTracks.map((t) {
+                    final label =
+                        t.h != null && t.h! > 0 ? '${t.h}p' : (t.title ?? t.id);
+                    return _settingsTile(
+                      label,
+                      selected: _qualityTrack?.id == t.id,
+                      onTap: () => _setQuality(t),
+                    );
+                  }),
+                  const _SettingsLabel('Screen'),
+                  _settingsTile('16:9', selected: _aspect == 16 / 9,
+                      onTap: () => _setAspect(16 / 9)),
+                  _settingsTile('9:16', selected: _aspect == 9 / 16,
+                      onTap: () => _setAspect(9 / 16)),
+                  _settingsTile('4:3', selected: _aspect == 4 / 3,
+                      onTap: () => _setAspect(4 / 3)),
+                  _settingsTile('2.35:1', selected: _aspect == 2.35,
+                      onTap: () => _setAspect(2.35)),
+                  const _SettingsLabel('Crop / Fit'),
+                  _settingsTile('Fit / Letterbox',
+                      selected: _fit == BoxFit.contain,
+                      onTap: () => _setFit(BoxFit.contain)),
+                  _settingsTile('Fill / Crop', selected: _fit == BoxFit.cover,
+                      onTap: () => _setFit(BoxFit.cover)),
+                  _settingsTile('Stretch', selected: _fit == BoxFit.fill,
+                      onTap: () => _setFit(BoxFit.fill)),
+                  const _SettingsLabel('Speed'),
+                  ...[0.5, 1.0, 1.5, 2.0].map((s) {
+                    return _settingsTile('${s}x',
+                        selected: _playbackRate == s, onTap: () => _setSpeed(s));
+                  }),
+                ],
               ),
             ),
           ),
       ],
+    );
+  }
+
+  Widget _settingsTile(String label, {required bool selected, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Row(
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: selected ? AppColors.primary : Colors.white70,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -910,6 +1078,22 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
       child: Padding(
         padding: const EdgeInsets.all(8),
         child: Icon(icon, color: Colors.white, size: 22),
+      ),
+    );
+  }
+}
+
+class _SettingsLabel extends StatelessWidget {
+  final String text;
+  const _SettingsLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      child: Text(
+        text,
+        style: const TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.w600),
       ),
     );
   }

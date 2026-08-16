@@ -148,13 +148,14 @@ class WatchScreen extends ConsumerWidget {
                   final mode = src['providerMode'] as String? ?? '';
                   // 'direct' mode means the server's IP is blocked by the CDN,
                   // so only the raw CDN URL (from the user's IP) can play. In
-                  // 'hls' mode the proxy is the reliable primary path: it adds
-                  // the browser UA/Referer server-side and rewrites the
-                  // disguised .txt/.woff2 playlist and segment names. The raw
-                  // direct URL is kept as a fallback.
+                  // 'hls' mode the proxy is the only reliable path: it adds the
+                  // browser UA/Referer server-side and rewrites the disguised
+                  // .txt/.woff2 playlist and segment names. The raw direct URL
+                  // cannot play on its own (no proxy headers), so it is NOT
+                  // used as a fallback — retrying the proxy is strictly better.
                   final preferDirect = mode == 'direct' && rawDirect.isNotEmpty;
                   final primaryRaw = preferDirect ? rawDirect : rawProxy;
-                  final fallbackRaw = preferDirect ? rawProxy : rawDirect;
+                  final fallbackRaw = preferDirect ? rawProxy : '';
                   var url = primaryRaw.isNotEmpty
                       ? resolveStreamUrl(primaryRaw)
                       : '';
