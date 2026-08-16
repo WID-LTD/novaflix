@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Icon from '../components/ui/Icon'
+import Modal from '../components/ui/Modal'
 import { useNotifications } from '../lib/notifications'
 import { getToken } from '../lib/auth'
 import { formatRelative } from '../components/features/news/formatRelative'
 
 const BASE = '/api'
-const PAGE_SIZE = 25
+const PAGE_SIZE = 50
+const MAX_NOTIFICATIONS = 1000
 
 const TYPE_ICON: Record<string, string> = {
   follow: 'person_add',
@@ -17,54 +19,60 @@ const TYPE_ICON: Record<string, string> = {
 
 export default function Notifications() {
   const navigate = useNavigate()
-  const { items, unread, refresh, markRead, markAllRead } = useNotifications(true)
+  const { unread, refresh, markRead, markAllRead } = useNotifications(true)
   const [all, setAll] = useState<any[]>([])
-  const [offset, setOffset] = useState(0)
-  const [hasMore, setHasMore] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState<any>(null)
   const initialized = useRef(false)
 
-  const go = useCallback((n: any) => {
-    if (!n.is_read) markRead(n.id)
-    if (n.link) navigate(n.link)
-  }, [navigate, markRead])
+  const open = useCallback((n: any) => {
+    setSelected(n)
+    if (!n.is_read) {
+      markRead(n.id)
+      setAll((prev) => prev.map((x) => (x.id === n.id ? { ...x, is_read: true } : x)))
+    }
+  }, [markRead])
+
+  const openLink = useCallback(() => {
+    if (!selected) return
+    const link = selected.link
+    setSelected(null)
+    if (link) navigate(link)
+  }, [selected, navigate])
 
   useEffect(() => {
-    if (!initialized.current) {
-      initialized.current = true
-      setOffset(0)
-      fetch(`${BASE}/notifications?limit=${PAGE_SIZE}&offset=0`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
-      }).then((res) => res.json()).then((res) => {
-        if (res.success) {
-          setAll(res.notifications || [])
-          setHasMore((res.notifications || []).length >= PAGE_SIZE)
+    if (initialized.current) return
+    initialized.current = true
+    const loadAll = async () => {
+      setLoading(true)
+      const seen = new Set<string>()
+      const collected: any[] = []
+      let offset = 0
+      while (offset < MAX_NOTIFICATIONS) {
+        try {
+          const res = await fetch(`${BASE}/notifications?limit=${PAGE_SIZE}&offset=${offset}`, {
+            headers: { Authorization: `Bearer ${getToken()}` },
+          }).then((r) => r.json())
+          const items = res.notifications || []
+          if (!items.length) break
+          for (const n of items) {
+            if (!seen.has(n.id)) {
+              seen.add(n.id)
+              collected.push(n)
+            }
+          }
+          offset += items.length
+          if (items.length < PAGE_SIZE) break
+        } catch {
+          break
         }
-      })
+      }
+      setAll(collected)
+      setLoading(false)
     }
+    loadAll()
     refresh()
   }, [refresh])
-
-  const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore) return
-    setLoadingMore(true)
-    const next = offset + PAGE_SIZE
-    const res = await fetch(`${BASE}/notifications?limit=${PAGE_SIZE}&offset=${next}`, {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    }).then((r) => r.json())
-    if (res.success && res.notifications?.length) {
-      setAll((prev) => {
-        const seen = new Set(prev.map((n) => n.id))
-        const additions = res.notifications.filter((n: any) => !seen.has(n.id))
-        return [...prev, ...additions]
-      })
-      setOffset(next)
-      setHasMore(res.notifications.length >= PAGE_SIZE)
-    } else {
-      setHasMore(false)
-    }
-    setLoadingMore(false)
-  }, [loadingMore, hasMore, offset])
 
   return (
     <div className="min-h-screen px-margin-mobile md:px-margin-desktop pt-6 md:pt-10 pb-nav">
@@ -89,7 +97,11 @@ export default function Notifications() {
           )}
         </div>
 
-        {all.length === 0 ? (
+        {loading ? (
+          <div className="text-center py-20">
+            <span className="inline-block w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : all.length === 0 ? (
           <div className="text-center py-20">
             <Icon name="notifications_none" className="w-16 h-16 text-on-surface-variant/40 mx-auto mb-4" />
             <h3 className="font-label-md text-label-md text-on-surface-variant mb-2">You're all caught up</h3>
@@ -100,7 +112,7 @@ export default function Notifications() {
             {all.map((n) => (
               <button
                 key={n.id}
-                onClick={() => go(n)}
+                onClick={() => open(n)}
                 className="w-full text-left px-4 py-3.5 flex gap-3 items-start hover:bg-white/5 transition-colors"
               >
                 <span className={`p-2 rounded-xl shrink-0 ${n.is_read ? 'bg-surface-container-high text-on-surface-variant' : 'bg-primary text-on-primary'}`}>
@@ -116,24 +128,46 @@ export default function Notifications() {
             ))}
           </div>
         )}
+      </div>
 
-        {hasMore && (
-          <div className="py-8 text-center">
-            <button
-              onClick={loadMore}
-              disabled={loadingMore}
-              className="inline-flex items-center gap-2 px-6 py-2.5 bg-primary-container text-on-primary-container rounded-xl text-sm font-bold hover:brightness-110 transition-all disabled:opacity-50"
-            >
-              {loadingMore ? (
-                <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Icon name="expand_more" size="sm" />
+      <Modal
+        isOpen={!!selected}
+        onClose={() => setSelected(null)}
+        title={selected?.title || 'Notification'}
+      >
+        {selected && (
+          <div>
+            <div className="flex items-center gap-3 mb-4">
+              <span className={`p-2 rounded-xl shrink-0 ${selected.is_read ? 'bg-surface-container-high text-on-surface-variant' : 'bg-primary text-on-primary'}`}>
+                <Icon name={TYPE_ICON[selected.type] || 'notifications'} size="sm" />
+              </span>
+              {selected.actor_name && (
+                <span className="text-label-md text-on-surface-variant">{selected.actor_name}</span>
               )}
-              Load more
-            </button>
+              <span className="text-xs text-on-surface-dim ml-auto">{formatRelative(selected.created_at)}</span>
+            </div>
+            {selected.body && (
+              <p className="text-sm text-on-surface-variant leading-relaxed whitespace-pre-wrap mb-6">{selected.body}</p>
+            )}
+            <div className="flex items-center justify-end gap-3">
+              {selected.link && (
+                <button
+                  onClick={openLink}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary rounded-xl text-sm font-bold hover:brightness-110 transition-all"
+                >
+                  Open <Icon name="arrow_forward" size="sm" />
+                </button>
+              )}
+              <button
+                onClick={() => setSelected(null)}
+                className="px-5 py-2.5 bg-surface-container-high text-on-surface rounded-xl text-sm font-bold hover:brightness-110 transition-all"
+              >
+                Close
+              </button>
+            </div>
           </div>
         )}
-      </div>
+      </Modal>
     </div>
   )
 }

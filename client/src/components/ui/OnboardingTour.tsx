@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Icon from './Icon'
+import { useStore } from '../../store/useStore'
 
 interface OnboardingStep {
   targetSelector: string
@@ -24,6 +25,18 @@ export default function OnboardingTour({ steps, storageKey, onComplete, onSkip }
   const [arrowDir, setArrowDir] = useState<'up' | 'down' | 'left' | 'right'>('up')
   const tooltipRef = useRef<HTMLDivElement>(null)
   const [tooltipSize, setTooltipSize] = useState({ width: 320, height: 0 })
+  const drawerOpen = useStore((s) => s.mobileDrawerOpen)
+  const suppressedByDrawer = useRef(false)
+
+  useEffect(() => {
+    if (drawerOpen && visible) {
+      suppressedByDrawer.current = true
+      setVisible(false)
+    } else if (!drawerOpen && suppressedByDrawer.current) {
+      suppressedByDrawer.current = false
+      setVisible(true)
+    }
+  }, [drawerOpen, visible])
 
   useEffect(() => {
     const done = localStorage.getItem(storageKey)
