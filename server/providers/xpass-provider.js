@@ -7,6 +7,20 @@ const WORKER_RE = /workers\.dev/i
 const RACE_MS = 9000
 const VERIFIED_TTL = 6 * 60 * 60 * 1000
 
+// Known placeholder/ad farms. tik/vip/dara.1x2.space serve fake playlists
+// (1x1 PNG segments or garbage MPEG-TS); tiktokcdn hosts those placeholder
+// PNGs. Real content on xpass comes from workers.dev URLs that redirect to
+// tnmr.org (or similar CDNs).
+const FAKE_HOST_RE = /(^|\.)(1x2\.space|tiktokcdn\.com)$/i
+
+function isFakeHost(url) {
+  try {
+    return FAKE_HOST_RE.test(new URL(url).hostname)
+  } catch {
+    return true
+  }
+}
+
 // Verified stream URLs (e.g. tnmr.org) carry ~8h tokens, so re-use them across
 // requests instead of re-scraping the flaky embed/worker chain every time.
 const verifiedCache = new Map()
@@ -122,7 +136,7 @@ async function collectSources(paths, headers) {
         const data = typeof res.data === 'string' ? JSON.parse(res.data) : res.data
         const sources = data?.playlist?.[0]?.sources || []
         for (const s of sources) {
-          if (s && s.file && s.file.startsWith('http')) found.add(s.file)
+          if (s && s.file && s.file.startsWith('http') && !isFakeHost(s.file)) found.add(s.file)
         }
       } catch {}
     })

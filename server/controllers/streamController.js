@@ -275,6 +275,10 @@ function ffmpegProbePlayable(streamUrl, headers, ffmpegPath) {
   })
 }
 
+// Known placeholder/ad farms (tik/vip/dara.1x2.space fake playlists + the
+// tiktokcdn PNG host). Real providers resolve to tnmr.org or similar CDNs.
+const FAKE_HOST_RE = /(^|\.)(1x2\.space|tiktokcdn\.com)$/i
+
 // Health check for an HLS/direct stream. Free-tier CDNs serve playlists whose
 // "segments" are 1x1 PNG ad-images (unplayable) or return expired 404s /
 // anti-bot blocks; the player then sits on a black screen showing a (fake)
@@ -293,6 +297,9 @@ async function probeStreamUrl(streamUrl, ffmpegPath) {
 }
 
 async function probeStreamUrlUncached(streamUrl, ffmpegPath) {
+  if (FAKE_HOST_RE.test(hostOf(streamUrl))) {
+    return { ok: false, reason: 'ad-only', detail: 'known placeholder host', steps: [] }
+  }
   const hdrs = headersForStream(streamUrl)
   const steps = []
   const cookies = []
