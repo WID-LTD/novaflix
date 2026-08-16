@@ -127,7 +127,7 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
   double _lastProgressAt = 0;
   bool _triedFallback = false;
   Timer? _noStartTimer;
-  static const int _noStartTimeoutSeconds = 12;
+  static const int _noStartTimeoutSeconds = 20;
 
   @override
   void initState() {
