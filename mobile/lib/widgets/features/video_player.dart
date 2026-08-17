@@ -103,9 +103,6 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
   double _aspect = 16 / 9;
   List<VideoTrack> _videoTracks = [];
   VideoTrack? _qualityTrack;
-  String? _seekHint;
-  Timer? _seekHintTimer;
-
   final List<StreamSubscription> _subs = [];
 
   List<_AdItem> _ads = [];
@@ -441,12 +438,6 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
     _player.seek(Duration(milliseconds: (fraction * _duration * 1000).round()));
   }
 
-  void _toggleMute() {
-    _muted = !_muted;
-    _player.setVolume(_muted ? 0 : _volume);
-    setState(() {});
-  }
-
   void _setVolume(double v) {
     _volume = v;
     _muted = v == 0;
@@ -476,21 +467,6 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
 
   void _setFit(BoxFit f) {
     setState(() => _fit = f);
-  }
-
-  void _showSeekHint(String label) {
-    _seekHintTimer?.cancel();
-    setState(() => _seekHint = label);
-    _seekHintTimer = Timer(const Duration(milliseconds: 700), () {
-      if (mounted) setState(() => _seekHint = null);
-    });
-  }
-
-  void _seekBy(double seconds) {
-    if (_currentAd != null || _duration <= 0) return;
-    final target = (_currentTime + seconds).clamp(0.0, _duration);
-    _player.seek(Duration(milliseconds: (target * 1000).round()));
-    _showSeekHint(seconds >= 0 ? '+${seconds.toStringAsFixed(0)}s' : '−${seconds.abs().toStringAsFixed(0)}s');
   }
 
   Future<void> _toggleFullscreen() async {
@@ -610,7 +586,6 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
     }
     _controlsTimer?.cancel();
     _progressTimer?.cancel();
-    _seekHintTimer?.cancel();
     _player.dispose();
     super.dispose();
   }
@@ -633,19 +608,11 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
         GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () {
-            _togglePlay();
             _resetControlsTimer();
           },
-          onDoubleTapDown: (d) {
-            final w = context.size?.width ?? 0;
-            final frac = w <= 0 ? 0.5 : (d.localPosition.dx / w);
-            if (frac < 1 / 3) {
-              _seekBy(-10);
-            } else if (frac > 2 / 3) {
-              _seekBy(10);
-            } else {
-              _togglePlay();
-            }
+          onDoubleTapDown: (_) {
+            _togglePlay();
+            _resetControlsTimer();
           },
           onVerticalDragUpdate: (d) {
             final v = (_volume - d.delta.dy / 200).clamp(0.0, 1.0);
@@ -689,26 +656,6 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
             left: 0,
             right: 0,
             child: Center(child: _buildFlash()),
-          ),
-
-        if (_seekHint != null)
-          Positioned.fill(
-            child: IgnorePointer(
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.7),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white12),
-                  ),
-                  child: Text(
-                    _seekHint!,
-                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-            ),
           ),
 
         if (_debugOverlay) _buildDebugOverlay(),
@@ -783,7 +730,7 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
           const SizedBox(height: 12),
           ElevatedButton(
             onPressed: _open,
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryContainer),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             child: const Text('Retry', style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -811,7 +758,7 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
               setState(() => _showPauseAd = false);
               _player.play();
             },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryContainer),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             child: const Text('Play', style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -842,7 +789,7 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
               const SizedBox(width: 12),
               ElevatedButton(
                 onPressed: _handleAdComplete,
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryContainer),
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
                 child: const Text('Watch', style: TextStyle(color: Colors.white)),
               ),
             ],
@@ -929,19 +876,7 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
                   _iconBtn(_playing ? Icons.pause : Icons.play_arrow, _togglePlay),
                   const SizedBox(width: 4),
                   _iconBtn(Icons.forward_10, _skipForward),
-                  const SizedBox(width: 4),
-                  _iconBtn(
-                      _muted || _volume == 0 ? Icons.volume_off : Icons.volume_up, _toggleMute),
-                  Expanded(
-                    child: Slider(
-                      value: _muted ? 0 : _volume,
-                      onChanged: _setVolume,
-                      min: 0,
-                      max: 1,
-                      activeColor: AppColors.primary,
-                      inactiveColor: Colors.white24,
-                    ),
-                  ),
+                  const Spacer(),
                   Text(
                     '${_formatTime(_currentTime)} / ${_formatTime(_duration)}',
                     style: const TextStyle(color: Colors.white54, fontSize: 11),

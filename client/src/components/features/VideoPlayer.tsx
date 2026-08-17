@@ -75,9 +75,9 @@ export default function VideoPlayer({
   const [levels, setLevels] = useState<Array<{ index: number; label: string }>>([])
   const [aspect, setAspect] = useState<'16:9' | '9:16' | '4:3' | '2.35:1'>('16:9')
   const [fit, setFit] = useState<'contain' | 'cover' | 'fill'>('contain')
-  const [seekHint, setSeekHint] = useState<string | null>(null)
-  const seekHintTimer = useRef<ReturnType<typeof setTimeout>>()
   const tapTimer = useRef<ReturnType<typeof setTimeout>>()
+  const swipeStart = useRef<{ y: number; vol: number } | null>(null)
+  const didSwipe = useRef(false)
 
   // Ad state
   const [ads, setAds] = useState<AdItem[]>([])
@@ -318,15 +318,6 @@ export default function VideoPlayer({
     video.currentTime = pos * duration
   }
 
-  const handleVolume = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const video = videoRef.current
-    if (!video) return
-    const val = parseFloat(e.target.value)
-    video.volume = val
-    setVolume(val)
-    setMuted(val === 0)
-  }
-
   const toggleMute = () => {
     const video = videoRef.current
     if (!video) return
@@ -387,29 +378,13 @@ export default function VideoPlayer({
     setOpenMenu(null)
   }
 
-  const showSeekHint = (label: string) => {
-    setSeekHint(label)
-    if (seekHintTimer.current) clearTimeout(seekHintTimer.current)
-    seekHintTimer.current = setTimeout(() => setSeekHint(null), 700)
-  }
-
-  const handleTapZone = (clientX: number, rect: DOMRect) => {
-    const video = videoRef.current
-    if (!video) return
-    const frac = (clientX - rect.left) / rect.width
-    if (frac < 1 / 3) {
-      video.currentTime = Math.max(0, video.currentTime - 10)
-      showSeekHint('−10s')
-    } else if (frac > 2 / 3) {
-      video.currentTime = Math.min(duration, video.currentTime + 10)
-      showSeekHint('+10s')
-    } else {
-      togglePlay()
-    }
-  }
-
   const handleSurfaceClick = () => {
-    // Debounce so a double-tap doesn't also fire a single toggle.
+    // A vertical swipe adjusts volume; ignore the click it produces.
+    if (didSwipe.current) {
+      didSwipe.current = false
+      return
+    }
+    // Debounce so a double-tap doesn't also fire the single-tap show-controls.
     if (tapTimer.current) {
       clearTimeout(tapTimer.current)
       tapTimer.current = undefined
@@ -417,17 +392,39 @@ export default function VideoPlayer({
     }
     tapTimer.current = setTimeout(() => {
       tapTimer.current = undefined
-      togglePlay()
       resetControlsTimer()
     }, 250)
   }
 
-  const handleSurfaceDoubleClick = (e: React.MouseEvent<HTMLVideoElement>) => {
+  const handleSurfaceDoubleClick = () => {
     if (tapTimer.current) {
       clearTimeout(tapTimer.current)
       tapTimer.current = undefined
     }
-    handleTapZone(e.clientX, e.currentTarget.getBoundingClientRect())
+    togglePlay()
+    resetControlsTimer()
+  }
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const video = videoRef.current
+    if (!video) return
+    swipeStart.current = { y: e.clientY, vol: video.volume }
+    didSwipe.current = false
+  }
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const video = videoRef.current
+    if (!video || !swipeStart.current) return
+    const dy = swipeStart.current.y - e.clientY
+    if (Math.abs(dy) > 10) didSwipe.current = true
+    const v = Math.max(0, Math.min(1, swipeStart.current.vol + dy / 300))
+    video.volume = v
+    setVolume(v)
+    setMuted(v === 0)
+  }
+
+  const handlePointerEnd = () => {
+    swipeStart.current = null
   }
 
   const handleWheelVolume = (e: React.WheelEvent<HTMLDivElement>) => {
@@ -482,7 +479,6 @@ export default function VideoPlayer({
   useEffect(() => {
     return () => {
       if (tapTimer.current) clearTimeout(tapTimer.current)
-      if (seekHintTimer.current) clearTimeout(seekHintTimer.current)
     }
   }, [])
 
@@ -559,10 +555,14 @@ export default function VideoPlayer({
       ref={containerRef}
       id="tour-player"
       className="relative bg-black rounded-2xl overflow-hidden group"
-      style={{ aspectRatio: aspectRatioMap[aspect] }}
+      style={{ aspectRatio: aspectRatioMap[aspect], touchAction: 'none' }}
       onMouseMove={resetControlsTimer}
       onMouseLeave={() => playing && setShowControls(false)}
       onWheel={handleWheelVolume}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerEnd}
+      onPointerCancel={handlePointerEnd}
     >
       {/* Pause Ad Overlay (free tier only) */}
       {showPauseAd && (
@@ -630,12 +630,6 @@ export default function VideoPlayer({
         </div>
       )}
 
-      {seekHint && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 bg-black/70 backdrop-blur-sm text-white text-lg font-bold px-5 py-2 rounded-xl border border-white/10">
-          {seekHint}
-        </div>
-      )}
-
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/60">
           <div className="w-12 h-12 border-2 border-accent border-t-transparent rounded-full animate-spin" />
@@ -694,21 +688,6 @@ export default function VideoPlayer({
             <button onClick={handleSkipForward} className="text-white hover:text-accent transition-colors min-w-[40px] min-h-[40px] sm:min-w-[44px] sm:min-h-[44px] flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed" aria-label="Skip forward" disabled={!canSkipForward && isFreeTier}>
               <Icon name="forward_10" />
             </button>
-
-            <div className="flex items-center gap-1 sm:gap-2">
-              <button onClick={toggleMute} className="text-white hover:text-accent transition-colors min-w-[40px] min-h-[40px] sm:min-w-[44px] sm:min-h-[44px] flex items-center justify-center" aria-label={muted ? 'Unmute' : 'Mute'}>
-                {muted || volume === 0 ? <Icon name="volume_off" /> : <Icon name="volume_up" />}
-              </button>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={muted ? 0 : volume}
-                onChange={handleVolume}
-                className="w-14 sm:w-20 h-1 accent-accent"
-              />
-            </div>
 
             <span className="text-[11px] sm:text-xs text-gray-400 whitespace-nowrap">
               {formatTime(currentTime)} / {formatTime(duration)}

@@ -217,9 +217,9 @@ export default function WatchParty() {
   const [quality, setQuality] = useState<number>(-1)
   const [levels, setLevels] = useState<Array<{ index: number; label: string }>>([])
   const [fit, setFit] = useState<'contain' | 'cover' | 'fill'>('contain')
-  const [seekHint, setSeekHint] = useState<string | null>(null)
-  const seekHintTimer = useRef<ReturnType<typeof setTimeout>>()
   const tapTimer = useRef<ReturnType<typeof setTimeout>>()
+  const swipeStart = useRef<{ y: number; vol: number } | null>(null)
+  const didSwipe = useRef(false)
   const [showPartySettings, setShowPartySettings] = useState(false)
   const [playbackRate, setPlaybackRate] = useState(1)
   const [aspect, setAspect] = useState<'16:9' | '9:16' | '4:3' | '2.35:1'>('16:9')
@@ -741,13 +741,12 @@ export default function WatchParty() {
     setOpenMenu(null)
   }
 
-  const showSeekHint = (label: string) => {
-    setSeekHint(label)
-    if (seekHintTimer.current) clearTimeout(seekHintTimer.current)
-    seekHintTimer.current = setTimeout(() => setSeekHint(null), 700)
-  }
-
   const handleSurfaceClick = () => {
+    // A vertical swipe adjusts volume; ignore the click it produces.
+    if (didSwipe.current) {
+      didSwipe.current = false
+      return
+    }
     if (tapTimer.current) {
       clearTimeout(tapTimer.current)
       tapTimer.current = undefined
@@ -755,29 +754,39 @@ export default function WatchParty() {
     }
     tapTimer.current = setTimeout(() => {
       tapTimer.current = undefined
-      togglePlay()
       resetControls()
     }, 250)
   }
 
-  const handleSurfaceDoubleClick = (e: React.MouseEvent<HTMLVideoElement>) => {
+  const handleSurfaceDoubleClick = () => {
     if (tapTimer.current) {
       clearTimeout(tapTimer.current)
       tapTimer.current = undefined
     }
+    togglePlay()
+    resetControls()
+  }
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     const video = videoRef.current
     if (!video) return
-    const rect = e.currentTarget.getBoundingClientRect()
-    const frac = (e.clientX - rect.left) / rect.width
-    if (frac < 1 / 3) {
-      video.currentTime = Math.max(0, video.currentTime - 10)
-      showSeekHint('−10s')
-    } else if (frac > 2 / 3) {
-      video.currentTime = Math.min(duration, video.currentTime + 10)
-      showSeekHint('+10s')
-    } else {
-      togglePlay()
-    }
+    swipeStart.current = { y: e.clientY, vol: video.volume }
+    didSwipe.current = false
+  }
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const video = videoRef.current
+    if (!video || !swipeStart.current) return
+    const dy = swipeStart.current.y - e.clientY
+    if (Math.abs(dy) > 10) didSwipe.current = true
+    const v = Math.max(0, Math.min(1, swipeStart.current.vol + dy / 300))
+    video.volume = v
+    setVolume(v)
+    setMuted(v === 0)
+  }
+
+  const handlePointerEnd = () => {
+    swipeStart.current = null
   }
 
   const handleWheelVolume = (e: React.WheelEvent<HTMLDivElement>) => {
@@ -793,7 +802,6 @@ export default function WatchParty() {
   useEffect(() => {
     return () => {
       if (tapTimer.current) clearTimeout(tapTimer.current)
-      if (seekHintTimer.current) clearTimeout(seekHintTimer.current)
     }
   }, [])
 
@@ -835,15 +843,6 @@ export default function WatchParty() {
     } catch {
       // Some browsers reject fullscreen requests outside a user gesture.
     }
-  }
-
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const video = videoRef.current
-    if (!video) return
-    const val = parseFloat(e.target.value)
-    video.volume = val
-    setVolume(val)
-    setMuted(val === 0)
   }
 
   // ─── Chat ───────────────────────────────────────────
@@ -912,9 +911,14 @@ export default function WatchParty() {
       <div
         ref={containerRef}
         className="fixed inset-0 bg-black z-50 flex items-center justify-center"
+        style={{ touchAction: 'none' }}
         onMouseMove={resetControls}
         onMouseLeave={() => playing && setShowControls(false)}
         onWheel={handleWheelVolume}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerEnd}
+        onPointerCancel={handlePointerEnd}
       >
         <div className="w-full h-full flex items-center justify-center">
           <div
@@ -935,12 +939,6 @@ export default function WatchParty() {
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/60">
             <div className="w-12 h-12 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-          </div>
-        )}
-
-        {seekHint && (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 bg-black/70 backdrop-blur-sm text-white text-lg font-bold px-5 py-2 rounded-xl border border-white/10 pointer-events-none">
-            {seekHint}
           </div>
         )}
 
@@ -1001,10 +999,6 @@ export default function WatchParty() {
               <span className="text-xs text-white/70 font-mono">{formatTime(currentTime)} / {formatTime(duration)}</span>
             </div>
             <div className="flex items-center gap-1 sm:gap-2">
-              <button onClick={() => { const v = videoRef.current; if (v) { v.muted = !muted; setMuted(!muted) } }} className="text-white/70 hover:text-white transition-colors w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center" aria-label={muted ? 'Unmute' : 'Mute'}>
-                {muted || volume === 0 ? <Icon name="volume_off" size="sm" /> : <Icon name="volume_up" size="sm" />}
-              </button>
-              <input type="range" min={0} max={1} step={0.05} value={muted ? 0 : volume} onChange={handleVolumeChange} className="w-12 sm:w-16 h-1 accent-accent" />
               <div className="relative">
                 <button
                   onClick={() => setShowPartySettings(!showPartySettings)}
