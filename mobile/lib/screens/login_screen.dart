@@ -10,7 +10,9 @@ import '../widgets/features/index.dart';
 import '../widgets/ui/index.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.redirect});
+
+  final String? redirect;
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -65,7 +67,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final isLoginVerify = authState.status == AuthStatus.needsLoginVerification;
 
     if (authState.status == AuthStatus.authenticated) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => context.go('/home'));
+      final redirect = widget.redirect;
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => context.go(
+          redirect != null && redirect.isNotEmpty ? redirect : '/home',
+        ),
+      );
     }
 
     return Scaffold(

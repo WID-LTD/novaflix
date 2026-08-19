@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../core/config.dart';
@@ -9,10 +10,6 @@ import '../providers/auth_provider.dart';
 import '../widgets/ui/index.dart';
 import '../widgets/features/video_player.dart';
 
-/// The server returns [streamUrl] as a same-origin relative path (e.g.
-/// `/api/proxy/<host>/playlist.m3u8` or `/api/stream/creator/<id>.mp4`).
-/// The web client resolves this against the page origin; native players
-/// require an absolute URL, so we prepend the API server's origin.
 String resolveStreamUrl(String url) {
   final u = url.trim();
   if (u.isEmpty) return u;
@@ -63,7 +60,7 @@ final _sourceProvider =
       return data;
     });
 
-class WatchScreen extends ConsumerWidget {
+class WatchScreen extends ConsumerStatefulWidget {
   final int? movieId;
   final String? mediaType;
   final String? streamUrl;
@@ -80,146 +77,207 @@ class WatchScreen extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    if (movieId == null) {
+  ConsumerState<WatchScreen> createState() => _WatchScreenState();
+}
+
+class _WatchScreenState extends ConsumerState<WatchScreen> {
+  DateTime? _lastWatchRecord;
+  bool _watchRecorded = false;
+  @override
+  void initState() {
+    super.initState();
+    _enterFullscreen();
+  }
+
+  Future<void> _enterFullscreen() async {
+    try {
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    } catch (_) {}
+  }
+
+  Future<void> _exitFullscreen() async {
+    try {
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]);
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _exitFullscreen();
+    super.dispose();
+  }
+
+  void _goBack() {
+    _exitFullscreen();
+    if (context.canPop()) {
+      context.pop();
+    } else if (widget.movieId != null) {
+      context.go('/movie/${widget.movieId}');
+    } else {
+      context.go('/home');
+    }
+  }
+
+  void _onPlaybackProgress(double progress) {
+    final now = DateTime.now();
+    if (_lastWatchRecord != null && now.difference(_lastWatchRecord!).inSeconds < 30) return;
+    _lastWatchRecord = now;
+    final api = ref.read(apiServiceProvider);
+    final auth = ref.read(authProvider);
+    if (auth.status != AuthStatus.authenticated) return;
+    final minutes = (progress / 60).round();
+    if (minutes < 1 && _watchRecorded) return;
+    _watchRecorded = true;
+    api.recordWatch({
+      'contentId': widget.movieId,
+      'title': '',
+      'type': widget.mediaType ?? 'movie',
+      'minutes': minutes,
+      if (widget.season != null) 'season': int.tryParse(widget.season!),
+      if (widget.episode != null) 'episode': int.tryParse(widget.episode!),
+    }).catchError((_) {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.movieId == null) {
       return Scaffold(
         backgroundColor: Colors.black,
-        appBar: AppBar(
-          title: const Text('Watch'),
-          backgroundColor: Colors.black,
-        ),
         body: const Center(
-          child: Text(
-            'No media selected',
-            style: TextStyle(color: Colors.white),
-          ),
+          child: Text('No media selected', style: TextStyle(color: Colors.white)),
         ),
       );
     }
 
-    final type = mediaType ?? 'movie';
-    final detail = ref.watch(_watchDetailsProvider(movieId!));
+    final type = widget.mediaType ?? 'movie';
+    final detail = ref.watch(_watchDetailsProvider(widget.movieId!));
     final source = ref.watch(
       _sourceProvider((
-        id: movieId!,
+        id: widget.movieId!,
         type: type,
-        season: int.tryParse(season ?? ''),
-        episode: int.tryParse(episode ?? ''),
+        season: int.tryParse(widget.season ?? ''),
+        episode: int.tryParse(widget.episode ?? ''),
       )),
     );
     final authState = ref.watch(authProvider);
     final isFreeTier = !(authState.user?.isPremium ?? false);
 
-    final episodeInfo = episode != null ? 'S${season} E$episode' : null;
+    final episodeInfo = widget.episode != null
+        ? 'S${widget.season} E${widget.episode}'
+        : null;
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _goBack();
+      },
+      child: Scaffold(
         backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        leading: AppBackButton(),
-        title: detail.when(
-          data: (item) => Text(
-            item?.title ?? 'Watch',
-            style: const TextStyle(fontSize: 16),
-          ),
-          loading: () => const Text('Loading...'),
-          error: (_, __) => const Text('Watch'),
-        ),
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              child: source.when(
-                loading: () => Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: SizedBox(
-                    height: 200,
-                    child: Center(child: LoadingSpinner(logo: true, size: 40)),
+        body: Stack(
+          children: [
+            Column(
+              children: [
+                Expanded(
+                  child: source.when(
+                    loading: () => const Center(
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation(AppColors.primary),
+                      ),
+                    ),
+                    error: (e, _) => _buildError(friendlyErrorMessage(e)),
+                    data: (src) {
+                      final rawHeaders = src['headers'] as Map<String, dynamic>?;
+                      final rawProxy = src['streamUrl'] as String? ?? '';
+                      final rawDirect = src['directUrl'] as String? ?? '';
+                      final mode = src['providerMode'] as String? ?? '';
+                      final preferDirect = mode == 'direct' && rawDirect.isNotEmpty;
+                      final primaryRaw = preferDirect ? rawDirect : rawProxy;
+                      final fallbackRaw = preferDirect ? rawProxy : '';
+                      var url = primaryRaw.isNotEmpty
+                          ? resolveStreamUrl(primaryRaw)
+                          : '';
+                      if (url.isEmpty) {
+                        url = resolveStreamUrl(
+                          widget.streamUrl ?? src['streamUrl'] as String? ?? '',
+                        );
+                      }
+                      if (url.isEmpty) {
+                        final embed = src['embedUrl'] as String? ?? '';
+                        return _buildError(
+                          embed.isNotEmpty
+                              ? 'This title uses an embedded stream that could not be resolved. Try again later.'
+                              : src['error'] as String? ?? 'Could not load video source',
+                        );
+                      }
+                      final direct = rawDirect.isNotEmpty
+                          ? resolveStreamUrl(rawDirect)
+                          : null;
+                      final directHeaders = rawHeaders?.map(
+                        (k, v) => MapEntry(k, '$v'),
+                      );
+                      final fallbackUrl = fallbackRaw.isNotEmpty
+                          ? resolveStreamUrl(fallbackRaw)
+                          : null;
+                      return Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          children: [
+                            VideoPlayer(
+                              streamUrl: url,
+                              httpHeaders: url == direct ? directHeaders : null,
+                              errorReason: src['error'] as String?,
+                              fallbackUrl: fallbackUrl == url ? null : fallbackUrl,
+                              title: episodeInfo != null
+                                  ? '${detail.valueOrNull?.title} - $episodeInfo'
+                                  : detail.valueOrNull?.title,
+                              isFreeTier: isFreeTier,
+                              onProgress: _onPlaybackProgress,
+                              onDuration: (_) {},
+                            ),
+                            const SizedBox(height: 12),
+                            if (episodeInfo != null)
+                              Text(
+                                episodeInfo,
+                                style: const TextStyle(color: AppColors.onSurfaceVariant),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
                 ),
-                error: (e, _) => _buildError(context, friendlyErrorMessage(e)),
-                data: (src) {
-                  final rawHeaders = src['headers'] as Map<String, dynamic>?;
-                  final rawProxy = src['streamUrl'] as String? ?? '';
-                  final rawDirect = src['directUrl'] as String? ?? '';
-                  final mode = src['providerMode'] as String? ?? '';
-                  // 'direct' mode means the server's IP is blocked by the CDN,
-                  // so only the raw CDN URL (from the user's IP) can play. In
-                  // 'hls' mode the proxy is the only reliable path: it adds the
-                  // browser UA/Referer server-side and rewrites the disguised
-                  // .txt/.woff2 playlist and segment names. The raw direct URL
-                  // cannot play on its own (no proxy headers), so it is NOT
-                  // used as a fallback — retrying the proxy is strictly better.
-                  final preferDirect = mode == 'direct' && rawDirect.isNotEmpty;
-                  final primaryRaw = preferDirect ? rawDirect : rawProxy;
-                  final fallbackRaw = preferDirect ? rawProxy : '';
-                  var url = primaryRaw.isNotEmpty
-                      ? resolveStreamUrl(primaryRaw)
-                      : '';
-                  if (url.isEmpty) {
-                    url = resolveStreamUrl(
-                      streamUrl ?? src['streamUrl'] as String? ?? '',
-                    );
-                  }
-                  if (url.isEmpty) {
-                    final embed = src['embedUrl'] as String? ?? '';
-                    return _buildError(
-                      context,
-                      embed.isNotEmpty
-                          ? 'This title uses an embedded stream that could not be resolved for desktop playback. Try again later.'
-                          : src['error'] as String? ?? 'Could not load video source',
-                    );
-                  }
-                  final direct = rawDirect.isNotEmpty
-                      ? resolveStreamUrl(rawDirect)
-                      : null;
-                  final directHeaders = rawHeaders?.map(
-                    (k, v) => MapEntry(k, '$v'),
-                  );
-                  final fallbackUrl = fallbackRaw.isNotEmpty
-                      ? resolveStreamUrl(fallbackRaw)
-                      : null;
-                  debugPrint(
-                    '[watch] url=$url direct=${url == direct} fallback=$fallbackUrl error=${src['error']}',
-                  );
-                  return Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      children: [
-                        VideoPlayer(
-                          streamUrl: url,
-                          httpHeaders: url == direct ? directHeaders : null,
-                          errorReason: src['error'] as String?,
-                          fallbackUrl: fallbackUrl == url ? null : fallbackUrl,
-                          title: episodeInfo != null
-                              ? '${detail.valueOrNull?.title} - $episodeInfo'
-                              : detail.valueOrNull?.title,
-                          isFreeTier: isFreeTier,
-                          onProgress: (_) {},
-                          onDuration: (_) {},
-                        ),
-                        const SizedBox(height: 12),
-                        if (episodeInfo != null)
-                          Text(
-                            episodeInfo,
-                            style: TextStyle(color: AppColors.onSurfaceVariant),
-                          ),
-                      ],
-                    ),
-                  );
-                },
+              ],
+            ),
+
+            Positioned(
+              top: 12,
+              left: 12,
+              child: SafeArea(
+                child: IconButton(
+                  onPressed: _goBack,
+                  icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.black45,
+                  ),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildError(BuildContext context, String message) {
+  Widget _buildError(String message) {
     return Container(
       color: Colors.black,
       padding: const EdgeInsets.all(32),
@@ -247,23 +305,10 @@ class WatchScreen extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               FilledButton(
-                onPressed: () => context.go(
-                  '/watch?id=$movieId&type=$mediaType${season != null ? '&season=$season' : ''}${episode != null ? '&episode=$episode' : ''}',
-                ),
+                onPressed: _goBack,
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primaryContainer,
                 ),
-                child: const Text('Retry'),
-              ),
-              const SizedBox(width: 12),
-              TextButton(
-                onPressed: () {
-                  if (context.canPop()) {
-                    context.pop();
-                  } else {
-                    context.go('/home');
-                  }
-                },
                 child: const Text('Go Back'),
               ),
             ],

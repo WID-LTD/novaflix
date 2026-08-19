@@ -6,82 +6,82 @@ import Button from '../components/ui/Button'
 import { useToast } from '../components/ui/Toast'
 import Icon from '../components/ui/Icon'
 
+const API_BASE = import.meta.env.VITE_API_URL || '/api'
+
 interface Feature {
   label: string
   included: boolean
   bold?: boolean
 }
 
-const plans = [
-  {
-    id: 'student',
-    name: 'Student',
-    price: '₦800',
-    description: 'For learners on a budget',
-    popular: false,
-    features: [
-      { label: '720p HD Quality', included: true },
-      { label: '1 device at a time', included: true },
-      { label: 'Offline downloads (1 device)', included: true },
-      { label: 'Ad-free listening', included: false },
-      { label: '6 skips per hour', included: true },
-    ],
-  },
-  {
-    id: 'basic',
-    name: 'Basic',
-    price: '₦1,500',
-    description: 'Solo streaming essentials',
-    popular: false,
-    features: [
-      { label: '720p HD Quality', included: true },
-      { label: '1 device at a time', included: true },
-      { label: 'Offline downloads (1 device)', included: true },
-      { label: 'Ad-free listening', included: false },
-      { label: '6 skips per hour', included: true },
-    ],
-  },
-  {
-    id: 'standard',
-    name: 'Standard',
-    price: '₦2,500',
-    description: 'The sweet spot',
-    popular: true,
-    features: [
-      { label: '1080p Full HD', included: true, bold: true },
-      { label: '2 devices simultaneously', included: true },
-      { label: 'Offline downloads (2 devices)', included: true },
-      { label: 'Completely ad-free', included: true },
-      { label: 'Unlimited skips', included: true },
-    ],
-  },
-  {
-    id: 'premium',
-    name: 'Premium',
-    price: '₦5,500',
-    description: 'Cinema grade experience',
-    popular: false,
-    features: [
-      { label: '4K UHD + HDR10 / Dolby Vision', included: true, bold: true },
-      { label: 'Spatial Audio', included: true },
-      { label: '4 devices simultaneously', included: true },
-      { label: 'Offline downloads (6 devices)', included: true },
-      { label: 'Completely ad-free', included: true },
-      { label: 'Exclusive premier access', included: true },
-    ],
-  },
-]
+interface PlanData {
+  id: string
+  name: string
+  price: string
+  description: string
+  popular: boolean
+  features: Feature[]
+}
+
+const defaultPlans: PlanData[] = []
+
+const featureSets: Record<string, Feature[]> = {
+  student: [
+    { label: '720p HD Quality', included: true },
+    { label: '1 device at a time', included: true },
+    { label: 'Offline downloads (1 device)', included: true },
+    { label: 'Ad-free listening', included: false },
+    { label: '6 skips per hour', included: true },
+  ],
+  basic: [
+    { label: '720p HD Quality', included: true },
+    { label: '1 device at a time', included: true },
+    { label: 'Offline downloads (1 device)', included: true },
+    { label: 'Ad-free listening', included: false },
+    { label: '6 skips per hour', included: true },
+  ],
+  standard: [
+    { label: '1080p Full HD', included: true, bold: true },
+    { label: '2 devices simultaneously', included: true },
+    { label: 'Offline downloads (2 devices)', included: true },
+    { label: 'Completely ad-free', included: true },
+    { label: 'Unlimited skips', included: true },
+  ],
+  premium: [
+    { label: '4K UHD + HDR10 / Dolby Vision', included: true, bold: true },
+    { label: 'Spatial Audio', included: true },
+    { label: '4 devices simultaneously', included: true },
+    { label: 'Offline downloads (6 devices)', included: true },
+    { label: 'Completely ad-free', included: true },
+    { label: 'Exclusive premier access', included: true },
+  ],
+}
 
 export default function Pricing() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const toast = useToast()
+  const [plans, setPlans] = useState<PlanData[]>(defaultPlans)
   const [selectedPlan, setSelectedPlan] = useState('standard')
   const [gateways, setGateways] = useState<{ paystack: { configured: boolean; publicKey: string }; flutterwave: { configured: boolean; publicKey: string } } | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [modalPlan, setModalPlan] = useState<string | null>(null)
   const [modalGateway, setModalGateway] = useState<'paystack' | 'flutterwave'>('flutterwave')
   const [modalLoading, setModalLoading] = useState(false)
+
+  useEffect(() => {
+    fetch(`${API_BASE}/payment/pricing`).then(r => r.json()).then((data: any) => {
+      const raw = data?.plans || []
+      setPlans(raw.map((p: any, i: number) => ({
+        id: p.slug,
+        name: p.name,
+        price: `${data.currency || 'NGN'} ${(p.price || 0).toLocaleString()}`,
+        description: p.slug === 'student' ? 'For learners on a budget' : p.slug === 'basic' ? 'Solo streaming essentials' : p.slug === 'standard' ? 'The sweet spot' : 'Cinema grade experience',
+        popular: p.slug === 'standard',
+        features: featureSets[p.slug] || (p.features || []).map((f: string) => ({ label: f, included: true })),
+      })))
+    }).catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (user) {

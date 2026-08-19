@@ -57,6 +57,12 @@ class ApiService {
   Future<void> saveToken(String token) =>
       _storage.write(key: _tokenKey, value: token);
   Future<void> deleteToken() => _storage.delete(key: _tokenKey);
+
+  static const _userCacheKey = 'novaflix-user-cache';
+  Future<void> saveUserCache(String json) =>
+      _storage.write(key: _userCacheKey, value: json);
+  Future<String?> getUserCache() => _storage.read(key: _userCacheKey);
+  Future<void> deleteUserCache() => _storage.delete(key: _userCacheKey);
   Future<String?> getCreatorToken() => _storage.read(key: _creatorTokenKey);
   Future<void> saveCreatorToken(String token) =>
       _storage.write(key: _creatorTokenKey, value: token);
@@ -145,6 +151,12 @@ class ApiService {
       post('/user/watch-history', data: data);
   Future<Response> getWatchHistory() => get('/user/watch-history');
 
+  Future<Response> getWatchlist() => get('/user/watchlist');
+  Future<Response> addToWatchlist(Map<String, dynamic> data) =>
+      post('/user/watchlist', data: data);
+  Future<Response> removeFromWatchlist(String contentId) =>
+      delete('/user/watchlist/$contentId');
+
   Future<Response> creatorRegister(
     String email,
     String password,
@@ -177,6 +189,8 @@ class ApiService {
       get('/search/all', params: {'q': query});
   Future<Response> getDetails(int id, String type) =>
       get('/details', params: {'id': id, 'type': type});
+  Future<Response> getCredits(int id, String type) =>
+      get('/credits', params: {'id': id, 'type': type});
   Future<Response> getTVSeason(int id, int season) =>
       get('/tv-season', params: {'id': id, 'season': season});
   Future<Response> getStreamSource(
@@ -330,8 +344,9 @@ class ApiService {
   Future<Response> getArtistGraph() => get('/payouts/graph');
   Future<Response> getPublicCreators() => get('/creator/public');
 
-  Future<Response> initializePayment(String plan) =>
-      post('/payment/initialize', data: {'plan': plan});
+  Future<Response> getPricing() => get('/payment/pricing');
+  Future<Response> initializePayment(String plan, {String? gateway}) =>
+      post('/payment/initialize', data: {'plan': plan, if (gateway != null) 'gateway': gateway});
   Future<Response> verifyPayment(String reference, String plan) =>
       get('/payment/verify', params: {'reference': reference, 'plan': plan});
   Future<Response> getPaymentStatus() => get('/payment/status');
@@ -429,6 +444,11 @@ class ApiService {
       post('/community/$communityId/posts', data: {'content': content});
   Future<Response> deleteCommunityPost(int communityId, int postId) =>
       delete('/community/$communityId/posts/$postId');
+  Future<Response> likeCommunityPost(int communityId, int postId) =>
+      post('/community/$communityId/posts/$postId/like');
+  Future<Response> getCommunityMembers(int communityId) =>
+      get('/community/$communityId/members');
+  Future<Response> getMyEggs() => get('/eggs/mine');
 
   Future<Response> createArchive(Map<String, dynamic> data) =>
       post('/archive', data: data);
@@ -451,6 +471,7 @@ class ApiService {
       delete('/downloads/$filename');
 
   /// Stream a media URL in chunks (used by encrypted offline downloads).
+  /// Uses Dio streaming to avoid loading the entire file into RAM.
   Future<Stream<Uint8List>> streamUrl(String url) async {
     final token = await _storage.read(key: _tokenKey);
     final cToken = await _storage.read(key: _creatorTokenKey);
@@ -458,26 +479,20 @@ class ApiService {
       if (token != null) 'Authorization': 'Bearer $token',
       if (cToken != null) 'Authorization': 'Bearer $cToken',
     };
-    final resp = await _dio.get<Uint8List>(
+    final resp = await _dio.get<ResponseBody>(
       url.startsWith('http') ? url : baseUrl + url,
       options: Options(
-        responseType: ResponseType.bytes,
+        responseType: ResponseType.stream,
         headers: headers,
         followRedirects: true,
       ),
     );
-    final bytes = resp.data;
-    if (bytes == null) return const Stream.empty();
-    // Emit in aligned chunks for on-the-fly encryption.
-    final controller = StreamController<Uint8List>();
-    var offset = 0;
-    while (offset < bytes.length) {
-      final end = (offset + 65536).clamp(0, bytes.length);
-      controller.add(Uint8List.sublistView(bytes, offset, end));
-      offset = end;
-    }
-    await controller.close();
-    return controller.stream;
+    final stream = resp.data?.stream;
+    if (stream == null) return const Stream.empty();
+    return stream.map((chunk) {
+      if (chunk is Uint8List) return chunk;
+      return Uint8List.fromList(chunk);
+    });
   }
 
   Future<Response> subscribeNewsletter(String email) =>
@@ -600,8 +615,13 @@ class ApiService {
       post('/forum/topics', data: data);
   Future<Response> voteForumTopic(int id, int value) =>
       post('/forum/topics/$id/vote', data: {'value': value});
-  Future<Response> addForumReply(int id, String content) =>
-      post('/forum/topics/$id/replies', data: {'content': content});
+  Future<Response> addForumReply(int id, String content, {int? parentId}) =>
+      post(
+        '/forum/topics/$id/replies',
+        data: {'content': content, if (parentId != null) 'parentId': parentId},
+      );
+  Future<Response> voteForumReply(int replyId, int value) =>
+      post('/forum/replies/$replyId/vote', data: {'value': value});
 
   // ---------- Public profiles / fan ----------
   Future<Response> getFollowStats(String userId) =>

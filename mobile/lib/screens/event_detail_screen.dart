@@ -67,7 +67,7 @@ class EventDetailScreen extends ConsumerWidget {
             ),
           );
         },
-        loading: () => const LoadingSpinner(logo: true),
+        loading: () => const LoadingSpinner(),
         error: (err, _) => Center(child: Text('Error: $err', style: TextStyle(color: AppColors.error))),
       ),
     );

@@ -13,6 +13,7 @@ class MediaItem {
   final bool premium;
   final bool promoted;
   final String? trailerKey;
+  final String? source;
 
   MediaItem({
     required this.id,
@@ -29,6 +30,7 @@ class MediaItem {
     this.premium = false,
     this.promoted = false,
     this.trailerKey,
+    this.source,
   });
 
   factory MediaItem.fromJson(Map<String, dynamic> json) {
@@ -61,6 +63,7 @@ class MediaItem {
       premium: json['premium'] as bool? ?? false,
       promoted: json['promoted'] as bool? ?? false,
       trailerKey: json['trailer_key'] as String?,
+      source: json['source'] as String?,
     );
   }
 

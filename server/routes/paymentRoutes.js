@@ -4,6 +4,7 @@ import * as paymentController from '../controllers/paymentController.js'
 
 const router = Router()
 
+router.get('/pricing', paymentController.listPricing)
 router.post('/initialize', authMiddleware, paymentController.initialize)
 router.get('/verify', authMiddleware, paymentController.verify)
 router.post('/webhook', paymentController.webhook)

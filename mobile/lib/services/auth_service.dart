@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/user.dart';
 import 'api_service.dart';
@@ -37,7 +38,9 @@ class AuthService {
     await _api.saveToken(token);
 
     final userData = data['user'] as Map<String, dynamic>;
-    return User.fromJson(userData, token: token);
+    final user = User.fromJson(userData, token: token);
+    await _api.saveUserCache(jsonEncode(user.toJson()));
+    return user;
   }
 
   Future<User> loginVerify(String userId, String code) async {
@@ -49,7 +52,9 @@ class AuthService {
 
     await _api.saveToken(token);
     final userData = data['user'] as Map<String, dynamic>;
-    return User.fromJson(userData, token: token);
+    final user = User.fromJson(userData, token: token);
+    await _api.saveUserCache(jsonEncode(user.toJson()));
+    return user;
   }
 
   Future<User> verifyEmail(String userId, String code) async {
@@ -60,7 +65,9 @@ class AuthService {
     if (token != null) {
       await _api.saveToken(token);
       final userData = data['user'] as Map<String, dynamic>;
-      return User.fromJson(userData, token: token);
+      final user = User.fromJson(userData, token: token);
+      await _api.saveUserCache(jsonEncode(user.toJson()));
+      return user;
     }
     throw AuthException('verify_failed', 'Verification failed');
   }
@@ -77,15 +84,24 @@ class AuthService {
       final res = await _api.getMe();
       final data = res.data as Map<String, dynamic>;
       final userData = data['user'] as Map<String, dynamic>? ?? data;
-      return User.fromJson(userData, token: token);
+      final user = User.fromJson(userData, token: token);
+      await _api.saveUserCache(jsonEncode(user.toJson()));
+      return user;
     } catch (_) {
-      await _api.deleteToken();
+      final cached = await _api.getUserCache();
+      if (cached != null) {
+        try {
+          final map = jsonDecode(cached) as Map<String, dynamic>;
+          return User.fromJson(map, token: token);
+        } catch (_) {}
+      }
       return null;
     }
   }
 
   Future<void> logout() async {
     await _api.deleteToken();
+    await _api.deleteUserCache();
   }
 }
 

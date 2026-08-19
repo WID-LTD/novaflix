@@ -190,7 +190,7 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
             ),
           );
         },
-        loading: () => const LoadingSpinner(logo: true),
+        loading: () => const LoadingSpinner(),
         error: (e, _) => Center(
           child: Text(
             'Could not load profile',

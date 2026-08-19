@@ -239,24 +239,24 @@ class _PremiumRibbon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [AppColors.primaryContainer, AppColors.primaryAccent],
+          colors: [AppColors.primary, AppColors.primaryLight],
         ),
-        borderRadius: BorderRadius.circular(9999),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: const Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.star_rounded, size: 10, color: Colors.black),
+          Icon(Icons.star_rounded, size: 10, color: AppColors.white),
           SizedBox(width: 2),
           Text(
-            'Premium',
+            'PREMIUM',
             style: TextStyle(
               fontSize: 7.5,
               fontWeight: FontWeight.w800,
-              color: Colors.black,
+              color: AppColors.white,
               letterSpacing: 0.4,
             ),
           ),

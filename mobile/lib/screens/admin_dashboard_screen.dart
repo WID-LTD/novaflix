@@ -128,7 +128,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
             )).toList(),
           );
         },
-        loading: () => const LoadingSpinner(logo: true),
+        loading: () => const LoadingSpinner(),
         error: (_, __) => const Center(child: Text('Error loading stats')),
       ),
     );
@@ -184,7 +184,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           ),
         );
       },
-      loading: () => const LoadingSpinner(logo: true),
+      loading: () => const LoadingSpinner(),
       error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: AppColors.error))),
     );
   }
@@ -233,7 +233,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           ),
         );
       },
-      loading: () => const LoadingSpinner(logo: true),
+      loading: () => const LoadingSpinner(),
       error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: AppColors.error))),
     );
   }
@@ -277,7 +277,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           ),
         );
       },
-      loading: () => const LoadingSpinner(logo: true),
+      loading: () => const LoadingSpinner(),
       error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: AppColors.error))),
     );
   }

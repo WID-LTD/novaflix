@@ -147,10 +147,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Settings')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 24, 16, 48),
         children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
+            child: Row(
+              children: [
+                const Icon(Icons.settings, size: 28, color: AppColors.primaryContainer),
+                const SizedBox(width: 12),
+                Text('Settings', style: AppTypography.headlineLg),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
           _section('Account', [
             _field('Name', AppInput(controller: _nameCtl, hint: 'Your name')),
             const SizedBox(height: 12),

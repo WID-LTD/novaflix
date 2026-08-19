@@ -10,7 +10,6 @@ import '../theme/app_typography.dart';
 import '../providers/downloads_provider.dart';
 import '../services/download_service.dart';
 import '../widgets/ui/index.dart';
-import '../widgets/features/video_player.dart';
 
 class OfflinePlayArgs {
   final DownloadItem item;
@@ -193,7 +192,7 @@ class _OfflinePlayScreenState extends ConsumerState<OfflinePlayScreen> {
           Expanded(
             child: Center(
               child: _loading
-                  ? const LoadingSpinner(logo: true, size: 40)
+                  ? const LoadingSpinner(size: 40)
                   : _error != null
                       ? _errorView()
                       : AspectRatio(
@@ -223,7 +222,7 @@ class _OfflinePlayScreenState extends ConsumerState<OfflinePlayScreen> {
         const SizedBox(height: 16),
         FilledButton(
           onPressed: _initPlayback,
-          style: FilledButton.styleFrom(backgroundColor: AppColors.primaryContainer),
+          style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
           child: const Text('Retry'),
         ),
       ],
@@ -297,7 +296,7 @@ class _OfflinePlayScreenState extends ConsumerState<OfflinePlayScreen> {
           const SizedBox(width: 16),
           FilledButton.icon(
             onPressed: () => context.go('/downloads'),
-            style: FilledButton.styleFrom(backgroundColor: AppColors.primaryContainer),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
             icon: const Icon(Icons.video_library, size: 18),
             label: const Text('More downloads'),
           ),

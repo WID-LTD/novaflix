@@ -76,7 +76,7 @@ class MovieListScreen extends ConsumerWidget {
             itemBuilder: (_, i) => MovieCard(item: list[i]),
           );
         },
-        loading: () => const LoadingSpinner(logo: true),
+        loading: () => const LoadingSpinner(),
         error: (e, _) => Center(
           child: Padding(
             padding: const EdgeInsets.all(24),

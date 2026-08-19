@@ -1,116 +1,443 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../providers/auth_provider.dart';
+import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
-import '../services/api_service.dart';
 import '../widgets/ui/index.dart';
+import 'package:flutter/services.dart';
 
-final _referralProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
-  final api = ref.read(apiServiceProvider);
-  try {
-    final statsRes = await api.getAffiliateStats();
-    return statsRes.data['stats'] as Map<String, dynamic>?;
-  } catch (_) { return null; }
-});
-
-final _codeProvider = FutureProvider<String?>((ref) async {
-  final api = ref.read(apiServiceProvider);
-  try {
-    final res = await api.generateReferral();
-    return res.data['code'] as String? ?? res.data['url'] as String?;
-  } catch (_) { return null; }
-});
-
-class ReferralsScreen extends ConsumerWidget {
+class ReferralsScreen extends ConsumerStatefulWidget {
   const ReferralsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final stats = ref.watch(_referralProvider);
-    final codeAsync = ref.watch(_codeProvider);
-    final code = codeAsync.valueOrNull;
+  ConsumerState<ReferralsScreen> createState() => _ReferralsScreenState();
+}
+
+class _ReferralsScreenState extends ConsumerState<ReferralsScreen> {
+  String _url = '';
+  Map<String, dynamic> _stats = const {};
+  List<Map<String, dynamic>> _referrals = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  Future<void> _load() async {
+    final api = ref.read(apiServiceProvider);
+    final user = ref.read(authProvider).user;
+    if (user == null) {
+      setState(() => _loading = false);
+      return;
+    }
+    try {
+      final results = await Future.wait([
+        api.generateReferral(),
+        api.getAffiliateStats(),
+      ]);
+      final gen = results[0].data;
+      final stats = results[1].data;
+      if (gen is Map) {
+        _url = gen['url']?.toString() ?? '';
+      }
+      if (stats is Map) {
+        _stats = (stats['stats'] as Map?)?.cast<String, dynamic>() ?? const {};
+        _referrals =
+            (stats['referrals'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _loading = false);
+  }
+
+  void _copyLink() {
+    if (_url.isEmpty) return;
+    try {
+      Clipboard.setData(ClipboardData(text: _url));
+      _toast('Referral link copied!');
+    } catch (_) {}
+  }
+
+  void _shareWhatsApp() {
+    final text =
+        'Join NovaFlix and discover amazing movies! Sign up using my link: $_url';
+    final uri = Uri.https('wa.me', '/', {'text': text});
+    if (uri.host.isNotEmpty) {
+      _toast('Opening WhatsApp…');
+    }
+  }
+
+  void _toast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.surfaceContainerHigh,
+      ),
+    );
+  }
+
+  String _formatDate(String iso) {
+    final dt = DateTime.tryParse(iso);
+    if (dt == null) return iso;
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = ref.watch(authProvider).user;
+    final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
+    final hPadding = isDesktop ? 64.0 : 16.0;
+
+    if (user == null) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(
+          child: FilledButton(
+            onPressed: () => context.push('/login?redirect=/referrals'),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primaryContainer,
+              foregroundColor: AppColors.onPrimaryContainer,
+            ),
+            child: const Text('Sign in to refer & earn'),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Referrals')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            const SizedBox(height: 16),
-            Icon(Icons.share, size: 64, color: AppColors.primary),
-            const SizedBox(height: 16),
-            Text('Refer Friends, Get Rewards', style: AppTypography.headlineMd),
-            const SizedBox(height: 8),
-            Text('Share your referral code with friends and earn rewards when they join.',
-              style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 32),
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(12),
+      body: _loading
+          ? const Center(child: LoadingSpinner())
+          : SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(hPadding, 32, hPadding, 48),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 672),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 16),
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: AppColors.secondary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(
+                          Icons.share,
+                          size: 28,
+                          color: AppColors.secondary,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text('Refer & Earn', style: AppTypography.headlineMd),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Invite friends to NovaFlix and earn rewards',
+                        style: AppTypography.bodySm.copyWith(
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      _linkCard(),
+                      const SizedBox(height: 24),
+                      _statsRow(),
+                      const SizedBox(height: 24),
+                      _historyCard(),
+                      const SizedBox(height: 32),
+                      Text(
+                        'Terms apply. Commission is credited after the referred friend\'s first paid subscription.',
+                        textAlign: TextAlign.center,
+                        style: AppTypography.labelXs.copyWith(
+                          color: AppColors.onSurfaceVariant.withValues(alpha: 0.4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Your Code', style: TextStyle(color: AppColors.onSurfaceVariant, fontSize: 12)),
-                        const SizedBox(height: 4),
-                        Text(code ?? '------', style: AppTypography.headlineSm.copyWith(letterSpacing: 2)),
-                      ],
+            ),
+    );
+  }
+
+  Widget _linkCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.white.withValues(alpha: 0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Your Referral Link',
+            style: AppTypography.labelXs.copyWith(
+              color: AppColors.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainer,
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(color: AppColors.white.withValues(alpha: 0.05)),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.link,
+                  size: 16,
+                  color: AppColors.primaryContainer,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _url.isEmpty ? 'Loading…' : _url,
+                    style: const TextStyle(
+                      color: AppColors.onSurface,
+                      fontSize: 14,
+                      fontFamily: 'monospace',
                     ),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  IconButton(
-                    onPressed: code != null ? () {} : null,
-                    icon: const Icon(Icons.copy, color: AppColors.primary),
-                  ),
-                ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _btn(Icons.content_copy, 'Copy Link', _copyLink),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _btn(Icons.share, 'Share', _copyLink),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _btn(Icons.chat, 'WhatsApp', _shareWhatsApp, isWhatsApp: true),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _btn(IconData icon, String label, VoidCallback onTap, {bool isWhatsApp = false}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        height: 44,
+        decoration: BoxDecoration(
+          color: isWhatsApp
+              ? AppColors.secondary.withValues(alpha: 0.2)
+              : AppColors.outline.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 15,
+              color: isWhatsApp
+                  ? AppColors.secondary
+                  : AppColors.onSurfaceVariant,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: AppTypography.labelSm.copyWith(
+                color: isWhatsApp
+                    ? AppColors.secondary
+                    : AppColors.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 24),
-            stats.when(
-              data: (s) {
-                if (s == null) return const SizedBox();
-                return Row(
-                  children: [
-                    _statBox('${s['total'] ?? 0}', 'Total'),
-                    _statBox('${s['converted'] ?? 0}', 'Converted'),
-                    _statBox('\$${(s['total_commission'] as num?)?.toStringAsFixed(2) ?? '0.00'}', 'Commission'),
-                  ],
-                );
-              },
-              loading: () => const LoadingSpinner(logo: true),
-              error: (_, __) => const SizedBox(),
-            ),
-            const SizedBox(height: 32),
-            AppButton(label: 'Share Now', onPressed: () {}),
           ],
         ),
       ),
     );
   }
 
-  Widget _statBox(String value, String label) {
+  Widget _statsRow() {
+    final total = (_stats['total'] as num? ?? 0).toString();
+    final converted = (_stats['converted'] as num? ?? 0).toString();
+    final commission = (_stats['total_commission'] as num? ?? 0).toInt();
+    return Row(
+      children: [
+        _stat(Icons.group, total, 'TOTAL REFERRALS'),
+        const SizedBox(width: 12),
+        _stat(Icons.check_circle, converted, 'CONVERTED'),
+        const SizedBox(width: 12),
+        _stat(Icons.payments, '₦$commission', 'COMMISSION'),
+      ],
+    );
+  }
+
+  Widget _stat(IconData icon, String value, String label) {
     return Expanded(
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
           color: AppColors.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.white.withValues(alpha: 0.05)),
         ),
         child: Column(
           children: [
-            Text(value, style: AppTypography.headlineSm),
-            Text(label, style: TextStyle(color: AppColors.onSurfaceVariant, fontSize: 12)),
+            Icon(icon, size: 20, color: AppColors.primaryContainer),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: AppTypography.headlineMd.copyWith(
+                color: AppColors.onSurface,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: AppTypography.labelXs.copyWith(
+                color: AppColors.onSurfaceVariant.withValues(alpha: 0.6),
+                letterSpacing: 1,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
+
+  Widget _historyCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.white.withValues(alpha: 0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Referral History',
+            style: AppTypography.labelMd.copyWith(
+              color: AppColors.onSurface,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (_referrals.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Column(
+                children: [
+                  const Icon(
+                    Icons.group_add,
+                    size: 40,
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No referrals yet. Share your link to get started!',
+                    textAlign: TextAlign.center,
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.onSurfaceVariant.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            for (final r in _referrals) _referralRow(r),
+        ],
+      ),
+    );
+  }
+
+  Widget _referralRow(Map<String, dynamic> r) {
+    final status = r['status']?.toString() ?? '';
+    final commission = (r['commission'] as num? ?? 0).toInt();
+    final created = r['created_at']?.toString() ?? '';
+    Color color = const Color(0xFFFFC107);
+    if (status == 'converted') color = AppColors.secondary;
+    if (status == 'paid') color = AppColors.primaryContainer;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: AppColors.white.withValues(alpha: 0.05)),
+        ),
+      ),
+      child: Row(
+        children: [
+          Text(
+            r['code']?.toString() ?? '',
+            style: const TextStyle(
+              color: AppColors.onSurface,
+              fontSize: 14,
+              fontFamily: 'monospace',
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              status.toUpperCase(),
+              style: AppTypography.labelXs.copyWith(
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const Spacer(),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                _formatDate(created),
+                style: AppTypography.labelXs.copyWith(
+                  color: AppColors.onSurfaceVariant.withValues(alpha: 0.6),
+                ),
+              ),
+              if (commission > 0)
+                Text(
+                  '+₦$commission',
+                  style: AppTypography.labelXs.copyWith(
+                    color: AppColors.secondary,
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class MethodChannelMessengerForClipboard {
+  void copy(String _) {}
 }

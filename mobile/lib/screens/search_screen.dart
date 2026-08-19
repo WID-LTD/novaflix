@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,12 +10,55 @@ import '../models/media_item.dart';
 import '../providers/store_provider.dart';
 import '../widgets/ui/index.dart';
 import '../widgets/features/index.dart';
+import '../widgets/movie_card.dart';
+
+final _suggestProvider = FutureProvider.family<List<MediaItem>, String>((ref, query) async {
+  if (query.isEmpty) return [];
+  final api = ref.read(apiServiceProvider);
+  try {
+    final res = await api.searchMedia(query, type: 'movie');
+    final data = res.data['data'] as List? ?? [];
+    return data.map((e) => MediaItem.fromJson(e as Map<String, dynamic>)).toList();
+  } catch (_) {
+    return [];
+  }
+});
 
 final _searchResultsProvider = FutureProvider.family<List<MediaItem>, String>((ref, query) async {
   if (query.isEmpty) return [];
   final api = ref.read(apiServiceProvider);
   final res = await api.searchAll(query);
   final data = res.data['data'] as List? ?? [];
+  return data.map((e) => MediaItem.fromJson(e as Map<String, dynamic>)).toList();
+});
+
+final _nowPlayingProvider = FutureProvider<List<MediaItem>>((ref) async {
+  final api = ref.read(apiServiceProvider);
+  final res = await api.getNowPlaying();
+  final data = res.data['data'] as List? ?? res.data as List;
+  return data.map((e) => MediaItem.fromJson(e as Map<String, dynamic>)).toList();
+});
+
+final _trendingProvider = FutureProvider<({List<MediaItem> movies, List<MediaItem> tv})>((ref) async {
+  final api = ref.read(apiServiceProvider);
+  final res = await api.getTrending();
+  final data = res.data['data'] as Map<String, dynamic>? ?? res.data as Map<String, dynamic>;
+  final movies = (data['movies'] as List?)?.map((e) => MediaItem.fromJson(e as Map<String, dynamic>)).toList() ?? <MediaItem>[];
+  final tv = (data['tv'] as List?)?.map((e) => MediaItem.fromJson(e as Map<String, dynamic>)).toList() ?? <MediaItem>[];
+  return (movies: movies, tv: tv);
+});
+
+final _genreProvider = FutureProvider.family<List<MediaItem>, int>((ref, genreId) async {
+  final api = ref.read(apiServiceProvider);
+  final res = await api.getCategoryMovies(genreId, type: 'movie');
+  final data = res.data['data'] as List? ?? res.data as List;
+  return data.map((e) => MediaItem.fromJson(e as Map<String, dynamic>)).toList();
+});
+
+final _popularTvProvider = FutureProvider<List<MediaItem>>((ref) async {
+  final api = ref.read(apiServiceProvider);
+  final res = await api.getDiscover(type: 'tv', sortBy: 'popularity.desc');
+  final data = res.data['data'] as List? ?? res.data as List;
   return data.map((e) => MediaItem.fromJson(e as Map<String, dynamic>)).toList();
 });
 
@@ -27,117 +71,370 @@ class SearchScreen extends ConsumerStatefulWidget {
 
 class _SearchScreenState extends ConsumerState<SearchScreen> {
   final _searchCtl = TextEditingController();
+  final _focusNode = FocusNode();
   String _query = '';
-  String _tab = 'All';
+  String _type = 'movie';
+  bool _showSuggestions = false;
+  Timer? _suggestDebounce;
 
   @override
   void dispose() {
     _searchCtl.dispose();
+    _focusNode.dispose();
+    _suggestDebounce?.cancel();
     super.dispose();
+  }
+
+  void _clear() {
+    _searchCtl.clear();
+    setState(() => _query = '');
+    _focusNode.requestFocus();
+  }
+
+  void _runSearch(String q) {
+    if (q.isEmpty) return;
+    ref.read(storeProvider.notifier).addRecentSearch(q);
+    setState(() => _query = q);
   }
 
   @override
   Widget build(BuildContext context) {
+    final suggestions = ref.watch(_suggestProvider(_query.length > 0 ? _query : ''));
     final results = ref.watch(_searchResultsProvider(_query));
     final store = ref.watch(storeProvider);
+    final nowPlaying = ref.watch(_nowPlayingProvider);
+    final trending = ref.watch(_trendingProvider);
+    final actionMovies = ref.watch(_genreProvider(28));
+    final comedyMovies = ref.watch(_genreProvider(35));
+    final popularTv = ref.watch(_popularTvProvider);
+    final isDesktop = MediaQuery.of(context).size.width >= 1024;
+    final hPadding = isDesktop ? 64.0 : 16.0;
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: TextField(
-                controller: _searchCtl,
-                autofocus: true,
-                style: const TextStyle(color: AppColors.onSurface, fontSize: 16),
-                decoration: InputDecoration(
-                  hintText: 'Search movies, TV shows...',
-                  prefixIcon: const Icon(Icons.search, color: AppColors.onSurfaceVariant),
-                  suffixIcon: _searchCtl.text.isNotEmpty
-                      ? IconButton(icon: const Icon(Icons.clear, color: AppColors.onSurfaceVariant), onPressed: () { _searchCtl.clear(); setState(() => _query = ''); })
-                      : null,
-                  filled: true,
-                  fillColor: AppColors.surfaceContainerHigh,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-                onSubmitted: (v) => setState(() => _query = v),
-                onChanged: (v) {
-                  if (v.length > 2) setState(() => _query = v);
-                },
-              ),
-            ),
-            if (_query.isEmpty) ...[
-              if (store.recentlySearched.isNotEmpty) ...[
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(children: [
-                    const Text('Recent Searches', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
-                    const Spacer(),
-                    GestureDetector(
-                      onTap: () => ref.read(storeProvider.notifier).addRecentSearch(''),
-                      child: const Text('Clear', style: TextStyle(color: AppColors.onSurfaceVariant, fontSize: 13)),
+      body: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(hPadding, isDesktop ? 40 : 24, hPadding, 48),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 896),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Stack(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceContainerHigh,
+                        border: Border.all(color: AppColors.outline.withValues(alpha: 0.2)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.search, color: AppColors.onSurfaceVariant),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              controller: _searchCtl,
+                              focusNode: _focusNode,
+                              style: const TextStyle(color: AppColors.onSurface, fontSize: 16),
+                              decoration: const InputDecoration(
+                                hintText: 'Search movies, TV shows...',
+                                hintStyle: TextStyle(color: AppColors.onSurfaceVariant),
+                                border: InputBorder.none,
+                                isDense: true,
+                              ),
+                              onChanged: (v) {
+                                _suggestDebounce?.cancel();
+                                _suggestDebounce = Timer(const Duration(milliseconds: 250), () {
+                                  if (mounted) setState(() {});
+                                });
+                                setState(() => _showSuggestions = v.isNotEmpty);
+                              },
+                              onSubmitted: (v) => _runSearch(v.trim()),
+                              onTap: () => setState(() => _showSuggestions = _searchCtl.text.isNotEmpty),
+                            ),
+                          ),
+                          if (_searchCtl.text.isNotEmpty)
+                            IconButton(
+                              icon: const Icon(Icons.close, color: AppColors.onSurfaceVariant, size: 20),
+                              onPressed: _clear,
+                            ),
+                        ],
+                      ),
                     ),
-                  ]),
+                    if (_showSuggestions)
+                      Positioned(
+                        top: 56,
+                        left: 0,
+                        right: 0,
+                        child: Material(
+                          color: Colors.transparent,
+                          child: suggestions.when(
+                            data: (items) => items.isEmpty
+                                ? const SizedBox.shrink()
+                                : Container(
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surfaceContainerHigh,
+                                      border: Border.all(color: AppColors.outline.withValues(alpha: 0.2)),
+                                      borderRadius: BorderRadius.circular(12),
+                                      boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 24)],
+                                    ),
+                                    child: Column(
+                                      children: items.take(5).map((item) {
+                                        final type = item.mediaType == 'tv' ? 'TV Show' : 'Movie';
+                                        return InkWell(
+                                          onTap: () {
+                                            _runSearch(_searchCtl.text.trim());
+                                            setState(() => _showSuggestions = false);
+                                            context.go('/${item.mediaType == 'tv' ? 'tv' : 'movie'}/${item.id}');
+                                          },
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                            child: Row(
+                                              children: [
+                                                ClipRRect(
+                                                  borderRadius: BorderRadius.circular(4),
+                                                  child: SizedBox(
+                                                    width: 32,
+                                                    height: 48,
+                                                    child: item.posterPath != null
+                                                        ? CachedNetworkImage(
+                                                            imageUrl: item.posterPath!,
+                                                            fit: BoxFit.cover,
+                                                            errorWidget: (_, _, _) => Container(
+                                                              color: AppColors.surfaceVariant,
+                                                              child: const Icon(Icons.movie, color: AppColors.onSurfaceVariant, size: 16),
+                                                            ),
+                                                          )
+                                                        : Container(
+                                                            color: AppColors.surfaceVariant,
+                                                            child: const Icon(Icons.movie, color: AppColors.onSurfaceVariant, size: 16),
+                                                          ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 12),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(item.title, style: AppTypography.bodyMd, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                                      const SizedBox(height: 2),
+                                                      Text(type, style: AppTypography.labelSm.copyWith(color: AppColors.onSurfaceVariant)),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const Icon(Icons.chevron_right, color: AppColors.onSurfaceVariant, size: 20),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ),
+                            loading: () => const SizedBox.shrink(),
+                            error: (_, _) => const SizedBox.shrink(),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    children: store.recentlySearched.map((s) => ListTile(
-                      leading: const Icon(Icons.history, color: AppColors.onSurfaceVariant, size: 20),
-                      title: Text(s, style: const TextStyle(color: AppColors.onSurface)),
-                      dense: true,
-                      onTap: () => setState(() { _query = s; _searchCtl.text = s; }),
-                    )).toList(),
-                  ),
+                const SizedBox(height: 24),
+                AppTabs(
+                  tabs: const ['Movies', 'TV Shows'],
+                  activeIndex: _type == 'movie' ? 0 : 1,
+                  onChanged: (i) => setState(() => _type = i == 0 ? 'movie' : 'tv'),
                 ),
-              ] else ...[
-                Expanded(child: Center(child: Text('Search for movies and TV shows', style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant)))),
+                const SizedBox(height: 24),
+                if (_query.isEmpty)
+                  _buildRecentAndDiscover(store, nowPlaying, trending, actionMovies, comedyMovies, popularTv)
+                else
+                  _buildResults(results),
               ],
-            ] else ...[
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecentAndDiscover(
+    StoreState store,
+    AsyncValue<List<MediaItem>> nowPlaying,
+    AsyncValue<({List<MediaItem> movies, List<MediaItem> tv})> trending,
+    AsyncValue<List<MediaItem>> actionMovies,
+    AsyncValue<List<MediaItem>> comedyMovies,
+    AsyncValue<List<MediaItem>> popularTv,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (store.recentlySearched.isNotEmpty) ...[
+          Text('Recent Searches', style: AppTypography.labelMd.copyWith(color: AppColors.onSurfaceVariant)),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: store.recentlySearched.map((s) => GestureDetector(
+              onTap: () {
+                _searchCtl.text = s;
+                _runSearch(s);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceContainerHigh,
+                  border: Border.all(color: AppColors.outline.withValues(alpha: 0.2)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(s, style: AppTypography.bodySm.copyWith(color: AppColors.onSurfaceVariant)),
+              ),
+            )).toList(),
+          ),
+          const SizedBox(height: 40),
+        ],
+        const Divider(color: Colors.white10, height: 1),
+        const SizedBox(height: 24),
+        const Text('Discover', style: AppTypography.headlineMd),
+        const SizedBox(height: 24),
+        _discoverRow('Now Playing', nowPlaying, () => context.go('/discover?sort=trending')),
+        _discoverRowTrending('Trending Movies', trending, (items) => items.movies, () => context.go('/discover?sort=trending')),
+        _discoverRowTrending('Trending TV Shows', trending, (items) => items.tv, () => context.go('/tv-shows')),
+        _discoverRow('Top Rated Movies', nowPlaying, () => context.go('/discover?sort=top_rated')),
+        _discoverRow('Action Movies', actionMovies, () => context.go('/discover?sort=trending')),
+        _discoverRow('Comedy Movies', comedyMovies, () => context.go('/discover?sort=trending')),
+        _discoverRow('Popular TV Shows', popularTv, () => context.go('/tv-shows')),
+      ],
+    );
+  }
+
+  Widget _discoverRow(
+    String title,
+    AsyncValue<List<MediaItem>> items, [
+    VoidCallback? onSeeAll,
+  ]) {
+    return items.when(
+      data: (list) => _row(title, list, onSeeAll),
+      loading: () => const SizedBox(height: 180, child: Center(child: LoadingSpinner(size: 28))),
+      error: (_, _) => const SizedBox.shrink(),
+    );
+  }
+
+  Widget _discoverRowTrending(
+    String title,
+    AsyncValue<({List<MediaItem> movies, List<MediaItem> tv})> items,
+    List<MediaItem> Function(({List<MediaItem> movies, List<MediaItem> tv})) selector, [
+    VoidCallback? onSeeAll,
+  ]) {
+    return items.when(
+      data: (data) => _row(title, selector(data), onSeeAll),
+      loading: () => const SizedBox(height: 180, child: Center(child: LoadingSpinner(size: 28))),
+      error: (_, _) => const SizedBox.shrink(),
+    );
+  }
+
+  Widget _row(String title, List<MediaItem> items, VoidCallback? onSeeAll) {
+    if (items.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
                 child: Row(
                   children: [
-                    const Text('Results', style: TextStyle(fontWeight: FontWeight.w600)),
-                    const Spacer(),
-                    Text('${results.valueOrNull?.length ?? 0} found', style: const TextStyle(color: AppColors.onSurfaceVariant)),
+                    Flexible(child: Text(title, style: AppTypography.headlineSm, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                    const SizedBox(width: 6),
+                    const Icon(Icons.chevron_right, color: AppColors.primary, size: 20),
                   ],
                 ),
               ),
-              Expanded(
-                child: results.when(
-                  data: (items) {
-                    if (items.isEmpty) {
-                      return const Center(child: Text('No results found'));
-                    }
-                    return GridView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: gridColumnsFor(MediaQuery.sizeOf(context).width),
-                        childAspectRatio: 0.65,
-                        crossAxisSpacing: 8,
-                        mainAxisSpacing: 8,
-                      ),
-                      itemCount: items.length,
-                      itemBuilder: (_, i) {
-                        final item = items[i];
-                        return MovieCard(item: item);
-                      },
-                    );
-                  },
-                  loading: () => const LoadingSpinner(logo: true),
-                  error: (e, _) => Center(child: Text('Error: $e')),
+              if (onSeeAll != null)
+                GestureDetector(
+                  onTap: onSeeAll,
+                  child: Text('View All', style: AppTypography.labelSm.copyWith(color: AppColors.primary)),
                 ),
-              ),
             ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 200,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: items.take(10).length,
+              itemBuilder: (_, i) => Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: SizedBox(width: 130, child: MovieCard(item: items[i])),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResults(AsyncValue<List<MediaItem>> results) {
+    return results.when(
+      data: (items) {
+        final filtered = items.where((e) {
+          if (_type == 'movie') return e.mediaType != 'tv';
+          return e.mediaType == 'tv';
+        }).toList();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  '${filtered.length} result${filtered.length == 1 ? '' : 's'}',
+                  style: AppTypography.bodySm.copyWith(color: AppColors.onSurfaceVariant),
+                ),
+                const Spacer(),
+                AppBadge(label: _type == 'movie' ? 'Movies' : 'TV Shows'),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (filtered.isEmpty)
+              const _EmptySearch()
+            else
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: gridColumnsFor(MediaQuery.of(context).size.width),
+                  childAspectRatio: 0.65,
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                ),
+                itemCount: filtered.length,
+                itemBuilder: (_, i) => MovieCard(item: filtered[i]),
+              ),
           ],
-        ),
+        );
+      },
+      loading: () => const SizedBox(height: 300, child: Center(child: LoadingSpinner())),
+      error: (e, _) => const _EmptySearch(),
+    );
+  }
+}
+
+class _EmptySearch extends StatelessWidget {
+  const _EmptySearch();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 48),
+      child: Column(
+        children: [
+          const Icon(Icons.search, size: 64, color: AppColors.onSurfaceVariant),
+          const SizedBox(height: 12),
+          Text('No results found', style: AppTypography.labelMd.copyWith(color: AppColors.onSurfaceVariant)),
+          const SizedBox(height: 4),
+          Text('Try a different search term', style: AppTypography.bodySm.copyWith(color: AppColors.onSurfaceVariant)),
+        ],
       ),
     );
   }

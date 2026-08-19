@@ -51,7 +51,7 @@ class CreatorProfileHubScreen extends ConsumerWidget {
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Creator Profile')),
       body: me.when(
-        loading: () => const LoadingSpinner(logo: true),
+        loading: () => const LoadingSpinner(),
         error: (_, __) => _noSession(context),
         data: (user) {
           if (user == null) return _noSession(context);

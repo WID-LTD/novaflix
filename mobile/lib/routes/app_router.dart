@@ -203,7 +203,12 @@ GoRouter appRouter(WidgetRef ref) {
     routes: [
       GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
       GoRoute(path: '/landing', builder: (_, __) => const LandingScreen()),
-      GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+      GoRoute(
+        path: '/login',
+        builder: (_, state) => LoginScreen(
+          redirect: state.uri.queryParameters['redirect'],
+        ),
+      ),
       GoRoute(
         path: '/forgot-password',
         builder: (_, __) => const ForgotPasswordScreen(),
@@ -226,7 +231,6 @@ GoRouter appRouter(WidgetRef ref) {
         builder: (ctx, state) => WatchScreen(
           movieId: int.tryParse(state.uri.queryParameters['id'] ?? ''),
           mediaType: state.uri.queryParameters['type'],
-          streamUrl: state.uri.queryParameters['url'],
           season: state.uri.queryParameters['season'],
           episode: state.uri.queryParameters['episode'],
         ),
@@ -353,6 +357,14 @@ GoRouter appRouter(WidgetRef ref) {
             path: '/community',
             pageBuilder: (_, s) =>
                 NoTransitionPage(child: const CommunityScreen()),
+          ),
+          GoRoute(
+            path: '/community/:id',
+            pageBuilder: (_, s) => NoTransitionPage(
+              child: CommunityScreen(
+                communityId: int.tryParse(s.pathParameters['id'] ?? ''),
+              ),
+            ),
           ),
           GoRoute(
             path: '/events',

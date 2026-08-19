@@ -918,3 +918,22 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS suspension_reason TEXT DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS banned_reason TEXT DEFAULT '';
 
 CREATE INDEX IF NOT EXISTS idx_users_admin_role ON users(admin_role_id);
+
+CREATE TABLE IF NOT EXISTS plans (
+  id SERIAL PRIMARY KEY,
+  slug VARCHAR(50) UNIQUE NOT NULL,
+  name VARCHAR(100) NOT NULL,
+  price INTEGER NOT NULL,
+  currency VARCHAR(10) DEFAULT 'NGN',
+  features JSONB DEFAULT '[]',
+  sort_order INT DEFAULT 0,
+  active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+INSERT INTO plans (slug, name, price, currency, features, sort_order) VALUES
+  ('student', 'Student', 800, 'NGN', '["720p streaming","1 device","Limited downloads","Ad-supported"]', 1),
+  ('basic', 'Basic', 1500, 'NGN', '["720p streaming","1 device","Limited downloads","Ad-free"]', 2),
+  ('standard', 'Standard', 2500, 'NGN', '["1080p streaming","2 devices","Offline downloads","Ad-free","Skip limits"]', 3),
+  ('premium', 'Premium', 5500, 'NGN', '["4K streaming","4 devices","6 download devices","Ad-free","Unlimited skips","Priority support"]', 4)
+ON CONFLICT (slug) DO NOTHING;

@@ -23,7 +23,7 @@ class NotFoundScreen extends StatelessWidget {
             ElevatedButton(
               onPressed: () => Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false),
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryContainer,
+                backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
               ),

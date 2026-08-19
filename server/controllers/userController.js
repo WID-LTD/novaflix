@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid'
 import bcrypt from 'bcryptjs'
-import { findUserById, updateUser, getUploadsByUserId, getTotalMinutesWatched, getUserSubscription, addWatchEntry, getWatchHistory, checkAndAwardAchievements, addXp } from '../db.js'
+import { findUserById, updateUser, getUploadsByUserId, getTotalMinutesWatched, getUserSubscription, addWatchEntry, getWatchHistory, checkAndAwardAchievements, addXp, addToWatchlist, getWatchlistByUserId, removeFromWatchlist, getWatchlistCount } from '../db.js'
 import { uploadFile } from '../lib/r2.js'
 
 export async function updateProfile(req, res) {
@@ -56,16 +56,17 @@ export async function getStats(req, res) {
   try {
     const user = await findUserById(req.userId)
     if (!user) return res.status(404).json({ error: 'User not found' })
-    const [sub, minutes, uploads] = await Promise.all([
+    const [sub, minutes, uploads, watchlistCount] = await Promise.all([
       getUserSubscription(req.userId),
       getTotalMinutesWatched(req.userId),
       getUploadsByUserId(req.userId),
+      getWatchlistCount(req.userId),
     ])
     res.json({
       success: true,
       stats: {
         minutesWatched: minutes,
-        watchlistCount: 0,
+        watchlistCount,
         uploadsCount: uploads.length,
         plan: user.plan || 'free',
         subscription: sub || null,
@@ -124,6 +125,46 @@ export async function uploadAvatar(req, res) {
 
     await updateUser(req.userId, { avatar: result.url })
     res.json({ success: true, url: result.url })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+export async function addToWatchlistHandler(req, res) {
+  try {
+    const { contentId, contentType, title, poster, year } = req.body
+    if (!contentId || !contentType) {
+      return res.status(400).json({ error: 'contentId and contentType required' })
+    }
+    const entry = await addToWatchlist({
+      id: uuidv4(),
+      userId: req.userId,
+      contentId: String(contentId),
+      contentType,
+      title: title || null,
+      poster: poster || null,
+      year: year || null,
+    })
+    res.json({ success: true, entry })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+export async function getWatchlistHandler(req, res) {
+  try {
+    const items = await getWatchlistByUserId(req.userId)
+    res.json({ success: true, items })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+export async function removeFromWatchlistHandler(req, res) {
+  try {
+    const { contentId } = req.params
+    const removed = await removeFromWatchlist(req.userId, contentId)
+    res.json({ success: true, removed })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

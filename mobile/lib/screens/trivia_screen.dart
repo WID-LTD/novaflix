@@ -2,6 +2,8 @@ import 'dart:ui' show ImageFilter;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
@@ -88,6 +90,53 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(authProvider).user;
+    if (user == null) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.quiz, size: 48, color: AppColors.primaryContainer),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Trivia & Rewards',
+                    style: AppTypography.headlineMd.copyWith(
+                      color: AppColors.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Sign in to play trivia and earn coins.',
+                    textAlign: TextAlign.center,
+                    style: AppTypography.bodyMd.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton(
+                    onPressed: () => context.push('/login?redirect=/trivia'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primaryContainer,
+                      foregroundColor: AppColors.onPrimaryContainer,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                    ),
+                    child: const Text('Sign in'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -193,7 +242,7 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
   Widget _buildDaily() {
     final trivia = ref.watch(_dailyTriviaProvider);
     return trivia.when(
-      loading: () => const LoadingSpinner(logo: true),
+      loading: () => const LoadingSpinner(),
       error: (e, _) => Center(
         child: Text(
           'Error: $e',
@@ -383,45 +432,80 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
 
   Widget _buildDailyResult(int total) {
     final pct = total > 0 ? _correctCount / total : 0.0;
-    final good = pct >= 0.5;
+    final Color tierColor;
+    final String tierLabel;
+    final String tierCopy;
+    if (pct >= 0.7) {
+      tierColor = const Color(0xFF22C55E);
+      tierLabel = 'Excellent!';
+      tierCopy = 'You clearly know your films. Bravo!';
+    } else if (pct >= 0.4) {
+      tierColor = const Color(0xFFF97316);
+      tierLabel = 'Good!';
+      tierCopy = 'Solid effort — the next round is yours.';
+    } else {
+      tierColor = const Color(0xFFEF4444);
+      tierLabel = 'You failed';
+      tierCopy = "Don't worry — even hits have outtakes. Try again!";
+    }
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           color: AppColors.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.white.withValues(alpha: 0.05)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Icon(
-              Icons.emoji_events_rounded,
-              size: 56,
-              color: good ? AppColors.secondary : AppColors.primaryLight,
+            Container(
+              width: 80,
+              height: 80,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: tierColor.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                pct >= 0.4 ? Icons.check_rounded : Icons.close_rounded,
+                size: 44,
+                color: tierColor,
+              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Text(
-              good ? 'Nice job!' : 'Keep going!',
-              style: AppTypography.headlineSm,
+              tierLabel,
+              style: AppTypography.headlineSm.copyWith(color: AppColors.onSurface),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 4),
             Text(
-              'You scored $_correctCount of $total questions.',
+              '$_correctCount/$total',
               textAlign: TextAlign.center,
-              style: AppTypography.bodyMd.copyWith(
-                color: AppColors.onSurfaceVariant,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: tierColor,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
                 value: pct,
                 minHeight: 8,
                 backgroundColor: AppColors.surfaceContainerHighest,
-                color: good ? AppColors.secondary : AppColors.primary,
+                color: tierColor,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              tierCopy,
+              textAlign: TextAlign.center,
+              style: AppTypography.bodyMd.copyWith(
+                color: AppColors.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 20),
@@ -435,25 +519,7 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  '+$_coinsEarned coins earned',
-                  style: AppTypography.labelMd.copyWith(
-                    color: AppColors.onSurface,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.local_fire_department,
-                  size: 18,
-                  color: AppColors.secondary,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'Streak: $_streak',
+                  '+$_coinsEarned coins earned · Current streak: $_streak 🔥',
                   style: AppTypography.labelMd.copyWith(
                     color: AppColors.onSurface,
                   ),
@@ -492,7 +558,7 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
   Widget _buildGuess() {
     final guess = ref.watch(_guessProvider);
     return guess.when(
-      loading: () => const LoadingSpinner(logo: true),
+      loading: () => const LoadingSpinner(),
       error: (e, _) => Center(
         child: Text(
           'Error: $e',
@@ -771,7 +837,7 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
   Widget _buildShop() {
     final shop = ref.watch(_cosmeticsProvider);
     return shop.when(
-      loading: () => const LoadingSpinner(logo: true),
+      loading: () => const LoadingSpinner(),
       error: (e, _) => Center(
         child: Text(
           'Error: $e',
@@ -865,7 +931,7 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
   Widget _buildLeaderboard() {
     final board = ref.watch(_leaderboardProvider);
     return board.when(
-      loading: () => const LoadingSpinner(logo: true),
+      loading: () => const LoadingSpinner(),
       error: (e, _) => Center(
         child: Text(
           'Error: $e',
@@ -1091,7 +1157,7 @@ class _CosmeticCard extends StatelessWidget {
                 onPressed: canBuy ? onBuy : null,
                 style: TextButton.styleFrom(
                   padding: EdgeInsets.zero,
-                  backgroundColor: AppColors.primaryContainer,
+                  backgroundColor: AppColors.primary,
                   foregroundColor: canBuy
                       ? AppColors.white
                       : AppColors.onSurfaceVariant,

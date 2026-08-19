@@ -1,120 +1,594 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../providers/auth_provider.dart';
+import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
-import '../services/api_service.dart';
 import '../widgets/ui/index.dart';
 
-final _redCarpetProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final _eventsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final api = ref.read(apiServiceProvider);
-  final res = await api.getEvents(includePast: false);
-  final data = res.data['events'] as List? ?? [];
+  final res = await api.getEvents(includePast: true);
+  final data = res.data['events'] as List? ?? res.data['data'] as List? ?? [];
   return data.cast<Map<String, dynamic>>();
 });
 
-class RedCarpetScreen extends ConsumerWidget {
+final _ticketsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.read(apiServiceProvider);
+  final res = await api.getMyTickets();
+  final data = res.data['tickets'] as List? ?? res.data['data'] as List? ?? [];
+  return data.cast<Map<String, dynamic>>();
+});
+
+class RedCarpetScreen extends ConsumerStatefulWidget {
   const RedCarpetScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final events = ref.watch(_redCarpetProvider);
+  ConsumerState<RedCarpetScreen> createState() => _RedCarpetScreenState();
+}
+
+class _RedCarpetScreenState extends ConsumerState<RedCarpetScreen> {
+  String? _purchasingId;
+
+  bool _hasTicket(
+    List<Map<String, dynamic>> tickets,
+    Map<String, dynamic> event,
+  ) {
+    final id = event['id'].toString();
+    return tickets.any((t) => t['event_id']?.toString() == id);
+  }
+
+  Future<void> _purchase(Map<String, dynamic> event) async {
+    final user = ref.read(authProvider).user;
+    if (user == null) {
+      context.push('/login?redirect=/red-carpet');
+      return;
+    }
+    final id = event['id'];
+    if (id is! int && id is! String) return;
+    final eventId = int.tryParse(id.toString()) ?? -1;
+    if (eventId < 0) return;
+    setState(() => _purchasingId = id.toString());
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.purchaseTicket(eventId);
+      final body = res.data is Map ? res.data : <String, dynamic>{};
+      if (body['free'] == true) {
+        ref.invalidate(_ticketsProvider);
+        ref.invalidate(_eventsProvider);
+        _toast('You got your ticket!');
+      } else if (body['authorization_url'] != null) {
+        if (context.mounted) {
+          context.push(
+            '/payment-success?reference=${body['reference'] ?? ''}&source=event',
+          );
+        }
+      } else {
+        _toast(body['error']?.toString() ?? 'Purchase failed. Try again.');
+      }
+    } catch (_) {
+      if (mounted) _toast('Purchase failed. Try again.');
+    } finally {
+      if (mounted) setState(() => _purchasingId = null);
+    }
+  }
+
+  void _toast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.surfaceContainerHigh,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final events = ref.watch(_eventsProvider);
+    final user = ref.watch(authProvider).user;
+    final tickets = user != null
+        ? ref.watch(_ticketsProvider).valueOrNull ?? []
+        : <Map<String, dynamic>>[];
+    final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
+    final hPadding = isDesktop ? 64.0 : 16.0;
+
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Red Carpet')),
-      body: events.when(
-        data: (items) {
-          final upcoming = items.where((e) => e['status']?.toString() != 'ended').toList();
-          final past = items.where((e) => e['status']?.toString() == 'ended').toList();
-          return SingleChildScrollView(
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _hero(isDesktop),
+            Padding(
+              padding: EdgeInsets.fromLTRB(hPadding, 24, hPadding, 48),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1152),
+                  child: events.when(
+                    loading: () => const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 60),
+                      child: Center(child: LoadingSpinner()),
+                    ),
+                    error: (e, _) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 40),
+                      child: Center(
+                        child: Text(
+                          'Error: $e',
+                          style: const TextStyle(color: AppColors.error),
+                        ),
+                      ),
+                    ),
+                    data: (list) {
+                      final upcoming = list
+                          .where((e) =>
+                              e['status'] == 'scheduled' ||
+                              e['status'] == 'live')
+                          .toList()
+                        ..sort((a, b) =>
+                            DateTime.parse(a['event_date']?.toString() ?? '')
+                                .compareTo(
+                                    DateTime.parse(b['event_date']?.toString() ?? '')));
+                      final past = list
+                          .where((e) => e['status'] == 'ended')
+                          .toList();
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (upcoming.isNotEmpty)
+                            _section(
+                              'Upcoming Premieres',
+                              liveDot: true,
+                              child: _upcomingGrid(upcoming, tickets),
+                            ),
+                          if (upcoming.isEmpty && past.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 60),
+                              child: Center(
+                                child: Column(
+                                  children: [
+                                    Icon(
+                                      Icons.star_border,
+                                      size: 48,
+                                      color: AppColors.onSurfaceVariant,
+                                    ),
+                                    SizedBox(height: 12),
+                                    Text(
+                                      'No events scheduled yet',
+                                      style: TextStyle(
+                                        color: AppColors.onSurfaceVariant,
+                                      ),
+                                    ),
+                                    SizedBox(height: 4),
+                                    Text(
+                                      'Check back soon for upcoming premieres',
+                                      style: TextStyle(
+                                        color: AppColors.onSurfaceVariant,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          if (past.isNotEmpty)
+                            _section(
+                              'Past Premieres',
+                              child: _pastGrid(past),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _hero(bool isDesktop) {
+    return Container(
+      height: isDesktop ? 440 : 320,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0x66DC2626),
+            Color(0x33220A0A),
+            AppColors.background,
+          ],
+        ),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.star, size: 56, color: Color(0xFFFFC107)),
+            const SizedBox(height: 16),
+            Text(
+              'Virtual Red Carpet',
+              textAlign: TextAlign.center,
+              style: AppTypography.headlineLg.copyWith(
+                fontSize: isDesktop ? 56 : 36,
+                height: 1.15,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Exclusive premieres, live events, and behind-the-scenes access. Get your front-row seat.',
+              textAlign: TextAlign.center,
+              style: AppTypography.bodyMd.copyWith(
+                color: AppColors.onSurfaceVariant,
+                fontSize: isDesktop ? 18 : 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _section(
+    String title, {
+    bool liveDot = false,
+    required Widget child,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 40),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              if (liveDot)
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: Colors.redAccent,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              if (liveDot) const SizedBox(width: 8),
+              Text(
+                title,
+                style: AppTypography.headlineMd.copyWith(
+                  color: AppColors.onSurface,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _upcomingGrid(
+    List<Map<String, dynamic>> items,
+    List<Map<String, dynamic>> tickets,
+  ) {
+    final width = MediaQuery.sizeOf(context).width;
+    final cols = width >= 1024 ? 3 : (width >= 600 ? 2 : 1);
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: cols,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        childAspectRatio: 0.95,
+      ),
+      itemCount: items.length,
+      itemBuilder: (_, i) => _EventCard(
+        event: items[i],
+        hasTicket: _hasTicket(tickets, items[i]),
+        purchasing: _purchasingId == items[i]['id'].toString(),
+        onPurchase: () => _purchase(items[i]),
+      ),
+    );
+  }
+
+  Widget _pastGrid(List<Map<String, dynamic>> items) {
+    final width = MediaQuery.sizeOf(context).width;
+    final cols = width >= 1024 ? 5 : (width >= 600 ? 4 : 2);
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: cols,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 0.9,
+      ),
+      itemCount: items.length,
+      itemBuilder: (_, i) {
+        final ev = items[i];
+        final poster = ev['poster_url']?.toString();
+        return GestureDetector(
+          onTap: () {
+            final id = ev['id'];
+            final eventId = id is num ? id.toInt() : int.tryParse(id.toString()) ?? -1;
+            if (eventId >= 0) context.push('/events/$eventId');
+          },
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainer,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.white.withValues(alpha: 0.05)),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Container(
+                    color: AppColors.surface,
+                    child: poster != null && poster.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: poster,
+                            fit: BoxFit.cover,
+                            errorWidget: (_, _, _) => const Icon(
+                              Icons.movie,
+                              color: AppColors.onSurfaceVariant,
+                            ),
+                          )
+                        : const Icon(Icons.movie, color: AppColors.onSurfaceVariant),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        ev['title']?.toString() ?? '',
+                        style: AppTypography.labelSm.copyWith(
+                          color: AppColors.onSurface,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        _formatShortDate(ev['event_date']?.toString() ?? ''),
+                        style: AppTypography.labelXs.copyWith(
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _formatShortDate(String iso) {
+    final dt = DateTime.tryParse(iso);
+    if (dt == null) return iso;
+    return '${dt.day}/${dt.month}/${dt.year}';
+  }
+}
+
+class _EventCard extends StatelessWidget {
+  final Map<String, dynamic> event;
+  final bool hasTicket;
+  final bool purchasing;
+  final VoidCallback onPurchase;
+
+  const _EventCard({
+    required this.event,
+    required this.hasTicket,
+    required this.purchasing,
+    required this.onPurchase,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final title = event['title']?.toString() ?? '';
+    final poster = event['poster_url']?.toString();
+    final status = event['status']?.toString() ?? '';
+    final creator = event['creator_name']?.toString() ?? '';
+    final description = event['description']?.toString() ?? '';
+    final price = (event['ticket_price'] as num? ?? 0);
+    final isPaid = price > 0;
+    final isLive = status == 'live';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.white.withValues(alpha: 0.05)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Container(
+              color: AppColors.surface,
+              child: poster != null && poster.isNotEmpty
+                  ? CachedNetworkImage(
+                      imageUrl: poster,
+                      fit: BoxFit.cover,
+                      errorWidget: (_, _, _) =>
+                          const Icon(Icons.movie, size: 36, color: AppColors.onSurfaceVariant),
+                    )
+                  : const Icon(Icons.movie, size: 36, color: AppColors.onSurfaceVariant),
+            ),
+          ),
+          Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  height: 160,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: [Colors.red.shade800, AppColors.background]),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.star, size: 48, color: Colors.white),
-                        const SizedBox(height: 8),
-                        Text('Red Carpet Premieres', style: AppTypography.headlineMd.copyWith(color: Colors.white)),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Text('Upcoming Premieres', style: AppTypography.headlineSm),
-                const SizedBox(height: 12),
-                ...upcoming.map((e) => Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
+                Row(
+                  children: [
+                    if (isLive)
                       Container(
-                        width: 60, height: 60,
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(8),
-                          image: e['poster_url'] != null ? DecorationImage(image: NetworkImage(e['poster_url'].toString()), fit: BoxFit.cover) : null,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
                         ),
-                        child: e['poster_url'] == null ? const Icon(Icons.movie, color: AppColors.onSurfaceVariant) : null,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        decoration: BoxDecoration(
+                          color: AppColors.secondary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Row(
                           children: [
-                            Text(e['title']?.toString() ?? '', style: AppTypography.bodyMd.copyWith(fontWeight: FontWeight.w600)),
-                            Text(e['event_date']?.toString() ?? '', style: TextStyle(color: AppColors.onSurfaceVariant, fontSize: 12)),
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: const BoxDecoration(
+                                color: AppColors.secondary,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'LIVE',
+                              style: AppTypography.labelXs.copyWith(
+                                color: AppColors.secondary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ],
                         ),
                       ),
-                      AppButton(label: (e['ticket_price'] as num?)?.toStringAsFixed(0) == '0' ? 'RSVP' : 'Tickets', onPressed: () => context.push('/event/${e['id']}'), fullWidth: false, height: 36),
-                    ],
+                    if (isLive) const SizedBox(width: 8),
+                    Text(
+                      _formatEventDate(event['event_date']?.toString() ?? ''),
+                      style: AppTypography.labelXs.copyWith(
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  title,
+                  style: AppTypography.labelLg.copyWith(
+                    color: AppColors.onSurface,
                   ),
-                )),
-                if (past.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Text('Past Premieres', style: AppTypography.headlineSm),
-                  const SizedBox(height: 12),
-                  ...past.map((e) => Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceContainerHigh.withValues(alpha: 0.6),
-                      borderRadius: BorderRadius.circular(12),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'by $creator',
+                  style: AppTypography.labelSm.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  description,
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Text(
+                      isPaid ? '₦${_formatPrice(price)}' : 'Free',
+                      style: AppTypography.labelMd.copyWith(
+                        color: AppColors.onSurface,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                    child: Row(
-                      children: [
-                        Text(e['title']?.toString() ?? '', style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant)),
-                      ],
-                    ),
-                  )),
-                ],
-                if (upcoming.isEmpty && past.isEmpty)
-                  Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.star, size: 64, color: AppColors.onSurfaceVariant),
-                    const SizedBox(height: 16),
-                    Text('No premieres available', style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant)),
-                  ])),
+                    const Spacer(),
+                    if (hasTicket)
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.check_circle,
+                            size: 14,
+                            color: AppColors.secondary,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Got Ticket',
+                            style: AppTypography.labelSm.copyWith(
+                              color: AppColors.secondary,
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      FilledButton(
+                        onPressed: purchasing ? null : onPurchase,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primaryContainer,
+                          foregroundColor: AppColors.onPrimaryContainer,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: purchasing
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(
+                                isPaid ? 'Get Ticket' : 'RSVP Free',
+                                style: AppTypography.labelSm.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                      ),
+                  ],
+                ),
               ],
             ),
-          );
-        },
-        loading: () => const LoadingSpinner(logo: true),
-        error: (e, _) => Center(child: Text('Error: $e', style: TextStyle(color: AppColors.error))),
+          ),
+        ],
       ),
     );
+  }
+
+  String _formatPrice(num p) {
+    final n = p.toInt();
+    final s = n.toString();
+    final b = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) b.write(',');
+      b.write(s[i]);
+    }
+    return b.toString();
+  }
+
+  String _formatEventDate(String iso) {
+    final dt = DateTime.tryParse(iso);
+    if (dt == null) return iso;
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${days[dt.weekday - 1]}, ${months[dt.month - 1]} ${dt.day}';
   }
 }

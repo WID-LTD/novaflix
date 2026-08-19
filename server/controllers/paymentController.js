@@ -1,18 +1,21 @@
 import { v4 as uuidv4 } from 'uuid'
-import { addSubscription, getUserSubscription, updateUser, createTransaction, getTransactionByReference, updateTransactionByReference } from '../db.js'
+import { addSubscription, getUserSubscription, updateUser, createTransaction, getTransactionByReference, updateTransactionByReference, getPlanBySlug, listPlans } from '../db.js'
 import { initializePayment, verifyPayment, isConfigured } from '../lib/gateway.js'
 
-const PLANS = {
-  student: 800,
-  basic: 1500,
-  standard: 2500,
-  premium: 5500,
+export async function listPricing(req, res) {
+  try {
+    const plans = await listPlans()
+    res.json({ success: true, plans, currency: 'NGN' })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
 }
 
 export async function initialize(req, res) {
   try {
     const { plan, gateway } = req.body
-    const amount = PLANS[plan]
+    const planRow = await getPlanBySlug(plan)
+    const amount = planRow?.price
     if (!amount) return res.status(400).json({ error: 'Invalid plan' })
 
     const selectedGateway = gateway === 'flutterwave' ? 'flutterwave' : 'paystack'

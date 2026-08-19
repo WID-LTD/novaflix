@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -11,6 +12,30 @@ import '../providers/watchlist_provider.dart';
 import '../providers/downloads_provider.dart';
 import '../widgets/ui/index.dart';
 import '../widgets/features/index.dart';
+
+class CastMember {
+  final String? name;
+  final String? character;
+  final String? profilePath;
+  final String? job;
+  final String? department;
+
+  const CastMember({
+    this.name,
+    this.character,
+    this.profilePath,
+    this.job,
+    this.department,
+  });
+
+  factory CastMember.fromJson(Map<String, dynamic> json) => CastMember(
+    name: json['name'] as String?,
+    character: json['character'] as String?,
+    profilePath: json['profile_path'] as String?,
+    job: json['job'] as String?,
+    department: json['department'] as String?,
+  );
+}
 
 final _movieDetailProvider = FutureProvider.family<MediaItem?, int>((
   ref,
@@ -44,27 +69,49 @@ final _similarProvider = FutureProvider.family<List<MediaItem>, int>((
   }
 });
 
+final _creditsProvider = FutureProvider.family<List<CastMember>, int>((
+  ref,
+  id,
+) async {
+  final api = ref.read(apiServiceProvider);
+  try {
+    final res = await api.getCredits(id, 'movie');
+    final cast = res.data['cast'] as List? ?? [];
+    final crew = res.data['crew'] as List? ?? [];
+    return [
+      ...cast.map((e) => CastMember.fromJson(e as Map<String, dynamic>)),
+      ...crew.map((e) => CastMember.fromJson(e as Map<String, dynamic>)),
+    ];
+  } catch (_) {
+    return [];
+  }
+});
+
 class MovieDetailScreen extends ConsumerWidget {
   final int movieId;
+  final String? mediaType;
 
-  const MovieDetailScreen({super.key, required this.movieId});
+  const MovieDetailScreen({super.key, required this.movieId, this.mediaType});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final type = mediaType ?? 'movie';
     final detail = ref.watch(_movieDetailProvider(movieId));
     final similar = ref.watch(_similarProvider(movieId));
+    final credits = ref.watch(_creditsProvider(movieId));
+    final auth = ref.watch(authProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: detail.when(
-        loading: () => const LoadingSpinner(logo: true),
+        loading: () => const LoadingSpinner(),
         error: (err, _) => Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const Icon(Icons.error_outline, size: 48, color: AppColors.error),
               const SizedBox(height: 16),
-              Text('Error loading details', style: AppTypography.bodyMd),
+              Text('Failed to load details', style: AppTypography.bodyMd),
               const SizedBox(height: 16),
               AppButton(
                 label: 'Go Back',
@@ -78,10 +125,19 @@ class MovieDetailScreen extends ConsumerWidget {
           if (item == null) {
             return const Center(child: Text('Item not found'));
           }
+          final width = MediaQuery.sizeOf(context).width;
+          final heroHeight = width >= 768 ? 751.0 : 618.0;
+          final isTV = item.isTV;
+          final runtimeStr = item.runtime != null
+              ? '${item.runtime! ~/ 60}h ${item.runtime! % 60}m'
+              : null;
+          final isDesktop = width >= 1024;
+          final hPadding = isDesktop ? 64.0 : 16.0;
+
           return CustomScrollView(
             slivers: [
               SliverAppBar(
-                expandedHeight: 400,
+                expandedHeight: heroHeight,
                 pinned: true,
                 backgroundColor: AppColors.background,
                 flexibleSpace: FlexibleSpaceBar(
@@ -94,60 +150,250 @@ class MovieDetailScreen extends ConsumerWidget {
                           fit: BoxFit.cover,
                         )
                       else
-                        Container(color: AppColors.surfaceContainerHigh),
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                AppColors.primaryContainer.withValues(alpha: 0.2),
+                                AppColors.surface,
+                              ],
+                            ),
+                          ),
+                        ),
                       Container(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
-                            colors: [Colors.transparent, AppColors.background],
+                            colors: [
+                              const Color(0xFF050505).withValues(alpha: 0.0),
+                              const Color(0xFF050505).withValues(alpha: 0.4),
+                              const Color(0xFF050505),
+                            ],
+                            stops: const [0.0, 0.5, 1.0],
+                          ),
+                        ),
+                      ),
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                            colors: [
+                              const Color(0xFF050505).withValues(alpha: 0.8),
+                              const Color(0xFF050505).withValues(alpha: 0.2),
+                              const Color(0xFF050505).withValues(alpha: 0.0),
+                            ],
+                            stops: const [0.0, 0.3, 1.0],
                           ),
                         ),
                       ),
                       Positioned(
-                        left: 16,
-                        right: 16,
-                        bottom: 24,
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                        top: 24,
+                        left: isDesktop ? 32 : 16,
+                        child: IconButton(
+                          onPressed: () => context.pop(),
+                          icon: const Icon(
+                            Icons.arrow_back,
+                            color: Colors.white,
+                          ),
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.black.withValues(alpha: 0.4),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: hPadding,
+                        right: hPadding,
+                        bottom: isDesktop ? 96 : 48,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 896),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
                                 children: [
-                                  Text(
-                                    item.title,
-                                    style: AppTypography.headlineMd.copyWith(
-                                      color: Colors.white,
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      isTV ? 'TV SERIES' : 'ORIGINAL FILM',
+                                      style: AppTypography.labelSm.copyWith(
+                                        color: AppColors.onSurface,
+                                        letterSpacing: 2,
+                                      ),
                                     ),
                                   ),
-                                  const SizedBox(height: 8),
-                                  Row(
-                                    children: [
-                                      RatingBadge(
-                                        rating: item.voteAverage ?? 0,
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Text(
-                                        '${item.year}',
-                                        style: const TextStyle(
-                                          color: Colors.white70,
-                                        ),
-                                      ),
-                                      if (item.runtime != null) ...[
-                                        const SizedBox(width: 12),
-                                        Text(
-                                          '${item.runtime! ~/ 60}h ${item.runtime! % 60}m',
-                                          style: const TextStyle(
-                                            color: Colors.white70,
-                                          ),
-                                        ),
-                                      ],
-                                    ],
+                                  const SizedBox(width: 12),
+                                  const Icon(
+                                    Icons.star,
+                                    color: AppColors.secondary,
+                                    size: 14,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${item.ratingFormatted} Rating',
+                                    style: AppTypography.labelMd.copyWith(
+                                      color: AppColors.secondary,
+                                    ),
                                   ),
                                 ],
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 12),
+                              Text(
+                                item.title,
+                                style: isDesktop
+                                    ? AppTypography.displayLg.copyWith(
+                                        color: Colors.white,
+                                      )
+                                    : AppTypography.headlineLgMobile.copyWith(
+                                        color: Colors.white,
+                                      ),
+                              ),
+                              const SizedBox(height: 16),
+                              Wrap(
+                                spacing: 12,
+                                runSpacing: 8,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  Text(
+                                    '${item.year}',
+                                    style: AppTypography.labelMd.copyWith(
+                                      color: AppColors.secondary,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                        color: AppColors.onSurfaceVariant,
+                                      ),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text(
+                                      '18+',
+                                      style: TextStyle(
+                                        color: AppColors.onSurfaceVariant,
+                                        fontSize: 10,
+                                      ),
+                                    ),
+                                  ),
+                                  if (runtimeStr != null)
+                                    Text(
+                                      runtimeStr,
+                                      style: AppTypography.labelMd.copyWith(
+                                        color: AppColors.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  Text(
+                                    '4K Ultra HD',
+                                    style: AppTypography.labelMd.copyWith(
+                                      color: AppColors.onSurfaceVariant,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Dolby Atmos',
+                                    style: AppTypography.labelMd.copyWith(
+                                      color: AppColors.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (item.overview != null &&
+                                  item.overview!.isNotEmpty) ...[
+                                const SizedBox(height: 16),
+                                ConstrainedBox(
+                                  constraints: const BoxConstraints(maxWidth: 672),
+                                  child: Text(
+                                    item.overview!,
+                                    maxLines: 3,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTypography.bodyLg.copyWith(
+                                      color: AppColors.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 24),
+                              Wrap(
+                                spacing: 12,
+                                runSpacing: 12,
+                                children: [
+                                  _heroButton(
+                                    label: 'Play Now',
+                                    icon: Icons.play_arrow,
+                                    filled: true,
+                                    onTap: () {
+                                      if (auth.status != AuthStatus.authenticated) {
+                                        context.go('/login?redirect=/movie/$movieId');
+                                        return;
+                                      }
+                                      context.push(
+                                        '/watch?id=$movieId&type=$type${isTV ? '&season=1&episode=1' : ''}',
+                                      );
+                                    },
+                                  ),
+                                  _heroButton(
+                                    label: 'Download',
+                                    icon: Icons.download,
+                                    filled: false,
+                                    onTap: () => _handleDownload(context, ref, item),
+                                  ),
+                                  Container(
+                                    width: 56,
+                                    height: 56,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surfaceVariant.withValues(alpha: 0.4),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.white10),
+                                    ),
+                                    child: Consumer(
+                                      builder: (_, ref2, __) {
+                                        final watchlist = ref2.watch(watchlistProvider);
+                                        final inList = watchlist.isInWatchlist(item.id, isTV ? 'tv' : 'movie');
+                                        return IconButton(
+                                          icon: Icon(
+                                            inList ? Icons.check : Icons.add,
+                                            color: AppColors.onSurface,
+                                          ),
+                                          onPressed: () {
+                                            if (auth.status != AuthStatus.authenticated) {
+                                              context.go('/login?redirect=/movie/$movieId');
+                                              return;
+                                            }
+                                            ref2
+                                                .read(watchlistProvider.notifier)
+                                                .toggle(item.id, isTV ? 'tv' : 'movie');
+                                          },
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                  _heroButton(
+                                    label: 'Watch Party',
+                                    icon: Icons.diversity_3,
+                                    filled: false,
+                                    outline: true,
+                                    onTap: () => context.push(
+                                      '/watch-party?id=$movieId&type=$type',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -160,147 +406,27 @@ class MovieDetailScreen extends ConsumerWidget {
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 1440),
                     child: Padding(
-                      padding: const EdgeInsets.all(16),
+                      padding: EdgeInsets.fromLTRB(hPadding, 0, hPadding, 32),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: AppButton(
-                                  label: 'Watch Now',
-                                  onPressed: () => context.push(
-                                    '/watch?id=${item.id}&type=${item.mediaType ?? 'movie'}',
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Consumer(
-                                builder: (_, ref2, __) {
-                                  final watchlist = ref2.watch(
-                                    watchlistProvider,
-                                  );
-                                  final inWatchlist = watchlist.isInWatchlist(
-                                    item.id,
-                                    item.isTV ? 'tv' : 'movie',
-                                  );
-                                  return Container(
-                                    width: 48,
-                                    height: 48,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.surfaceContainerHigh,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: IconButton(
-                                      icon: Icon(
-                                        inWatchlist
-                                            ? Icons.bookmark
-                                            : Icons.bookmark_border,
-                                        color: inWatchlist
-                                            ? AppColors.primary
-                                            : AppColors.onSurfaceVariant,
-                                      ),
-                                      onPressed: () => ref2
-                                          .read(watchlistProvider.notifier)
-                                          .toggle(
-                                            item.id,
-                                            item.isTV ? 'tv' : 'movie',
-                                          ),
-                                    ),
-                                  );
-                                },
-                              ),
-                              const SizedBox(width: 12),
-                              Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  color: AppColors.surfaceContainerHigh,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: IconButton(
-                                  icon: const Icon(
-                                    Icons.download_outlined,
-                                    color: AppColors.onSurfaceVariant,
-                                  ),
-                                  onPressed: () =>
-                                      _handleDownload(context, ref, item),
-                                ),
-                              ),
-                            ],
-                          ),
+                          const SizedBox(height: 32),
+                          _infoCard(item, credits.valueOrNull ?? const [], isTV),
                           const SizedBox(height: 24),
-                          if (item.overview != null &&
-                              item.overview!.isNotEmpty) ...[
-                            Text('Synopsis', style: AppTypography.headlineSm),
-                            const SizedBox(height: 8),
-                            Text(
-                              item.overview!,
-                              style: AppTypography.bodyMd.copyWith(
-                                color: AppColors.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
+                          _engagementSection(context, item),
                           const SizedBox(height: 24),
-                          if (item.genres != null &&
-                              item.genres!.isNotEmpty) ...[
-                            Text('Genres', style: AppTypography.headlineSm),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: item.genres!
-                                  .map(
-                                    (g) => Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.surfaceContainerHigh,
-                                        borderRadius: BorderRadius.circular(20),
-                                        border: Border.all(
-                                          color: AppColors.outlineVariant,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        g.name,
-                                        style: AppTypography.bodySm,
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
-                            ),
-                          ],
-                          const SizedBox(height: 24),
-                          if (item.voteAverage != null) ...[
-                            Row(
-                              children: [
-                                const Text(
-                                  'Rating: ',
-                                  style: TextStyle(fontWeight: FontWeight.w600),
-                                ),
-                                Text(
-                                  '${item.voteAverage!.toStringAsFixed(1)}/10',
-                                  style: AppTypography.bodyMd,
-                                ),
-                              ],
-                            ),
-                          ],
-                          const SizedBox(height: 24),
-                          if (item.seasons != null &&
-                              item.seasons!.isNotEmpty) ...[
-                            Text('Seasons', style: AppTypography.headlineSm),
-                            const SizedBox(height: 8),
+                          if (isTV && item.seasons != null && item.seasons!.isNotEmpty) ...[
+                            Text('Episodes', style: AppTypography.headlineMd),
+                            const SizedBox(height: 12),
                             SeasonEpisodeSelector(
                               showId: item.id,
                               seasons: item.seasons!,
                             ),
+                            const SizedBox(height: 24),
                           ],
-                          const SizedBox(height: 24),
                           CommentSection(
                             contentId: item.id,
-                            contentType: item.isTV ? 'tv' : 'movie',
+                            contentType: isTV ? 'tv' : 'movie',
                           ),
                           const SizedBox(height: 24),
                           similar.when(
@@ -312,7 +438,7 @@ class MovieDetailScreen extends ConsumerWidget {
                                 : const SizedBox.shrink(),
                             loading: () => const SizedBox(
                               height: 200,
-                              child: LoadingSpinner(logo: true),
+                              child: LoadingSpinner(),
                             ),
                             error: (_, __) => const SizedBox.shrink(),
                           ),
@@ -326,6 +452,306 @@ class MovieDetailScreen extends ConsumerWidget {
           );
         },
       ),
+    );
+  }
+
+  Widget _heroButton({
+    required String label,
+    required IconData icon,
+    required VoidCallback onTap,
+    bool filled = false,
+    bool outline = false,
+  }) {
+    final bg = filled
+        ? AppColors.primaryContainer
+        : outline
+            ? Colors.transparent
+            : AppColors.surfaceVariant.withValues(alpha: 0.4);
+    final fg = filled ? AppColors.onPrimaryContainer : AppColors.onSurface;
+    return Material(
+      color: bg,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: outline ? Border.all(color: AppColors.primary.withValues(alpha: 0.3)) : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: fg, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: fg,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _infoCard(MediaItem item, List<CastMember> credits, bool isTV) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainer,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Synopsis', style: AppTypography.headlineMd),
+          const SizedBox(height: 8),
+          Text(
+            item.overview ?? 'No synopsis available.',
+            style: AppTypography.bodyMd.copyWith(
+              color: AppColors.onSurfaceVariant,
+              height: 1.6,
+            ),
+          ),
+          if (credits.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            const Text('Cast & Crew', style: AppTypography.headlineMd),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 150,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: credits.length,
+                itemBuilder: (_, i) {
+                  final person = credits[i];
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 16),
+                    child: SizedBox(
+                      width: 80,
+                      child: Column(
+                        children: [
+                          CircleAvatar(
+                            radius: 32,
+                            backgroundColor: AppColors.surfaceContainerHigh,
+                            backgroundImage: person.profilePath != null
+                                ? NetworkImage(
+                                    'https://image.tmdb.org/t/p/w185${person.profilePath}',
+                                  )
+                                : null,
+                            child: person.profilePath == null
+                                ? const Icon(
+                                    Icons.person,
+                                    color: AppColors.onSurfaceVariant,
+                                  )
+                                : null,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            person.name ?? '',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: AppTypography.bodySm.copyWith(
+                              color: AppColors.onSurface,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          if (person.character != null ||
+                              person.job != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              person.character ?? person.job ?? '',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: AppColors.onSurfaceVariant,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+          const SizedBox(height: 24),
+          Wrap(
+            spacing: 24,
+            runSpacing: 16,
+            children: [
+              _infoField('Rating', '${item.ratingFormatted} / 10', AppColors.primary),
+              _infoField('Year', '${item.year}'),
+              _infoField(
+                'Genres',
+                item.genres?.map((g) => g.name).join(', ') ?? '—',
+              ),
+              _infoField('Type', isTV ? 'TV Series' : 'Movie'),
+            ],
+          ),
+          if ((item.voteAverage ?? 0) >= 8) ...[
+            const SizedBox(height: 16),
+            const PremiumBadge(size: 18),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _infoField(String label, String value, [Color? valueColor]) {
+    return SizedBox(
+      width: 200,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: const TextStyle(
+              color: AppColors.onSurfaceVariant,
+              fontSize: 10,
+              letterSpacing: 1.5,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: AppTypography.labelMd.copyWith(color: valueColor ?? AppColors.onSurface),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _engagementSection(BuildContext context, MediaItem item) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Engagement',
+            style: AppTypography.labelMd.copyWith(
+              color: AppColors.onSurfaceVariant,
+              letterSpacing: 1.5,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  children: [
+                    _engRow('Popularity', '#1 Today', color: AppColors.secondary),
+                    const SizedBox(height: 8),
+                    const ClipRRect(
+                      borderRadius: BorderRadius.all(Radius.circular(8)),
+                      child: LinearProgressIndicator(
+                        value: 0.92,
+                        backgroundColor: Colors.white10,
+                        color: AppColors.secondary,
+                        minHeight: 4,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _engRow(
+                      'Critical Score',
+                      '${((item.voteAverage ?? 0) * 10).round()}/100',
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  LikeButton(
+                    contentId: item.id,
+                    contentType: item.isTV ? 'tv' : 'movie',
+                  ),
+                  const SizedBox(height: 8),
+                  InkWell(
+                    onTap: () {
+                      Clipboard.setData(
+                        ClipboardData(
+                          text: 'https://novaflix.app/${item.isTV ? 'tv' : 'movie'}/${item.id}',
+                        ),
+                      );
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Link copied to clipboard'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.share_outlined,
+                          color: AppColors.onSurfaceVariant,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Share',
+                          style: AppTypography.labelSm.copyWith(
+                            color: AppColors.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton(
+                    onPressed: () {},
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: BorderSide(color: AppColors.primary.withValues(alpha: 0.3)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      minimumSize: const Size(160, 44),
+                    ),
+                    child: Text(
+                      'Rate this Movie',
+                      style: AppTypography.labelMd,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _engRow(String label, String value, {Color? color}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: AppTypography.labelSm.copyWith(color: AppColors.onSurfaceVariant)),
+        Text(
+          value,
+          style: AppTypography.labelSm.copyWith(
+            color: color ?? AppColors.onSurface,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
     );
   }
 
@@ -379,16 +805,27 @@ class MovieDetailScreen extends ConsumerWidget {
           duration: const Duration(seconds: 3),
         ),
       );
-      ref
-          .read(downloadsProvider.notifier)
-          .startDownload(
-            contentId: item.id,
-            type: 'tv',
-            title: item.title,
-            poster: item.posterUrl,
-            backdrop: item.backdropUrl,
-            episodes: allEpisodes,
+      try {
+        await ref
+            .read(downloadsProvider.notifier)
+            .startDownload(
+              contentId: item.id,
+              type: 'tv',
+              title: item.title,
+              poster: item.posterUrl,
+              backdrop: item.backdropUrl,
+              episodes: allEpisodes,
+            );
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Download failed: ${e.toString().replaceFirst('Exception: ', '')}'),
+              backgroundColor: Colors.redAccent,
+            ),
           );
+        }
+      }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -396,15 +833,26 @@ class MovieDetailScreen extends ConsumerWidget {
           duration: const Duration(seconds: 3),
         ),
       );
-      ref
-          .read(downloadsProvider.notifier)
-          .startDownload(
-            contentId: item.id,
-            type: 'movie',
-            title: item.title,
-            poster: item.posterUrl,
-            backdrop: item.backdropUrl,
+      try {
+        await ref
+            .read(downloadsProvider.notifier)
+            .startDownload(
+              contentId: item.id,
+              type: 'movie',
+              title: item.title,
+              poster: item.posterUrl,
+              backdrop: item.backdropUrl,
+            );
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Download failed: ${e.toString().replaceFirst('Exception: ', '')}'),
+              backgroundColor: Colors.redAccent,
+            ),
           );
+        }
+      }
     }
   }
 }

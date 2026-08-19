@@ -39,10 +39,8 @@ class ContentRow extends StatelessWidget {
   Widget build(BuildContext context) {
     if (items.isEmpty) return const SizedBox.shrink();
     final isDesktop = MediaQuery.of(context).size.width >= 1024;
-    final cardWidth = isDesktop ? 220.0 : 160.0;
-    final rowHeight = cardWidth * 1.5 + 40;
     final hPadding = isDesktop ? 64.0 : 16.0;
-
+    final cardWidth = isDesktop ? 180.0 : 160.0;
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1440),
@@ -53,15 +51,26 @@ class ContentRow extends StatelessWidget {
               padding: EdgeInsets.fromLTRB(hPadding, 8, hPadding, 12),
               child: Row(
                 children: [
-                  Text(title, style: AppTypography.headlineMd),
-                  const Spacer(),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: AppTypography.headlineMd.copyWith(
+                        color: AppColors.onSurface,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                   if (onSeeAll != null)
                     GestureDetector(
                       onTap: onSeeAll,
-                      child: Text(
-                        'See All',
-                        style: AppTypography.labelMd.copyWith(
-                          color: AppColors.primary,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Text(
+                          'View All',
+                          style: AppTypography.labelMd.copyWith(
+                            color: AppColors.primary,
+                          ),
                         ),
                       ),
                     ),
@@ -69,7 +78,7 @@ class ContentRow extends StatelessWidget {
               ),
             ),
             SizedBox(
-              height: rowHeight,
+              height: cardWidth * 1.5 + 40,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 padding: EdgeInsets.symmetric(horizontal: hPadding),
@@ -78,7 +87,7 @@ class ContentRow extends StatelessWidget {
                   padding: const EdgeInsets.only(right: 16),
                   child: SizedBox(
                     width: cardWidth,
-                    child: MovieCard(item: items[i], width: cardWidth, height: cardWidth * 1.5),
+                    child: MovieCard(item: items[i]),
                   ),
                 ),
               ),
@@ -162,11 +171,11 @@ class _HeroBannerState extends ConsumerState<HeroBanner> {
     if (widget.items.isEmpty) return const SizedBox(height: 400);
     final item = widget.items[_currentPage];
     final type = item.mediaType == 'tv' ? 'tv' : 'movie';
-    final size = MediaQuery.sizeOf(context);
-    final width = size.width;
+    final width = MediaQuery.sizeOf(context).width;
+    final heightPx = MediaQuery.sizeOf(context).height;
     final height = width >= 1280
-        ? size.height * 0.8
-        : (width >= 768 ? size.height * 0.7 : size.height * 0.6);
+        ? heightPx * 0.8
+        : (width >= 768 ? heightPx * 0.7 : heightPx * 0.6);
     final showControls = width >= 768 && widget.items.length > 1;
     final inWatchlist = ref
         .watch(watchlistProvider)
@@ -232,9 +241,9 @@ class _HeroBannerState extends ConsumerState<HeroBanner> {
                 ),
               ),
               Positioned(
-                left: width >= 768 ? 48 : 16,
-                right: width >= 768 ? 48 : 16,
-                bottom: width >= 1280 ? 64 : 48,
+                left: width >= 768 ? 64 : 16,
+                right: width >= 768 ? 64 : 16,
+                bottom: width >= 768 ? 64 : 48,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -249,11 +258,9 @@ class _HeroBannerState extends ConsumerState<HeroBanner> {
                       ),
                       child: Text(
                         type == 'movie' ? 'NOW PLAYING' : 'TRENDING',
-                        style: const TextStyle(
+                        style: AppTypography.labelSm.copyWith(
                           color: AppColors.onPrimaryContainer,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 2,
+                          letterSpacing: 1.2,
                         ),
                       ),
                     ),
@@ -261,12 +268,15 @@ class _HeroBannerState extends ConsumerState<HeroBanner> {
                     Text(
                       item.title,
                       style: width >= 1280
-                          ? AppTypography.displayLg.copyWith(
-                              color: Colors.white,
-                            )
-                          : AppTypography.headlineLg.copyWith(
-                              color: Colors.white,
-                            ),
+                          ? AppTypography.displayLg.copyWith(color: Colors.white)
+                          : (width >= 768
+                              ? AppTypography.headlineLg.copyWith(
+                                  color: Colors.white,
+                                  fontSize: 44,
+                                )
+                              : AppTypography.headlineLgMobile.copyWith(
+                                  color: Colors.white,
+                                )),
                     ),
                     const SizedBox(height: 12),
                     Row(

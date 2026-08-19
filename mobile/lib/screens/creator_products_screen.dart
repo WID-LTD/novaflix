@@ -210,7 +210,7 @@ class _CreatorProductsScreenState extends ConsumerState<CreatorProductsScreen> {
                   ); // closes Container + Opacity
                 },
               ),
-              loading: () => const LoadingSpinner(logo: true),
+              loading: () => const LoadingSpinner(),
               error: (e, _) => Center(child: Text('Error: $e')),
             ),
           ],

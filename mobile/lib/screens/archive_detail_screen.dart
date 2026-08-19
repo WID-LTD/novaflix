@@ -46,7 +46,7 @@ class ArchiveDetailScreen extends ConsumerWidget {
                 ),
               );
             },
-            loading: () => const LoadingSpinner(logo: true),
+            loading: () => const LoadingSpinner(),
             error: (e, _) => Center(child: Text('Error: $e', style: TextStyle(color: AppColors.error))),
           )
         : Center(child: Column(mainAxisSize: MainAxisSize.min, children: [

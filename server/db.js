@@ -128,6 +128,46 @@ export async function getWatchHistory(userId) {
   return rows
 }
 
+export async function addToWatchlist(entry) {
+  const { rows } = await pool.query(
+    `INSERT INTO watchlist (id, user_id, content_id, content_type, title, poster, year)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (user_id, content_id) DO NOTHING RETURNING *`,
+    [entry.id, entry.userId, entry.contentId, entry.contentType, entry.title, entry.poster || null, entry.year || null]
+  )
+  return rows[0] || null
+}
+
+export async function getWatchlistByUserId(userId) {
+  const { rows } = await pool.query('SELECT * FROM watchlist WHERE user_id = $1 ORDER BY added_at DESC', [userId])
+  return rows
+}
+
+export async function removeFromWatchlist(userId, contentId) {
+  const { rowCount } = await pool.query('DELETE FROM watchlist WHERE user_id = $1 AND content_id = $2', [userId, contentId])
+  return rowCount > 0
+}
+
+export async function isInWatchlist(userId, contentId) {
+  const { rows } = await pool.query('SELECT id FROM watchlist WHERE user_id = $1 AND content_id = $2', [userId, contentId])
+  return rows.length > 0
+}
+
+export async function getWatchlistCount(userId) {
+  const { rows } = await pool.query('SELECT COUNT(*)::int as count FROM watchlist WHERE user_id = $1', [userId])
+  return rows[0]?.count ?? 0
+}
+
+export async function listPlans() {
+  const { rows } = await pool.query('SELECT * FROM plans WHERE active = TRUE ORDER BY sort_order ASC')
+  return rows
+}
+
+export async function getPlanBySlug(slug) {
+  const { rows } = await pool.query('SELECT * FROM plans WHERE slug = $1 AND active = TRUE', [slug])
+  return rows[0] || null
+}
+
 export async function addSubscription(sub) {
   const { rows } = await pool.query(
     `INSERT INTO subscriptions (id, user_id, plan, active, started_at, expires_at)

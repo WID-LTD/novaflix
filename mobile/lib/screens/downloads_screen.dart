@@ -34,7 +34,7 @@ class DownloadsScreen extends ConsumerWidget {
         backgroundColor: AppColors.background,
       ),
       body: dlState.loading
-          ? const LoadingSpinner(logo: true)
+          ? const LoadingSpinner()
           : RefreshIndicator(
               onRefresh: () async {
                 ref.invalidate(downloadsProvider);
@@ -357,7 +357,7 @@ class DownloadsScreen extends ConsumerWidget {
         const SizedBox(height: 16),
         FilledButton(
           onPressed: () => context.go('/home'),
-          style: FilledButton.styleFrom(backgroundColor: AppColors.primaryContainer),
+          style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
           child: const Text('Browse'),
         ),
       ],

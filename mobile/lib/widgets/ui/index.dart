@@ -3,8 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 
-export 'animated_loader.dart';
-
 class AppButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
@@ -307,102 +305,19 @@ class RatingBadge extends StatelessWidget {
 class LoadingSpinner extends StatelessWidget {
   final double size;
   final Color? color;
-  final bool logo;
 
   const LoadingSpinner({
     super.key,
     this.size = 50,
     this.color,
-    this.logo = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (logo) {
-      return Center(
-        child: _LogoSpinner(size: size * 4, color: color ?? AppColors.primary),
-      );
-    }
     return Center(
       child: CircularProgressIndicator(
         strokeWidth: 3,
         valueColor: AlwaysStoppedAnimation(color ?? AppColors.primary),
-      ),
-    );
-  }
-}
-
-class _LogoSpinner extends StatefulWidget {
-  final double size;
-  final Color color;
-
-  const _LogoSpinner({required this.size, required this.color});
-
-  @override
-  State<_LogoSpinner> createState() => _LogoSpinnerState();
-}
-
-class _LogoSpinnerState extends State<_LogoSpinner>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _cw;
-  late final AnimationController _ccw;
-
-  @override
-  void initState() {
-    super.initState();
-    _cw = AnimationController(vsync: this, duration: const Duration(seconds: 2))
-      ..repeat();
-    _ccw = AnimationController(vsync: this, duration: const Duration(seconds: 3))
-      ..repeat();
-  }
-
-  @override
-  void dispose() {
-    _cw.dispose();
-    _ccw.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: widget.size,
-      height: widget.size,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          RotationTransition(
-            turns: _cw,
-            child: Image.asset(
-              'assets/brand/nova-logo.png',
-              width: widget.size,
-              fit: BoxFit.contain,
-            ),
-          ),
-          RotationTransition(
-            turns: _ccw,
-            child: Image.asset(
-              'assets/brand/flix-logo.png',
-              width: widget.size * 0.75,
-              fit: BoxFit.contain,
-            ),
-          ),
-          Container(
-            width: 14,
-            height: 14,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: widget.color,
-              boxShadow: [
-                BoxShadow(
-                  color: widget.color.withValues(alpha: 0.5),
-                  blurRadius: 16,
-                  spreadRadius: 4,
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -429,74 +344,13 @@ class AppSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Shimmer(
-      child: Container(
-        width: width,
-        height: height,
-        decoration: BoxDecoration(
-          color: AppColors.surfaceContainerHighest.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(borderRadius),
-        ),
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(borderRadius),
       ),
-    );
-  }
-}
-
-class Shimmer extends StatefulWidget {
-  final Widget child;
-
-  const Shimmer({super.key, required this.child});
-
-  @override
-  State<Shimmer> createState() => _ShimmerState();
-}
-
-class _ShimmerState extends State<Shimmer>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<Alignment> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller =
-        AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))
-          ..repeat();
-    _animation = AlignmentTween(
-      begin: const Alignment(-1.5, 0),
-      end: const Alignment(1.5, 0),
-    ).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _animation,
-      child: widget.child,
-      builder: (_, child) {
-        return ShaderMask(
-          blendMode: BlendMode.srcATop,
-          shaderCallback: (bounds) => LinearGradient(
-            begin: _animation.value,
-            end: -_animation.value,
-            colors: const [
-              Color(0x00FFFFFF),
-              Color(0x66FFFFFF),
-              Color(0x00FFFFFF),
-            ],
-            stops: const [0.35, 0.5, 0.65],
-          ).createShader(bounds),
-          child: child,
-        );
-      },
     );
   }
 }
@@ -519,85 +373,33 @@ class AppModal extends StatelessWidget {
     required Widget content,
     List<Widget>? actions,
   }) {
-    return showGeneralDialog<T>(
+    return showModalBottomSheet<T>(
       context: context,
-      barrierDismissible: true,
-      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-      barrierColor: Colors.black.withValues(alpha: 0.8),
-      transitionDuration: const Duration(milliseconds: 200),
-      pageBuilder: (_, __, ___) => AppModal(title: title, content: content, actions: actions),
-      transitionBuilder: (_, anim, __, child) {
-        return FadeTransition(
-          opacity: anim,
-          child: ScaleTransition(scale: anim, child: child),
-        );
-      },
+      backgroundColor: AppColors.surfaceContainer,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) =>
+          AppModal(title: title, content: content, actions: actions),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final maxH = MediaQuery.of(context).size.height * 0.9;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
-            width: 512,
-            constraints: BoxConstraints(maxHeight: maxH),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceContainer,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.6),
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 20, 12, 20),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(title, style: AppTypography.headlineSm),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 22),
-                        color: AppColors.onSurfaceVariant,
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1, color: Colors.white12),
-                Flexible(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(24),
-                    child: content,
-                  ),
-                ),
-                if (actions != null) ...[
-                  const Divider(height: 1, color: Colors.white12),
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: actions!,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: AppTypography.headlineSm),
+          const SizedBox(height: 16),
+          content,
+          if (actions != null) ...[
+            const SizedBox(height: 16),
+            Row(mainAxisAlignment: MainAxisAlignment.end, children: actions!),
+          ],
+        ],
       ),
     );
   }

@@ -3,9 +3,11 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:screen_brightness/screen_brightness.dart';
 import '../../theme/app_colors.dart';
 import '../../services/api_service.dart';
 
@@ -126,6 +128,13 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
   Timer? _noStartTimer;
   static const int _noStartTimeoutSeconds = 20;
 
+  double _brightness = 1;
+  int _dragMode = 0;
+  double _dragStartValue = 0;
+  String? _seekHintText;
+  Timer? _seekHintTimer;
+  bool _autoQualityApplied = false;
+
   @override
   void initState() {
     super.initState();
@@ -140,6 +149,15 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
     });
     _loadAds();
     _open();
+    _initBrightness();
+  }
+
+  Future<void> _initBrightness() async {
+    try {
+      _brightness = await ScreenBrightness.instance.application;
+    } catch (_) {
+      _brightness = 1;
+    }
   }
 
   void _debug(String msg) {
@@ -276,6 +294,18 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
         ..sort((a, b) => (b.h ?? 0).compareTo(a.h ?? 0));
       _debug('tracks: ${list.map((t) => '${t.h}p').join(',')}');
       setState(() => _videoTracks = list);
+      if (!_autoQualityApplied && list.length > 1 && _qualityTrack == null) {
+        _autoQualityApplied = true;
+        final lowest = list.last;
+        _debug('auto-quality: starting at lowest track ${lowest.h}p');
+        _player.setVideoTrack(lowest);
+        Timer(const Duration(seconds: 10), () {
+          if (mounted && _qualityTrack == null) {
+            _debug('auto-quality: upgrading to auto');
+            _player.setVideoTrack(VideoTrack.auto());
+          }
+        });
+      }
     }));
     _subs.add(_player.stream.log.listen((line) => _debug('mpv: $line')));
   }
@@ -413,14 +443,6 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
   void _resetControlsTimer() {
     if (!mounted) return;
     setState(() => _showControls = true);
-    _controlsTimer?.cancel();
-    // On desktop a pointer is always available, so auto-hiding the control bar
-    // just makes controls feel "lost". Keep them visible there.
-    if (_playing && !kIsWeb && defaultTargetPlatform != TargetPlatform.linux) {
-      _controlsTimer = Timer(const Duration(seconds: 3), () {
-        if (mounted) setState(() => _showControls = false);
-      });
-    }
   }
 
   void _togglePlay() {
@@ -577,16 +599,142 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
     });
   }
 
+  void _seekBy(double seconds) {
+    final target = (_currentTime + seconds).clamp(0.0, _duration > 0 ? _duration : _currentTime + seconds.abs());
+    _player.seek(Duration(milliseconds: (target * 1000).round()));
+    _seekHintText = seconds > 0 ? '+${seconds.toInt()}s' : '${seconds.toInt()}s';
+    _seekHintTimer?.cancel();
+    _seekHintTimer = Timer(const Duration(milliseconds: 800), () {
+      if (mounted) setState(() => _seekHintText = null);
+    });
+    setState(() {});
+  }
+
+  Future<void> _setBrightness(double b) async {
+    _brightness = b.clamp(0.0, 1.0);
+    try {
+      await ScreenBrightness.instance.setApplicationScreenBrightness(_brightness);
+    } catch (_) {}
+    setState(() {});
+  }
+
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    switch (event.logicalKey) {
+      case LogicalKeyboardKey.space:
+        _togglePlay();
+        _resetControlsTimer();
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.arrowRight:
+        _seekBy(10);
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.arrowLeft:
+        _seekBy(-10);
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.arrowUp:
+        _setVolume((_volume + 0.1).clamp(0.0, 1.0));
+        _showVolumeOverlay(_volume);
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.arrowDown:
+        _setVolume((_volume - 0.1).clamp(0.0, 1.0));
+        _showVolumeOverlay(_volume);
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.keyM:
+        _setVolume(_muted ? 1.0 : 0.0);
+        _showVolumeOverlay(_volume);
+        return KeyEventResult.handled;
+      default:
+        return KeyEventResult.ignored;
+    }
+  }
+
+  void _handlePointerSignal(PointerSignalEvent event) {
+    if (event is PointerScrollEvent) {
+      final delta = event.scrollDelta.dy > 0 ? -0.05 : 0.05;
+      _setVolume((_volume + delta).clamp(0.0, 1.0));
+      _showVolumeOverlay(_volume);
+    }
+  }
+
+  double _overlayAlpha = 0;
+  String _overlayIcon = '';
+  double _overlayValue = 0;
+
+  void _showVolumeOverlay(double v) {
+    _overlayIcon = v == 0 ? Icons.volume_off.codePoint.toString() : Icons.volume_up.codePoint.toString();
+    _overlayValue = v;
+    _overlayAlpha = 1;
+    setState(() {});
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      if (mounted) setState(() => _overlayAlpha = 0);
+    });
+  }
+
+  void _showBrightnessOverlay(double b) {
+    _overlayIcon = Icons.brightness_6.codePoint.toString();
+    _overlayValue = b;
+    _overlayAlpha = 1;
+    setState(() {});
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      if (mounted) setState(() => _overlayAlpha = 0);
+    });
+  }
+
+  Widget _buildGestureOverlay() {
+    if (_seekHintText == null && _overlayAlpha <= 0) return const SizedBox.shrink();
+    return Positioned.fill(
+      child: Center(
+        child: AnimatedOpacity(
+          opacity: _overlayAlpha.clamp(0.0, 1.0),
+          duration: const Duration(milliseconds: 200),
+          child: _seekHintText != null
+              ? Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Text(_seekHintText!,
+                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
+                )
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _overlayIcon == Icons.brightness_6.codePoint.toString()
+                          ? Icons.brightness_6
+                          : (_overlayValue == 0 ? Icons.volume_off : Icons.volume_up),
+                      color: Colors.white,
+                      size: 32,
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: 120,
+                      child: LinearProgressIndicator(
+                        value: _overlayValue.clamp(0.0, 1.0),
+                        backgroundColor: Colors.white24,
+                        valueColor: AlwaysStoppedAnimation(AppColors.primary),
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _stallTimer?.cancel();
     _noStartTimer?.cancel();
+    _seekHintTimer?.cancel();
     for (final s in _subs) {
       s.cancel();
     }
     _controlsTimer?.cancel();
     _progressTimer?.cancel();
     _player.dispose();
+    try { ScreenBrightness.instance.resetApplicationScreenBrightness(); } catch (_) {}
     super.dispose();
   }
 
@@ -602,30 +750,58 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
   }
 
   Widget _buildPlayerBody() {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () {
-            _resetControlsTimer();
-          },
-          onDoubleTapDown: (_) {
-            _togglePlay();
-            _resetControlsTimer();
-          },
-          onVerticalDragUpdate: (d) {
-            final v = (_volume - d.delta.dy / 200).clamp(0.0, 1.0);
-            _setVolume(v);
-          },
-          onLongPress: _toggleDebugOverlay,
-          child: Video(
-            controller: _controller,
-            controls: NoVideoControls,
-            wakelock: true,
-            fit: _fit,
+    final sw = MediaQuery.sizeOf(context).width;
+
+    return Focus(
+      autofocus: !kIsWeb,
+      onKeyEvent: _handleKeyEvent,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Listener(
+            onPointerSignal: _handlePointerSignal,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _resetControlsTimer(),
+              onDoubleTapDown: (d) {
+                final dx = d.localPosition.dx;
+                final w = sw > 0 ? sw : 1;
+                if (dx < w / 3) {
+                  _seekBy(-10);
+                } else if (dx > w * 2 / 3) {
+                  _seekBy(10);
+                } else {
+                  _togglePlay();
+                }
+                _resetControlsTimer();
+              },
+              onVerticalDragStart: (d) {
+                final w = sw > 0 ? sw : 1;
+                _dragMode = d.localPosition.dx < w / 2 ? 2 : 1;
+                _dragStartValue = _dragMode == 1 ? _volume : _brightness;
+              },
+              onVerticalDragUpdate: (d) {
+                final delta = -d.delta.dy / 200;
+                if (_dragMode == 1) {
+                  final v = (_dragStartValue + delta).clamp(0.0, 1.0);
+                  _setVolume(v);
+                  _showVolumeOverlay(v);
+                } else if (_dragMode == 2) {
+                  final b = (_dragStartValue + delta).clamp(0.0, 1.0);
+                  _setBrightness(b);
+                  _showBrightnessOverlay(b);
+                }
+              },
+              onVerticalDragEnd: (_) => _dragMode = 0,
+              onLongPress: _toggleDebugOverlay,
+              child: Video(
+                controller: _controller,
+                controls: NoVideoControls,
+                wakelock: true,
+                fit: _fit,
+              ),
+            ),
           ),
-        ),
 
         if (_loading && _error == null)
           Container(
@@ -660,8 +836,11 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
 
         if (_debugOverlay) _buildDebugOverlay(),
 
+        _buildGestureOverlay(),
+
         _buildControlBar(),
-      ],
+        ],
+      ),
     );
   }
 
@@ -876,6 +1055,11 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
                   _iconBtn(_playing ? Icons.pause : Icons.play_arrow, _togglePlay),
                   const SizedBox(width: 4),
                   _iconBtn(Icons.forward_10, _skipForward),
+                  const SizedBox(width: 8),
+                  _iconBtn(
+                    _muted ? Icons.volume_off : (_volume > 0.5 ? Icons.volume_up : Icons.volume_down),
+                    () => _setVolume(_muted ? 1.0 : 0.0),
+                  ),
                   const Spacer(),
                   Text(
                     '${_formatTime(_currentTime)} / ${_formatTime(_duration)}',

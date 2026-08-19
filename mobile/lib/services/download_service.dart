@@ -301,7 +301,12 @@ class DownloadService {
       final ep = epList[i];
       final s = ep['season'] as int? ?? season ?? 1;
       final e = ep['episode'] as int? ?? (i + 1);
-      final src = await _resolveSource(contentId, 'tv', season: s, episode: e);
+      String src;
+      try {
+        src = await _resolveSource(contentId, 'tv', season: s, episode: e);
+      } catch (_) {
+        continue;
+      }
       if (src.isEmpty) continue;
       final fileName =
           'S${s.toString().padLeft(2, '0')}E${e.toString().padLeft(2, '0')}.nfv';
@@ -356,9 +361,14 @@ class DownloadService {
       final data = res.data is Map<String, dynamic>
           ? res.data['data'] as Map<String, dynamic>? ?? res.data as Map<String, dynamic>
           : <String, dynamic>{};
-      return data['directUrl'] as String? ?? data['streamUrl'] as String? ?? '';
-    } catch (_) {
-      return '';
+      final url = data['directUrl'] as String? ?? data['streamUrl'] as String? ?? '';
+      if (url.isEmpty) {
+        final error = data['error'] as String? ?? 'No playable stream found for this title.';
+        throw Exception(error);
+      }
+      return url;
+    } catch (e) {
+      rethrow;
     }
   }
 

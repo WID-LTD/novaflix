@@ -1,5 +1,3 @@
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -184,142 +182,63 @@ class _TopBar extends StatelessWidget {
 
   const _TopBar({required this.isAuthenticated, required this.avatar});
 
-  static const _navLinks = [
-    ('/home', 'Home'),
-    ('/search?type=movie', 'Movies'),
-    ('/tv-shows', 'TV Shows'),
-    ('/discover?sort=trending', 'New & Popular'),
-    ('/hooks', 'Shorts'),
-    ('/news', 'News'),
-  ];
-
   @override
   Widget build(BuildContext context) {
-    final isDesktop = MediaQuery.of(context).size.width >= 1024;
-    final location = GoRouterState.of(context).matchedLocation ?? '';
-
-    bool isActive(String route) {
-      final path = route.split('?').first;
-      return location == path || location.startsWith('$path/');
-    }
-
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          height: 64,
-          padding: EdgeInsets.symmetric(
-            horizontal: isDesktop ? 64 : 16,
-          ),
-          decoration: const BoxDecoration(
-            color: Color(0x99131313),
-            border: Border(bottom: BorderSide(color: Color(0x0DFFFFFF))),
-          ),
-          child: Row(
-            children: [
-              if (!isDesktop)
-                IconButton(
-                  icon: const Icon(Icons.menu),
-                  onPressed: () => Scaffold.of(context).openDrawer(),
-                ),
-              GestureDetector(
-                onTap: () => context.go('/home'),
-                child: SizedBox(
-                  height: 48,
-                  child: Image.asset(
-                    'assets/brand/leter-mark-logo.png',
-                    fit: BoxFit.contain,
-                  ),
-                ),
+    return Container(
+      height: 64,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: const BoxDecoration(
+        color: Color(0x99131313),
+        border: Border(bottom: BorderSide(color: Color(0x0DFFFFFF))),
+      ),
+      child: Row(
+        children: [
+          if (MediaQuery.of(context).size.width < 1024)
+            IconButton(
+              icon: const Icon(Icons.menu),
+              onPressed: () => Scaffold.of(context).openDrawer(),
+            ),
+          GestureDetector(
+            onTap: () => context.go('/home'),
+            child: SizedBox(
+              height: 40,
+              child: Image.asset(
+                'assets/brand/leter-mark-logo.png',
+                fit: BoxFit.contain,
               ),
-              if (isDesktop) ...[
-                const SizedBox(width: 32),
-                for (final (route, label) in _navLinks)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 24),
-                    child: GestureDetector(
-                      onTap: () => context.go(route),
-                      child: Text(
-                        label,
-                        style: AppTypography.labelMd.copyWith(
-                          color: isActive(route)
-                              ? AppColors.primary
-                              : AppColors.onSurfaceVariant,
-                        ),
-                      ),
+            ),
+          ),
+          const Spacer(),
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () => context.go('/search'),
+          ),
+          if (isAuthenticated)
+            IconButton(
+              icon: const Icon(Icons.notifications_none),
+              onPressed: () => context.go('/settings'),
+            ),
+          GestureDetector(
+            onTap: () => context.go(isAuthenticated ? '/profile' : '/login'),
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.outlineVariant),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: avatar != null
+                  ? Image.network(avatar!, fit: BoxFit.cover)
+                  : const Icon(
+                      Icons.person,
+                      size: 20,
+                      color: AppColors.onSurfaceVariant,
                     ),
-                  ),
-                if (isAuthenticated)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 16),
-                    child: GestureDetector(
-                      onTap: () => context.go('/forum'),
-                      child: Text(
-                        'Hot Takes',
-                        style: AppTypography.labelMd.copyWith(
-                          color: isActive('/forum')
-                              ? AppColors.primary
-                              : AppColors.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-              const Spacer(),
-              GestureDetector(
-                onTap: () => context.go('/landing'),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.smartphone,
-                        size: 16,
-                        color: AppColors.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Get App',
-                        style: AppTypography.labelMd.copyWith(
-                          color: AppColors.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.search),
-                onPressed: () => context.go('/search'),
-              ),
-              if (isAuthenticated)
-                IconButton(
-                  icon: const Icon(Icons.notifications_none),
-                  onPressed: () => context.go('/notifications'),
-                ),
-              GestureDetector(
-                onTap: () => context.go(isAuthenticated ? '/profile' : '/login'),
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.surfaceVariant),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: avatar != null
-                      ? Image.network(avatar!, fit: BoxFit.cover)
-                      : const Icon(
-                          Icons.person,
-                          size: 20,
-                          color: AppColors.onSurfaceVariant,
-                        ),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -526,74 +445,6 @@ const _businessNav = [
   ),
 ];
 
-List<_SidebarItem> _visibleNav(
-  List<_SidebarItem> items, {
-  required bool isAuthenticated,
-  required bool isCreator,
-}) => items
-    .where(
-      (i) =>
-          (!i.authenticated || isAuthenticated) &&
-          (!i.creatorOnly || isCreator),
-    )
-    .toList();
-
-class _NavTile extends StatelessWidget {
-  final _SidebarItem item;
-  final bool active;
-  final VoidCallback onTap;
-
-  const _NavTile({
-    required this.item,
-    required this.active,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
-        decoration: BoxDecoration(
-          color: active
-              ? (item.primary
-                  ? Colors.white.withValues(alpha: 0.05)
-                  : AppColors.primaryContainer.withValues(alpha: 0.2))
-              : null,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Row(
-            children: [
-              Icon(
-                item.icon,
-                size: 20,
-                color: active
-                    ? AppColors.primaryPink
-                    : (item.primary
-                          ? AppColors.primaryLight
-                          : AppColors.onSurfaceVariant.withValues(alpha: 0.6)),
-              ),
-              const SizedBox(width: 12),
-                Text(
-                  item.label,
-                  style: AppTypography.labelMd.copyWith(
-                    color: active
-                        ? AppColors.primaryPink
-                        : AppColors.onSurfaceVariant.withValues(alpha: 0.6),
-                    fontWeight: item.primary ? FontWeight.w600 : FontWeight.w500,
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _DesktopSidebar extends StatelessWidget {
   final bool isAuthenticated;
   final bool isCreator;
@@ -603,23 +454,19 @@ class _DesktopSidebar extends StatelessWidget {
     required this.isCreator,
   });
 
+  List<_SidebarItem> _visible(List<_SidebarItem> items) => items
+      .where(
+        (i) =>
+            (!i.authenticated || isAuthenticated) &&
+            (!i.creatorOnly || isCreator),
+      )
+      .toList();
+
   @override
   Widget build(BuildContext context) {
-    final visibleNav = _visibleNav(
-      _mainNav,
-      isAuthenticated: isAuthenticated,
-      isCreator: isCreator,
-    );
-    final visibleEngagement = _visibleNav(
-      _engagementNav,
-      isAuthenticated: isAuthenticated,
-      isCreator: isCreator,
-    );
-    final visibleBusiness = _visibleNav(
-      _businessNav,
-      isAuthenticated: isAuthenticated,
-      isCreator: isCreator,
-    );
+    final visibleNav = _visible(_mainNav);
+    final visibleEngagement = _visible(_engagementNav);
+    final visibleBusiness = _visible(_businessNav);
     final location = GoRouterState.of(context).matchedLocation ?? '';
 
     bool isActive(String route) {
@@ -631,10 +478,45 @@ class _DesktopSidebar extends StatelessWidget {
 
     Widget itemTile(_SidebarItem item) {
       final active = isActive(item.route);
-      return _NavTile(
-        item: item,
-        active: active,
+      return InkWell(
         onTap: () => context.go(item.route),
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+          decoration: BoxDecoration(
+            color: active
+                ? (item.primary
+                    ? Colors.white.withValues(alpha: 0.05)
+                    : AppColors.primaryContainer.withValues(alpha: 0.2))
+                : null,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                Icon(
+                  item.icon,
+                  size: 20,
+                  color: active
+                      ? AppColors.primaryPink
+                      : (item.primary
+                            ? AppColors.primaryLight
+                            : AppColors.onSurfaceVariant.withValues(alpha: 0.6)),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  item.label,
+                  style: AppTypography.labelMd.copyWith(
+                    color: active
+                        ? AppColors.primaryPink
+                        : AppColors.onSurfaceVariant.withValues(alpha: 0.6),
+                    fontWeight: item.primary ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
@@ -741,314 +623,127 @@ class _MobileLayout extends StatelessWidget {
           Expanded(child: child),
         ],
       ),
-      bottomNavigationBar: ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(
-            decoration: const BoxDecoration(
-              color: Color(0xE60E0E0E),
-              border: Border(top: BorderSide(color: Color(0x0DFFFFFF))),
-            ),
-            padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 672),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                child: Row(
-                  children: [
-                    for (var i = 0; i < items.length; i++)
-                      Expanded(
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(8),
-                          onTap: () => context.go(items[i].route),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 150),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xE60E0E0E),
+          border: Border(top: BorderSide(color: Color(0x0DFFFFFF))),
+        ),
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
+        child: Row(
+          children: [
+            for (var i = 0; i < items.length; i++)
+              Expanded(
+                child: InkWell(
+                  onTap: () => context.go(items[i].route),
+                  child: AnimatedScale(
+                    scale: activeIndex == i ? 1.1 : 1.0,
+                    duration: const Duration(milliseconds: 150),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            activeIndex == i
+                                ? items[i].activeIcon
+                                : items[i].icon,
+                            size: 22,
+                            color: activeIndex == i
+                                ? AppColors.primaryPink
+                                : AppColors.onSurfaceVariant.withValues(
+                                    alpha: 0.6,
+                                  ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            items[i].label,
+                            style: TextStyle(
+                              fontSize: 10,
+                              height: 1.1,
                               color: activeIndex == i
-                                  ? Colors.white.withValues(alpha: 0.05)
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                AnimatedScale(
-                                  scale: activeIndex == i ? 1.1 : 1.0,
-                                  duration: const Duration(milliseconds: 150),
-                                  child: Icon(
-                                    activeIndex == i
-                                        ? items[i].activeIcon
-                                        : items[i].icon,
-                                    size: 22,
-                                    color: activeIndex == i
-                                        ? AppColors.primaryPink
-                                        : AppColors.onSurfaceVariant.withValues(
-                                            alpha: 0.6,
-                                          ),
-                                  ),
-                                ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  items[i].label,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    height: 1.1,
-                                    fontWeight: FontWeight.w500,
-                                    letterSpacing: 0.3,
-                                    color: activeIndex == i
-                                        ? AppColors.primaryPink
-                                        : AppColors.onSurfaceVariant.withValues(
-                                            alpha: 0.6,
-                                          ),
-                                  ),
-                                ),
-                              ],
+                                  ? AppColors.primaryPink
+                                  : AppColors.onSurfaceVariant.withValues(
+                                      alpha: 0.6,
+                                    ),
                             ),
                           ),
-                        ),
+                        ],
                       ),
-                  ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _MobileDrawer extends ConsumerWidget {
+class _MobileDrawer extends StatelessWidget {
   final bool isAuthenticated;
   final bool isCreator;
 
   const _MobileDrawer({required this.isAuthenticated, required this.isCreator});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(authProvider.select((a) => a.user));
-    final location = GoRouterState.of(context).matchedLocation ?? '';
-    final visibleNav = _visibleNav(
-      _mainNav,
-      isAuthenticated: isAuthenticated,
-      isCreator: isCreator,
-    );
-    final visibleEngagement = _visibleNav(
-      _engagementNav,
-      isAuthenticated: isAuthenticated,
-      isCreator: isCreator,
-    );
-    final visibleBusiness = _visibleNav(
-      _businessNav,
-      isAuthenticated: isAuthenticated,
-      isCreator: isCreator,
-    );
-
-    bool isActive(String route) {
-      if (route.contains('?')) {
-        return location.startsWith(route.split('?').first);
-      }
-      return location == route || location.startsWith('$route/');
-    }
-
-    Widget tile(_SidebarItem item) {
-      return _NavTile(
-        item: item,
-        active: isActive(item.route),
-        onTap: () {
-          Navigator.of(context).pop();
-          context.go(item.route);
-        },
-      );
-    }
-
-    Widget divider() => Container(
-          height: 1,
-          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          color: Colors.white.withValues(alpha: 0.05),
-        );
-
-    Widget sectionLabel(String label) => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.2,
-              color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
-            ),
-          ),
-        );
-
+  Widget build(BuildContext context) {
     return Drawer(
-      backgroundColor: AppColors.surfaceContainerLowest,
-      width: MediaQuery.of(context).size.width < 360
-          ? MediaQuery.of(context).size.width * 0.85
-          : 300,
+      backgroundColor: const Color(0xFF0E0E0E),
       child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: ListView(
+          padding: EdgeInsets.zero,
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      context.go('/home');
-                    },
-                    child: SizedBox(
-                      height: 40,
-                      child: Image.asset(
-                        'assets/brand/leter-mark-logo.png',
-                        fit: BoxFit.contain,
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: AppColors.onSurfaceVariant),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
+              padding: const EdgeInsets.all(16),
+              child: SizedBox(
+                height: 40,
+                child: Image.asset(
+                  'assets/brand/leter-mark-logo.png',
+                  fit: BoxFit.contain,
+                ),
               ),
             ),
-            divider(),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.only(bottom: 16),
-                children: [
-                  if (user != null)
-                    InkWell(
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        context.go('/profile');
-                      },
-                      child: Container(
-                        margin: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceContainerHigh,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.05),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: const LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    AppColors.primaryContainer,
-                                    AppColors.secondary,
-                                  ],
-                                ),
-                              ),
-                              clipBehavior: Clip.antiAlias,
-                              child: user.avatar != null
-                                  ? Image.network(
-                                      user.avatar!,
-                                      fit: BoxFit.cover,
-                                    )
-                                  : const Icon(
-                                      Icons.person,
-                                      size: 20,
-                                      color: Colors.white,
-                                    ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    user.username.isEmpty ? 'Member' : user.username,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: AppTypography.labelMd.copyWith(
-                                      color: AppColors.onSurface,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    user.email,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const Icon(
-                              Icons.chevron_right,
-                              color: AppColors.onSurfaceVariant,
-                              size: 20,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ...visibleNav.map(tile),
-                  if (!isAuthenticated)
-                    InkWell(
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        context.go('/login');
-                      },
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 1,
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.login,
-                              size: 20,
-                              color: AppColors.onSurfaceVariant,
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              'Sign In',
-                              style: AppTypography.labelMd.copyWith(
-                                color: AppColors.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  if (visibleEngagement.isNotEmpty) ...[
-                    divider(),
-                    sectionLabel('COMMUNITY & ENGAGEMENT'),
-                    ...visibleEngagement.map(tile),
-                  ],
-                  if (visibleBusiness.isNotEmpty) ...[
-                    divider(),
-                    sectionLabel('BUSINESS & MORE'),
-                    ...visibleBusiness.map(tile),
-                  ],
-                ],
+            ListTile(
+              leading: const Icon(
+                Icons.person_outline,
+                color: AppColors.onSurfaceVariant,
               ),
+              title: const Text('Sign In'),
+              onTap: () {
+                Navigator.pop(context);
+                context.go('/login');
+              },
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.workspace_premium,
+                color: AppColors.primary,
+              ),
+              title: const Text('Plans'),
+              onTap: () {
+                Navigator.pop(context);
+                context.go('/pricing');
+              },
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.settings_outlined,
+                color: AppColors.onSurfaceVariant,
+              ),
+              title: const Text('Settings'),
+              onTap: () {
+                Navigator.pop(context);
+                context.go('/settings');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.bar_chart, color: AppColors.primary),
+              title: const Text('Creator Hub'),
+              onTap: () {
+                Navigator.pop(context);
+                context.go('/creator');
+              },
             ),
           ],
         ),
