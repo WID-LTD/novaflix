@@ -34,8 +34,17 @@ class MediaItem {
   });
 
   factory MediaItem.fromJson(Map<String, dynamic> json) {
+    final rawId = json['id'];
+    int parsedId;
+    if (rawId is int) {
+      parsedId = rawId;
+    } else if (rawId is String) {
+      parsedId = int.tryParse(rawId) ?? 0;
+    } else {
+      parsedId = 0;
+    }
     return MediaItem(
-      id: json['id'] as int,
+      id: parsedId,
       title: json['title'] as String? ?? json['name'] as String? ?? '',
       posterPath: json['poster_path'] as String? ?? json['poster'] as String?,
       backdropPath:
@@ -48,7 +57,7 @@ class MediaItem {
           json['release_date'] as String? ??
           json['first_air_date'] as String? ??
           json['year'] as String?,
-      mediaType: json['media_type'] as String?,
+      mediaType: json['type'] as String? ?? json['media_type'] as String?,
       runtime: json['runtime'] as int?,
       genres: (json['genres'] as List?)
           ?.map(
@@ -68,12 +77,12 @@ class MediaItem {
   }
 
   String? get posterUrl => posterPath != null
-      ? (posterPath!.startsWith('http')
+      ? (posterPath!.startsWith('http') || posterPath!.startsWith('/api/')
             ? posterPath
             : 'https://image.tmdb.org/t/p/w500$posterPath')
       : null;
   String? get backdropUrl => backdropPath != null
-      ? (backdropPath!.startsWith('http')
+      ? (backdropPath!.startsWith('http') || backdropPath!.startsWith('/api/')
             ? backdropPath
             : 'https://image.tmdb.org/t/p/w1280$backdropPath')
       : null;

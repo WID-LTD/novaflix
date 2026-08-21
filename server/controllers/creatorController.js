@@ -190,3 +190,31 @@ export async function getGraph(req, res) {
     res.status(500).json({ error: err.message })
   }
 }
+
+export async function searchCreators(req, res) {
+  try {
+    const { q } = req.query
+    if (!q || q.trim().length < 2) {
+      return res.json({ success: true, creators: [] })
+    }
+    const query = `%${q.trim()}%`
+    const { rows } = await pool.query(
+      `SELECT u.id, u.name, u.avatar, u.bio,
+              cp.known_for_department, cp.tmdb_person_id,
+              (SELECT COUNT(*) FROM uploads WHERE user_id = u.id) as film_count,
+              (SELECT COALESCE(SUM(views), 0) FROM uploads WHERE user_id = u.id) as total_views,
+              (SELECT COUNT(*) FROM likes WHERE creator_id = u.id) as total_likes,
+              (SELECT COUNT(*) FROM followers WHERE following_id = u.id) as followers_count
+       FROM users u
+       JOIN creator_profiles cp ON cp.user_id = u.id
+       WHERE u.role = 'creator'
+         AND (u.name ILIKE $1 OR cp.display_name ILIKE $1 OR u.bio ILIKE $1)
+       ORDER BY total_likes DESC
+       LIMIT 20`,
+      [query]
+    )
+    res.json({ success: true, creators: rows })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}

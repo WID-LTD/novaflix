@@ -6,6 +6,7 @@ import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../widgets/ui/index.dart';
+import '../widgets/features/index.dart';
 
 final _pricingProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   final api = ref.read(apiServiceProvider);
@@ -160,32 +161,35 @@ class PricingScreen extends ConsumerWidget {
     String selectedSlug,
     String? activePlan,
   ) {
-    final isDesktop = MediaQuery.sizeOf(context).width >= 900;
     final isTablet = MediaQuery.sizeOf(context).width >= 600;
-    final cols = isDesktop ? 4 : (isTablet ? 2 : 1);
 
-    final grid = GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: cols,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 24,
-        childAspectRatio: isDesktop ? 0.62 : 0.75,
-      ),
-      itemCount: plans.length,
-      itemBuilder: (_, i) {
-        final plan = plans[i];
-        return _PlanCard(
-          plan: plan,
-          selected: plan['slug'] == selectedSlug,
-          isActive: plan['slug'] == activePlan,
-          onSubscribe: () => _startCheckout(context, ref, plan),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth >= 1150;
+        final cols = isDesktop ? 4 : (isTablet ? 2 : 1);
+
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: cols,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 24,
+            childAspectRatio: isDesktop ? 0.56 : 0.7,
+          ),
+          itemCount: plans.length,
+          itemBuilder: (_, i) {
+            final plan = plans[i];
+            return _PlanCard(
+              plan: plan,
+              selected: plan['slug'] == selectedSlug,
+              isActive: plan['slug'] == activePlan,
+              onSubscribe: () => _startCheckout(context, ref, plan),
+            );
+          },
         );
       },
     );
-
-    return grid;
   }
 
   Future<void> _startCheckout(
@@ -238,7 +242,9 @@ class PricingScreen extends ConsumerWidget {
               ),
             ),
             child: SizedBox(
-              width: 420,
+              width: MediaQuery.sizeOf(ctx).width >= 468
+                  ? 420
+                  : MediaQuery.sizeOf(ctx).width - 32,
               child: Padding(
                 padding: const EdgeInsets.all(28),
                 child: Column(

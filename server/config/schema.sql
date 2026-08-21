@@ -25,6 +25,9 @@ ALTER TABLE users ADD CONSTRAINT users_plan_check CHECK (plan IN ('free', 'stude
 ALTER TABLE users ADD COLUMN IF NOT EXISTS xp INTEGER DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS level INTEGER DEFAULT 1;
 
+-- User settings (playback + notification prefs) synced across devices
+ALTER TABLE users ADD COLUMN IF NOT EXISTS settings JSONB DEFAULT '{}'::jsonb;
+
 -- Google OAuth support: Google-linked accounts may have no password
 ALTER TABLE users ALTER COLUMN password DROP NOT NULL;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(255) UNIQUE;
@@ -124,8 +127,32 @@ CREATE TABLE IF NOT EXISTS watch_history (
   minutes INT DEFAULT 0,
   season INT,
   episode INT,
-  watched_at TIMESTAMP DEFAULT NOW()
+  position_seconds INT DEFAULT 0,
+  duration_seconds INT DEFAULT 0,
+  poster VARCHAR(500),
+  watched_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
 );
+
+ALTER TABLE watch_history ADD COLUMN IF NOT EXISTS position_seconds INT DEFAULT 0;
+ALTER TABLE watch_history ADD COLUMN IF NOT EXISTS duration_seconds INT DEFAULT 0;
+ALTER TABLE watch_history ADD COLUMN IF NOT EXISTS poster VARCHAR(500);
+ALTER TABLE watch_history ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+
+DO $$
+BEGIN
+  DELETE FROM watch_history a
+  USING watch_history b
+  WHERE a.id < b.id
+    AND a.user_id = b.user_id
+    AND a.content_id = b.content_id
+    AND a.type = b.type
+    AND COALESCE(a.season, -1) = COALESCE(b.season, -1)
+    AND COALESCE(a.episode, -1) = COALESCE(b.episode, -1);
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS watch_history_user_content_uniq
+  ON watch_history (user_id, content_id, type, COALESCE(season, -1), COALESCE(episode, -1));
 
 CREATE TABLE IF NOT EXISTS subscriptions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

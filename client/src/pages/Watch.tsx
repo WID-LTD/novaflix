@@ -9,7 +9,6 @@ import { recordWatch, getEggs, collectEgg } from '../lib/auth'
 import { WS_ORIGIN } from '../lib/config'
 import { isMobileBrowser, routeToStore } from '../lib/platform'
 import VideoPlayer from '../components/features/VideoPlayer'
-import EmbedPlayer from '../components/features/EmbedPlayer'
 import BingePassModal from '../components/features/BingePassModal'
 import Button from '../components/ui/Button'
 import Badge from '../components/ui/Badge'
@@ -28,6 +27,8 @@ export default function Watch() {
   const episodeParam = searchParams.get('episode')
   const season = seasonParam || undefined
   const episode = episodeParam || undefined
+  const resumeParam = searchParams.get('resume')
+  const resumeSeconds = resumeParam ? Number(resumeParam) : 0
 
   // Defensive: TV shows need season/episode
   useEffect(() => {
@@ -40,8 +41,6 @@ export default function Watch() {
   const [showQuality, setShowQuality] = useState(false)
   const [selectedVariant, setSelectedVariant] = useState<Variant | null>(null)
   const [currentStreamUrl, setCurrentStreamUrl] = useState<string>('')
-  const [currentEmbedUrl, setCurrentEmbedUrl] = useState<string>('')
-  const [isEmbedMode, setIsEmbedMode] = useState(false)
   const [manifestVariants, setManifestVariants] = useState<Variant[]>([])
   const [showBingePass, setShowBingePass] = useState(false)
   const [bingePassActive, setBingePassActive] = useState(false)
@@ -56,6 +55,7 @@ export default function Watch() {
   const addToContinueWatching = useStore((s) => s.addToContinueWatching)
   const { user, planRank } = useAuth()
   const lastRecordRef = useRef(0)
+  const durationRef = useRef(0)
   const presenceWsRef = useRef<WebSocket | null>(null)
   const lastPresenceRef = useRef(0)
   const flashIdRef = useRef(0)
@@ -89,8 +89,6 @@ export default function Watch() {
 
     if (sourceData.streamUrl) {
       setCurrentStreamUrl(sourceData.streamUrl)
-      setIsEmbedMode(false)
-      setCurrentEmbedUrl('')
 
       if (planRank < 2 && !bingePassActive) {
         setShowBingePass(true)
@@ -104,10 +102,6 @@ export default function Watch() {
           }
         })
         .catch(() => {})
-    } else if (sourceData.embedUrl) {
-      setCurrentEmbedUrl(sourceData.embedUrl)
-      setIsEmbedMode(true)
-      setCurrentStreamUrl('')
     }
   }, [sourceData, id, type, season, episode])
 
@@ -209,7 +203,7 @@ export default function Watch() {
       return
     }
     navigate('/download-app')
-    if (!currentStreamUrl || !id || !details || isEmbedMode) return
+    if (!currentStreamUrl || !id || !details) return
     setDownloading(true)
     setDownloadDone(false)
     try {
@@ -245,7 +239,7 @@ export default function Watch() {
         season: season ? Number(season) : undefined,
         episode: episode ? Number(episode) : undefined,
         progress: time,
-        duration: 0,
+        duration: durationRef.current,
       })
 
       if (user && time - lastRecordRef.current > 60) {
@@ -256,6 +250,9 @@ export default function Watch() {
           title: details.title,
           type,
           minutes: 1,
+          positionSeconds: Math.round(time),
+          durationSeconds: Math.round(durationRef.current),
+          poster: details.poster,
           season: season || null,
           episode: episode || null,
         }).catch(() => {})
@@ -296,7 +293,7 @@ export default function Watch() {
             </button>
           )}
 
-          {!isEmbedMode && manifestVariants.length > 0 && (
+          {manifestVariants.length > 0 && (
             <Button
               variant="ghost"
               size="sm"
@@ -317,8 +314,7 @@ export default function Watch() {
             </Button>
           )}
 
-          {!isEmbedMode && (
-            <Button
+          <Button
               variant="secondary"
               size="sm"
               onClick={handleDownload}
@@ -327,7 +323,6 @@ export default function Watch() {
               <Icon name="download" size="sm" />
               {downloading ? 'Saving...' : downloadDone ? 'Downloaded!' : 'Download'}
             </Button>
-          )}
         </div>
       </div>
 
@@ -363,17 +358,14 @@ export default function Watch() {
               </div>
             )
           })()
-        ) : isEmbedMode && currentEmbedUrl ? (
-          <EmbedPlayer
-            embedUrl={currentEmbedUrl}
-            title={episodeInfo ? `${title} - ${episodeInfo}` : title}
-          />
         ) : currentStreamUrl ? (
           <VideoPlayer
             streamUrl={currentStreamUrl}
             subtitles={sourceData?.subtitles || []}
             title={episodeInfo ? `${title} - ${episodeInfo}` : title}
             onProgress={handleProgress}
+            onDuration={(d) => { durationRef.current = d }}
+            startTime={resumeSeconds}
             plan={user?.plan || 'free'}
             bingePassActive={bingePassActive}
             eggs={eggPlacements}

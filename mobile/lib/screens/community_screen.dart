@@ -316,18 +316,22 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
   }
 
   Widget _keyGrid(List<Map<String, dynamic>> items) {
-    final cols = gridColumnsFor(MediaQuery.sizeOf(context).width).clamp(1, 3);
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: cols,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 1.4,
-      ),
-      itemCount: items.length,
-      itemBuilder: (_, i) => _KeyCard(item: items[i]),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cols = gridColumnsForWidth(constraints.maxWidth).clamp(1, 3);
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: cols,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 1.4,
+          ),
+          itemCount: items.length,
+          itemBuilder: (_, i) => _KeyCard(item: items[i]),
+        );
+      },
     );
   }
 
@@ -411,16 +415,18 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
   }
 
   Widget _communityGrid(List<Map<String, dynamic>> items, {bool joined = false}) {
-    final cols = gridColumnsFor(MediaQuery.sizeOf(context).width).clamp(1, 3);
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: cols,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 1.5,
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cols = gridColumnsForWidth(constraints.maxWidth).clamp(1, 3);
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: cols,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 1.5,
+          ),
       itemCount: items.length,
       itemBuilder: (_, i) {
         final item = items[i];
@@ -482,6 +488,8 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
           ),
         );
       },
+        );
+      },
     );
   }
 
@@ -505,16 +513,18 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
   }
 
   Widget _takesGrid(List<Map<String, dynamic>> takes) {
-    final cols = gridColumnsFor(MediaQuery.sizeOf(context).width).clamp(1, 3);
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: cols,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 1.6,
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cols = gridColumnsForWidth(constraints.maxWidth).clamp(1, 3);
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: cols,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 1.6,
+          ),
       itemCount: takes.length,
       itemBuilder: (_, i) {
         final t = takes[i];
@@ -579,6 +589,8 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
               ],
             ),
           ),
+        );
+      },
         );
       },
     );

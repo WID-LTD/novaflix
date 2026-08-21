@@ -87,17 +87,18 @@ class _WatchlistScreenState extends ConsumerState<WatchlistScreen> {
                     runSpacing: 12,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Container(
-                        width: 320,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceContainerHigh,
-                          border: Border.all(color: Colors.white10),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.search, color: Colors.grey, size: 20),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 320, minWidth: 200),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceContainerHigh,
+                            border: Border.all(color: Colors.white10),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.search, color: Colors.grey, size: 20),
                             const SizedBox(width: 8),
                             Expanded(
                               child: TextField(
@@ -124,6 +125,7 @@ class _WatchlistScreenState extends ConsumerState<WatchlistScreen> {
                                 },
                               ),
                           ],
+                        ),
                         ),
                       ),
                       AppTabs(
@@ -172,25 +174,27 @@ class _WatchlistScreenState extends ConsumerState<WatchlistScreen> {
                         ),
                       );
                     }
-                    return GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: gridColumnsFor(MediaQuery.of(context).size.width),
-                        childAspectRatio: 0.6,
-                        crossAxisSpacing: 20,
-                        mainAxisSpacing: 20,
+                    return LayoutBuilder(
+                      builder: (context, constraints) => GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: gridColumnsForWidth(constraints.maxWidth),
+                          childAspectRatio: 0.6,
+                          crossAxisSpacing: 20,
+                          mainAxisSpacing: 20,
+                        ),
+                        itemCount: filtered.length,
+                        itemBuilder: (_, i) {
+                          final item = filtered[i];
+                          return _WatchlistPoster(
+                            item: item,
+                            onRemove: () => ref
+                                .read(watchlistProvider.notifier)
+                                .toggle(item.id, item.isTV ? 'tv' : 'movie'),
+                          );
+                        },
                       ),
-                      itemCount: filtered.length,
-                      itemBuilder: (_, i) {
-                        final item = filtered[i];
-                        return _WatchlistPoster(
-                          item: item,
-                          onRemove: () => ref
-                              .read(watchlistProvider.notifier)
-                              .toggle(item.id, item.isTV ? 'tv' : 'movie'),
-                        );
-                      },
                     );
                   },
                   loading: () => const SizedBox(

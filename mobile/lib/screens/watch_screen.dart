@@ -7,7 +7,7 @@ import '../theme/app_colors.dart';
 import '../models/media_item.dart';
 import '../services/api_service.dart';
 import '../providers/auth_provider.dart';
-import '../widgets/ui/index.dart';
+import '../providers/store_provider.dart';
 import '../widgets/features/video_player.dart';
 
 String resolveStreamUrl(String url) {
@@ -34,6 +34,16 @@ final _watchDetailsProvider = FutureProvider.family<MediaItem?, int>((
   } catch (_) {
     return null;
   }
+});
+
+final _tvSeasonProvider = FutureProvider.family<List<dynamic>, ({int id, int season})>((
+  ref,
+  args,
+) async {
+  final api = ref.read(apiServiceProvider);
+  final res = await api.getTVSeason(args.id, args.season);
+  final data = res.data['data'] as Map<String, dynamic>? ?? res.data as Map<String, dynamic>;
+  return data['episodes'] as List? ?? [];
 });
 
 final _sourceProvider =
@@ -66,6 +76,7 @@ class WatchScreen extends ConsumerStatefulWidget {
   final String? streamUrl;
   final String? season;
   final String? episode;
+  final String? resume;
 
   const WatchScreen({
     super.key,
@@ -74,6 +85,7 @@ class WatchScreen extends ConsumerStatefulWidget {
     this.streamUrl,
     this.season,
     this.episode,
+    this.resume,
   });
 
   @override
@@ -83,6 +95,8 @@ class WatchScreen extends ConsumerStatefulWidget {
 class _WatchScreenState extends ConsumerState<WatchScreen> {
   DateTime? _lastWatchRecord;
   bool _watchRecorded = false;
+  double _duration = 0;
+  double _lastPosition = 0;
   @override
   void initState() {
     super.initState();
@@ -111,8 +125,36 @@ class _WatchScreenState extends ConsumerState<WatchScreen> {
 
   @override
   void dispose() {
+    _recordFinalPosition();
     _exitFullscreen();
     super.dispose();
+  }
+
+  void _recordFinalPosition() {
+    if (!mounted) return;
+    final auth = ref.read(authProvider);
+    final detail = ref.read(_watchDetailsProvider(widget.movieId ?? 0)).valueOrNull;
+    final minutes = (_lastPosition / 60).round();
+    final entry = {
+      'contentId': widget.movieId,
+      'title': detail?.title ?? '',
+      'type': widget.mediaType ?? 'movie',
+      'minutes': minutes,
+      'positionSeconds': _lastPosition.round(),
+      'durationSeconds': _duration.round(),
+      'poster': detail?.posterUrl,
+      if (widget.season != null) 'season': int.tryParse(widget.season!),
+      if (widget.episode != null) 'episode': int.tryParse(widget.episode!),
+    };
+    if (_lastPosition <= 0) return;
+    if (auth.status == AuthStatus.authenticated) {
+      ref.read(apiServiceProvider).recordWatch(entry).then((_) {}, onError: (_) {});
+    }
+    ref.read(storeProvider.notifier).updateProgress(
+      widget.movieId ?? 0,
+      widget.mediaType ?? 'movie',
+      _lastPosition,
+    );
   }
 
   void _goBack() {
@@ -127,23 +169,42 @@ class _WatchScreenState extends ConsumerState<WatchScreen> {
   }
 
   void _onPlaybackProgress(double progress) {
+    _lastPosition = progress;
     final now = DateTime.now();
     if (_lastWatchRecord != null && now.difference(_lastWatchRecord!).inSeconds < 30) return;
     _lastWatchRecord = now;
     final api = ref.read(apiServiceProvider);
     final auth = ref.read(authProvider);
-    if (auth.status != AuthStatus.authenticated) return;
+    final detail = ref.read(_watchDetailsProvider(widget.movieId ?? 0)).valueOrNull;
     final minutes = (progress / 60).round();
     if (minutes < 1 && _watchRecorded) return;
     _watchRecorded = true;
-    api.recordWatch({
+    final entry = {
       'contentId': widget.movieId,
-      'title': '',
+      'title': detail?.title ?? '',
       'type': widget.mediaType ?? 'movie',
       'minutes': minutes,
+      'positionSeconds': progress.round(),
+      'durationSeconds': _duration.round(),
+      'poster': detail?.posterUrl,
       if (widget.season != null) 'season': int.tryParse(widget.season!),
       if (widget.episode != null) 'episode': int.tryParse(widget.episode!),
-    }).catchError((_) {});
+    };
+    if (auth.status == AuthStatus.authenticated) {
+      api.recordWatch(entry).then((_) {}, onError: (_) {});
+    }
+    ref.read(storeProvider.notifier).addToContinueWatching(
+      ContinueWatchingItem(
+        id: widget.movieId ?? 0,
+        title: detail?.title ?? '',
+        poster: detail?.posterUrl,
+        type: widget.mediaType ?? 'movie',
+        season: int.tryParse(widget.season ?? ''),
+        episode: int.tryParse(widget.episode ?? ''),
+        progress: progress,
+        duration: _duration,
+      ),
+    );
   }
 
   @override
@@ -211,11 +272,8 @@ class _WatchScreenState extends ConsumerState<WatchScreen> {
                         );
                       }
                       if (url.isEmpty) {
-                        final embed = src['embedUrl'] as String? ?? '';
                         return _buildError(
-                          embed.isNotEmpty
-                              ? 'This title uses an embedded stream that could not be resolved. Try again later.'
-                              : src['error'] as String? ?? 'Could not load video source',
+                          src['error'] as String? ?? 'Could not load video source',
                         );
                       }
                       final direct = rawDirect.isNotEmpty
@@ -241,7 +299,10 @@ class _WatchScreenState extends ConsumerState<WatchScreen> {
                                   : detail.valueOrNull?.title,
                               isFreeTier: isFreeTier,
                               onProgress: _onPlaybackProgress,
-                              onDuration: (_) {},
+                              onDuration: (d) {
+                                if (mounted) setState(() => _duration = d);
+                              },
+                              startPosition: double.tryParse(widget.resume ?? ''),
                             ),
                             const SizedBox(height: 12),
                             if (episodeInfo != null)

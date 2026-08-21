@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import Icon from '../components/ui/Icon'
 import { getToken } from '../lib/auth'
+import VideoPlayer from '../components/features/VideoPlayer'
 
 const BASE = '/api'
 
@@ -63,9 +64,28 @@ export default function ArchiveDetail() {
             {item.media_url && (
               <div className="aspect-video rounded-2xl overflow-hidden bg-black mb-4">
                 {item.media_url.includes('youtube') || item.media_url.includes('youtu.be') ? (
-                  <iframe src={item.media_url.replace('watch?v=', 'embed/')} className="w-full h-full" allow="autoplay; fullscreen" allowFullScreen title={item.title} />
+                  <div className="w-full h-full flex items-center justify-center relative">
+                    <img
+                      src={`https://img.youtube.com/vi/${item.media_url.split('v=')[1]?.split('&')[0]}/maxresdefault.jpg`}
+                      alt={item.title}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+                    <button
+                      onClick={() => window.open(item.media_url, '_blank')}
+                      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full bg-primary-container/90 flex items-center justify-center hover:scale-110 transition-transform backdrop-blur-sm"
+                      aria-label="Watch on YouTube"
+                    >
+                      <Icon name="play_arrow" fill={true} className="text-on-primary-container w-8 h-8 ml-1" />
+                    </button>
+                  </div>
                 ) : item.content_type === 'video' ? (
-                  <video src={item.media_url} controls className="w-full h-full" />
+                  <VideoPlayer
+                    streamUrl={item.media_url}
+                    autoPlay={false}
+                    muted={false}
+                    showControls={true}
+                  />
                 ) : item.content_type === 'audio' ? (
                   <audio src={item.media_url} controls className="w-full mt-4" />
                 ) : (

@@ -1,17 +1,23 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import Icon from '../components/ui/Icon'
-import { searchMedia, getNowPlaying, getTrendingFeed, getDiscover } from '../lib/api'
+import { searchMedia, getNowPlaying, getTrendingFeed, getDiscover, searchPerson, getPersonCredits, searchCreators, searchCategories, type Creator, type Category } from '../lib/api'
+import type { Person, PersonCredit } from '../lib/api'
 import { useStore } from '../store/useStore'
 import Tabs from '../components/ui/Tabs'
 import Badge from '../components/ui/Badge'
 import Skeleton from '../components/ui/Skeleton'
 import HoverCard from '../components/features/HoverCard'
 import type { MediaItem } from '../types'
+import Button from '../components/ui/Button'
+import FollowButton from '../components/ui/FollowButton'
 
 const searchTabs = [
   { id: 'movie', label: 'Movies' },
   { id: 'tv', label: 'TV Shows' },
+  { id: 'people', label: 'People' },
+  { id: 'creators', label: 'Creators' },
+  { id: 'categories', label: 'Categories' },
 ]
 
 interface CategorySection {
@@ -79,13 +85,22 @@ export default function Search() {
   const [popularTV, setPopularTV] = useState<MediaItem[]>([])
   const [catLoading, setCatLoading] = useState(true)
 
-  const [mediaType, setMediaType] = useState<'movie' | 'tv'>(typeParam as 'movie' | 'tv')
+  const [mediaType, setMediaType] = useState<'movie' | 'tv' | 'people' | 'creators' | 'categories'>(typeParam as 'movie' | 'tv' | 'people' | 'creators' | 'categories')
+  const [peopleResults, setPeopleResults] = useState<Person[]>([])
+  const [creatorResults, setCreatorResults] = useState<Creator[]>([])
+  const [categoryResults, setCategoryResults] = useState<Category[]>([])
+  const [selectedPerson, setSelectedPerson] = useState<{ id: number; name: string } | null>(null)
+  const [selectedCreator, setSelectedCreator] = useState<Creator | null>(null)
+  const [creatorUploads, setCreatorUploads] = useState<MediaItem[]>([])
+  const [creatorUploadsLoading, setCreatorUploadsLoading] = useState(false)
+  const [personCredits, setPersonCredits] = useState<{ cast: PersonCredit[]; crew: PersonCredit[] }>({ cast: [], crew: [] })
+  const [creditsLoading, setCreditsLoading] = useState(false)
   const [suggestions, setSuggestions] = useState<MediaItem[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    setMediaType(typeParam as 'movie' | 'tv')
+    setMediaType(typeParam as 'movie' | 'tv' | 'people' | 'creators' | 'categories')
   }, [typeParam])
 
   useEffect(() => {
@@ -115,9 +130,12 @@ export default function Search() {
     loadCategories()
   }, [])
 
-  const doSearch = useCallback(async (q: string, type: 'movie' | 'tv') => {
+  const doSearch = useCallback(async (q: string, type: 'movie' | 'tv' | 'people' | 'creators' | 'categories') => {
     if (!q.trim()) {
       setResults([])
+      setPeopleResults([])
+      setCreatorResults([])
+      setCategoryResults([])
       setSearched(false)
       return
     }
@@ -127,17 +145,73 @@ export default function Search() {
     addRecentSearch(q.trim())
 
     try {
-      const res = await searchMedia(q.trim(), type)
-      if (res.success) {
-        setResults(res.data)
+      if (type === 'people') {
+        const res = await searchPerson(q.trim())
+        if (res.success) {
+          setPeopleResults(res.data)
+          setResults([])
+        } else {
+          setPeopleResults([])
+        }
+      } else if (type === 'creators') {
+        const res = await searchCreators(q.trim())
+        if (res.success) {
+          setCreatorResults(res.creators)
+          setResults([])
+        } else {
+          setCreatorResults([])
+        }
+      } else if (type === 'categories') {
+        const res = await searchCategories(q.trim())
+        if (res.success) {
+          setCategoryResults(res.categories)
+          setResults([])
+        } else {
+          setCategoryResults([])
+        }
       } else {
-        setResults([])
+        const res = await searchMedia(q.trim(), type)
+        if (res.success) {
+          setResults(res.data)
+          setPeopleResults([])
+        } else {
+          setResults([])
+        }
       }
     } catch {
       setResults([])
+      setPeopleResults([])
+      setCreatorResults([])
+      setCategoryResults([])
     }
     setLoading(false)
   }, [addRecentSearch])
+
+  const openPerson = async (person: Person) => {
+    setSelectedPerson({ id: person.id, name: person.name })
+    setCreditsLoading(true)
+    setPersonCredits({ cast: [], crew: [] })
+    try {
+      const res = await getPersonCredits(String(person.id))
+      if (res.success) {
+        setPersonCredits({ cast: res.cast || [], crew: res.crew || [] })
+      }
+    } catch {}
+    setCreditsLoading(false)
+  }
+
+  const openCreator = async (creator: Creator) => {
+    setSelectedCreator(creator)
+    setCreatorUploadsLoading(true)
+    try {
+      const res = await fetch(`/api/creator/${creator.id}/uploads`)
+      const data = await res.json()
+      if (data.success) {
+        setCreatorUploads(data.uploads || [])
+      }
+    } catch {}
+    setCreatorUploadsLoading(false)
+  }
 
   useEffect(() => {
     if (query) {
@@ -146,7 +220,7 @@ export default function Search() {
   }, [query, mediaType, doSearch])
 
   const fetchSuggestions = useCallback(async (q: string) => {
-    if (!q.trim()) { setSuggestions([]); setShowSuggestions(false); return }
+    if (!q.trim() || mediaType === 'people' || mediaType === 'creators' || mediaType === 'categories') { setSuggestions([]); setShowSuggestions(false); return }
     const res = await searchMedia(q.trim(), mediaType)
     if (res.success) setSuggestions(res.data.slice(0, 5))
     else setSuggestions([])
@@ -156,6 +230,7 @@ export default function Search() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value
     setQuery(val)
+    setSelectedPerson(null)
     setSearchParams(val ? { q: val, type: mediaType } : { type: mediaType })
     if (val.trim()) fetchSuggestions(val)
     else { setSuggestions([]); setShowSuggestions(false) }
@@ -167,7 +242,9 @@ export default function Search() {
   }
 
   const handleTabChange = (id: string) => {
-    setMediaType(id as 'movie' | 'tv')
+    setMediaType(id as 'movie' | 'tv' | 'people' | 'creators' | 'categories')
+    setSelectedPerson(null)
+    setSelectedCreator(null)
     if (query) {
       setSearchParams({ q: query, type: id })
     } else {
@@ -203,7 +280,7 @@ export default function Search() {
               onChange={handleInputChange}
               onFocus={() => { if (suggestions.length) setShowSuggestions(true) }}
               onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-              placeholder="Search movies, TV shows..."
+              placeholder="Search movies, TV shows, people, creators, categories..."
               className="flex-1 bg-transparent text-on-surface placeholder-on-surface-variant/50 outline-none text-body-md"
               autoFocus
             />
@@ -272,7 +349,7 @@ export default function Search() {
           </div>
         )}
 
-        {!loading && searched && results.length === 0 && (
+        {!loading && searched && !selectedPerson && !selectedCreator && ((mediaType === 'people' && peopleResults.length === 0) || (mediaType === 'creators' && creatorResults.length === 0) || (mediaType === 'categories' && categoryResults.length === 0) || (mediaType !== 'people' && mediaType !== 'creators' && mediaType !== 'categories' && results.length === 0)) && (
           <div className="text-center py-16">
             <Icon name="search" className="w-16 h-16 text-on-surface-variant/40 mx-auto mb-4" />
             <h3 className="font-label-md text-label-md text-on-surface-variant mb-2">No results found</h3>
@@ -280,7 +357,229 @@ export default function Search() {
           </div>
         )}
 
-        {!loading && results.length > 0 && (
+        {!loading && mediaType === 'people' && !selectedPerson && peopleResults.length > 0 && (
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-on-surface-variant text-sm">
+                {peopleResults.length} person{peopleResults.length !== 1 ? 's' : ''}
+              </p>
+              <Badge variant="outline">People</Badge>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {peopleResults.map((person) => (
+                <button
+                  key={person.id}
+                  onClick={() => openPerson(person)}
+                  className="group text-left"
+                >
+                  {person.profile_path ? (
+                    <img src={person.profile_path} alt={person.name} className="w-full aspect-[2/3] rounded-xl object-cover bg-surface-container group-hover:opacity-90 transition-opacity" loading="lazy" />
+                  ) : (
+                    <div className="w-full aspect-[2/3] rounded-xl bg-surface-container flex items-center justify-center">
+                      <Icon name="person" className="text-on-surface-variant/40" />
+                    </div>
+                  )}
+                  <p className="mt-2 text-sm text-on-surface truncate group-hover:text-primary transition-colors">{person.name}</p>
+                  {person.known_for_department && (
+                    <p className="text-xs text-on-surface-variant truncate">{person.known_for_department}</p>
+                  )}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {!loading && mediaType === 'creators' && !selectedCreator && creatorResults.length > 0 && (
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-on-surface-variant text-sm">
+                {creatorResults.length} creator{creatorResults.length !== 1 ? 's' : ''}
+              </p>
+              <Badge variant="outline">Creators</Badge>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+              {creatorResults.map((creator) => (
+                <button
+                  key={creator.id}
+                  onClick={() => openCreator(creator)}
+                  className="group text-left"
+                >
+                  {creator.avatar ? (
+                    <img src={creator.avatar} alt={creator.name} className="w-full aspect-[2/3] rounded-xl object-cover bg-surface-container group-hover:opacity-90 transition-opacity" loading="lazy" />
+                  ) : (
+                    <div className="w-full aspect-[2/3] rounded-xl bg-surface-container flex items-center justify-center">
+                      <Icon name="person" className="text-on-surface-variant/40" />
+                    </div>
+                  )}
+                  <p className="mt-2 text-sm text-on-surface truncate group-hover:text-primary transition-colors">{creator.name}</p>
+                  {creator.known_for_department && (
+                    <p className="text-xs text-on-surface-variant truncate">{creator.known_for_department}</p>
+                  )}
+                  <p className="text-xs text-primary mt-1">{creator.film_count} films</p>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {!loading && mediaType === 'categories' && !selectedCreator && categoryResults.length > 0 && (
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-on-surface-variant text-sm">
+                {categoryResults.length} categor{y(categoryResults.length !== 1 ? 'ies' : 'y')}
+              </p>
+              <Badge variant="outline">Categories</Badge>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+              {categoryResults.map((cat) => (
+                <Link key={cat.id} to={cat.source === 'tmdb' ? `/discover?genre_id=${cat.id}&type=${cat.type}` : `/discover?sort=popular`} className="group text-left">
+                  <div className="w-full aspect-[2/3] rounded-xl bg-surface-container flex items-center justify-center">
+                    <Icon name={cat.source === 'creator' ? 'video_library' : 'category'} className="text-on-surface-variant/40 text-4xl group-hover:text-primary transition-colors" />
+                  </div>
+                  <p className="mt-2 text-sm text-on-surface truncate group-hover:text-primary transition-colors">{cat.name}</p>
+                  <p className="text-xs text-on-surface-variant capitalize">{cat.source}</p>
+                </Link>
+              ))}
+            </div>
+          </>
+        )}
+
+        {!loading && selectedCreator && (
+          <>
+            <div className="flex items-center gap-3 mb-6">
+              <button onClick={() => setSelectedCreator(null)} className="p-2 rounded-lg bg-surface-container-high border border-outline/20 hover:border-primary-container/50 transition-colors" aria-label="Back to creators">
+                <Icon name="chevron_left" />
+              </button>
+              <div>
+                <h2 className="text-headline-sm text-on-surface font-bold">{selectedCreator.name}</h2>
+                {selectedCreator.known_for_department && (
+                  <p className="text-on-surface-variant text-sm">{selectedCreator.known_for_department}</p>
+                )}
+              </div>
+            </div>
+            {selectedCreator.avatar && (
+              <div className="mb-6 flex items-start gap-6">
+                <img src={selectedCreator.avatar} alt={selectedCreator.name} className="w-32 h-32 rounded-xl object-cover" />
+                <div className="flex-1">
+                  <p className="text-on-surface-variant mb-4">{selectedCreator.bio || 'No bio available'}</p>
+                  <div className="flex flex-wrap gap-4 text-sm text-on-surface-variant">
+                    <span>{selectedCreator.film_count} films</span>
+                    <span>{selectedCreator.total_views} views</span>
+                    <span>{selectedCreator.followers_count} followers</span>
+                  </div>
+                  <div className="mt-4">
+                    <FollowButton creatorId={selectedCreator.id} />
+                  </div>
+                </div>
+              </div>
+            )}
+            {creatorUploadsLoading ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-gutter">
+                {Array.from({ length: 10 }).map((_, i) => (
+                  <div key={i}>
+                    <Skeleton variant="poster" className="w-full" />
+                    <Skeleton variant="text" className="w-3/4 mt-2" />
+                  </div>
+                ))}
+              </div>
+            ) : creatorUploads.length === 0 ? (
+              <p className="text-on-surface-variant text-sm py-8">No uploads found.</p>
+            ) : (
+              <>
+                <h3 className="text-on-surface-variant font-label-md mb-3">Films</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-gutter">
+                  {creatorUploads.map((item, i) => (
+                    <HoverCard
+                      key={`${item.id}-${item.type}`}
+                      item={{
+                        id: item.id,
+                        title: item.title,
+                        poster: item.poster,
+                        backdrop: item.backdrop,
+                        type: item.type,
+                        year: item.year,
+                        overview: item.overview,
+                      }}
+                      index={i}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {!loading && selectedPerson && (
+          <>
+            <div className="flex items-center gap-3 mb-6">
+              <button onClick={() => setSelectedPerson(null)} className="p-2 rounded-lg bg-surface-container-high border border-outline/20 hover:border-primary-container/50 transition-colors" aria-label="Back to people">
+                <Icon name="chevron_left" />
+              </button>
+              <h2 className="text-headline-sm text-on-surface font-bold">{selectedPerson.name}</h2>
+            </div>
+            {creditsLoading ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-gutter">
+                {Array.from({ length: 10 }).map((_, i) => (
+                  <div key={i}>
+                    <Skeleton variant="poster" className="w-full" />
+                    <Skeleton variant="text" className="w-3/4 mt-2" />
+                  </div>
+                ))}
+              </div>
+            ) : personCredits.cast.length === 0 && personCredits.crew.length === 0 ? (
+              <p className="text-on-surface-variant text-sm py-8">No credits found.</p>
+            ) : (
+              <>
+                {personCredits.cast.length > 0 && (
+                  <>
+                    <h3 className="text-on-surface-variant font-label-md mb-3">Known For</h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-gutter mb-8">
+                      {personCredits.cast.map((item, i) => (
+                        <HoverCard
+                          key={`${item.id}-${item.type}`}
+                          item={{
+                            id: item.id,
+                            title: item.title,
+                            poster: item.poster,
+                            backdrop: item.backdrop,
+                            type: item.type,
+                            year: item.year,
+                            overview: item.overview,
+                          }}
+                          index={i}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
+                {personCredits.crew.length > 0 && (
+                  <>
+                    <h3 className="text-on-surface-variant font-label-md mb-3">Crew</h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-gutter">
+                      {personCredits.crew.map((item, i) => (
+                        <HoverCard
+                          key={`${item.id}-${item.type}`}
+                          item={{
+                            id: item.id,
+                            title: item.title,
+                            poster: item.poster,
+                            backdrop: item.backdrop,
+                            type: item.type,
+                            year: item.year,
+                            overview: item.overview,
+                          }}
+                          index={i}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </>
+        )}
+
+        {!loading && mediaType !== 'people' && !selectedPerson && results.length > 0 && (
           <>
             <div className="flex items-center justify-between mb-4">
               <p className="text-on-surface-variant text-sm">

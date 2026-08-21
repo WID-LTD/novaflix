@@ -25,7 +25,6 @@ export default function HooksCard({
   onEnded,
 }: HooksCardProps) {
   const navigate = useNavigate()
-  const iframeRef = useRef<HTMLIFrameElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const [posterHidden, setPosterHidden] = useState(false)
   const [muted, setMuted] = useState(true)
@@ -56,14 +55,6 @@ export default function HooksCard({
   }, [item.id, item.liked, item.bookmarked, item.following])
 
   useEffect(() => {
-    if (!iframeRef.current || item.type === 'ad' || item.type === 'short') return
-    if (active) {
-      iframeRef.current.src = item.videoUrl?.replace('autoplay=0', 'autoplay=1') || ''
-      setPosterHidden(true)
-    }
-  }, [active, item.videoUrl, item.type])
-
-  useEffect(() => {
     const video = videoRef.current
     if (!video || item.type !== 'short') return
     if (active) {
@@ -89,16 +80,9 @@ export default function HooksCard({
   }, [active, item.type, item.shortId])
 
   const toggleMute = () => {
-    if (item.type === 'short') {
-      setMuted(!muted)
-      return
-    }
-    if (iframeRef.current) {
-      iframeRef.current.contentWindow?.postMessage(
-        JSON.stringify({ event: 'command', func: muted ? 'unMute' : 'mute', args: '' }),
-        '*'
-      )
-      setMuted(!muted)
+    setMuted(!muted)
+    if (videoRef.current) {
+      videoRef.current.muted = !muted
     }
   }
 
@@ -184,8 +168,7 @@ export default function HooksCard({
         {item.poster && !posterHidden && (
           <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
         )}
-        {isShort ? (
-          <video
+        <video
             ref={videoRef}
             src={item.videoUrl || undefined}
             poster={item.poster || undefined}
@@ -193,17 +176,9 @@ export default function HooksCard({
             playsInline
             loop
             preload="metadata"
+            muted={muted}
+            onCanPlay={() => { if (active) videoRef.current?.play().catch(() => {}) }}
           />
-        ) : (
-          <iframe
-            ref={iframeRef}
-            title={item.title}
-            className="w-full h-full"
-            style={{ pointerEvents: active ? 'auto' : 'none' }}
-            allow="autoplay; encrypted-media"
-            allowFullScreen
-          />
-        )}
       </div>
 
       {/* Overlay gradient */}

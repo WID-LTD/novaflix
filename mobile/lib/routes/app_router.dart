@@ -121,54 +121,6 @@ bool _isPublicRoute(String location) {
   return false;
 }
 
-final _protectedRoutes = <String>{
-  '/profile',
-  '/watchlist',
-  '/watch',
-  '/upload',
-  '/downloads',
-  '/community',
-  '/hooks',
-  '/archive',
-  '/referrals',
-  '/payment-success',
-  '/watch-party',
-  '/creator',
-  '/creator/analytics',
-  '/creator/catalog',
-  '/creator/products',
-  '/creator/courses',
-  '/creator/events',
-  '/creator/memberships',
-  '/creator/plan-picker',
-  '/creator/campaigns',
-  '/creator/profile',
-  '/admin',
-  '/admin/asset-qc',
-  '/admin/filters',
-  '/admin/localization',
-  '/admin/campaigns',
-  '/trivia',
-  '/notifications',
-  '/chat',
-  '/forum',
-};
-
-bool _isProtectedRoute(String location) {
-  if (_protectedRoutes.contains(location)) return true;
-  if (location.startsWith('/creator') ||
-      location.startsWith('/admin') ||
-      location.startsWith('/archive/') ||
-      location.startsWith('/community') ||
-      location.startsWith('/chat') ||
-      location.startsWith('/forum') ||
-      location.startsWith('/trivia') ||
-      location.startsWith('/user/')) {
-    return true;
-  }
-  return false;
-}
-
 GoRouter? _router;
 GoRouter appRouter(WidgetRef ref) {
   if (_router != null) return _router!;
@@ -213,7 +165,12 @@ GoRouter appRouter(WidgetRef ref) {
         path: '/forgot-password',
         builder: (_, __) => const ForgotPasswordScreen(),
       ),
-      GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
+      GoRoute(
+        path: '/register',
+        builder: (_, state) => RegisterScreen(
+          refCode: state.uri.queryParameters['ref'],
+        ),
+      ),
       GoRoute(
         path: '/verify-email',
         builder: (_, __) => const VerifyEmailScreen(),
@@ -233,6 +190,7 @@ GoRouter appRouter(WidgetRef ref) {
           mediaType: state.uri.queryParameters['type'],
           season: state.uri.queryParameters['season'],
           episode: state.uri.queryParameters['episode'],
+          resume: state.uri.queryParameters['resume'],
         ),
       ),
 

@@ -409,74 +409,6 @@ async function probeStreamUrlUncached(streamUrl, ffmpegPath) {
   }
 }
 
-const EMBED_RESOLVE_MAX = 200
-const EMBED_RESOLVE_TTL = 60 * 1000
-const embedResolveCache = new Map()
-
-// Resolves a JW Player embed page into a direct HLS/MP4 stream so native
-// clients (desktop app) can play embed fallbacks without a browser. Returns
-// { ok:false, reason } when the embed has no playable source (e.g. /video/error).
-async function resolveEmbedStream(embedUrl) {
-  const cached = embedResolveCache.get(embedUrl)
-  if (cached && Date.now() - cached.ts < EMBED_RESOLVE_TTL) return cached.result
-  const result = await resolveEmbedStreamUncached(embedUrl)
-  if (embedResolveCache.size >= EMBED_RESOLVE_MAX) embedResolveCache.clear()
-  embedResolveCache.set(embedUrl, { result, ts: Date.now() })
-  return result
-}
-
-async function resolveEmbedStreamUncached(embedUrl) {
-  try {
-    const pageRes = await axios.get(embedUrl, {
-      headers: { 'User-Agent': UA, Referer: embedUrl, Accept: 'text/html' },
-      timeout: 8000,
-      validateStatus: () => true,
-      responseType: 'text',
-    })
-    const html = typeof pageRes.data === 'string' ? pageRes.data : JSON.stringify(pageRes.data)
-    const pm = html.match(/"playlist"\s*:\s*"([^"]+)/)
-    if (!pm) return { ok: false, reason: 'no-playlist' }
-
-    const playlistUrl = new URL(pm[1], embedUrl).href
-    const plRes = await axios.get(playlistUrl, {
-      headers: { 'User-Agent': UA, Referer: embedUrl },
-      timeout: 8000,
-      validateStatus: () => true,
-      responseType: 'text',
-    })
-    if (plRes.status !== 200) return { ok: false, reason: `playlist ${plRes.status}` }
-
-    let pl = plRes.data
-    if (typeof pl === 'string') {
-      try {
-        pl = JSON.parse(pl)
-      } catch {
-        return { ok: false, reason: 'bad-playlist-json' }
-      }
-    }
-    const file = pl?.playlist?.[0]?.sources?.[0]?.file
-    if (!file) return { ok: false, reason: 'no-source' }
-    if (String(file).includes('/video/error') || String(file).includes('/error')) {
-      return { ok: false, reason: 'unavailable' }
-    }
-    if (!String(file).includes('.m3u8') && !String(file).includes('.mp4')) {
-      return { ok: false, reason: `non-stream: ${String(file).slice(0, 30)}` }
-    }
-
-    const streamUrl = new URL(file, playlistUrl).href
-    const cookies = []
-    const setCookies = plRes.headers['set-cookie']
-    if (setCookies) {
-      for (const c of Array.isArray(setCookies) ? setCookies : [setCookies]) {
-        cookies.push(String(c).split(';')[0])
-      }
-    }
-    return { ok: true, streamUrl, headers: headersWithCookies(streamUrl, cookies) }
-  } catch (e) {
-    return { ok: false, reason: `error: ${e.message?.slice(0, 40) || 'unknown'}` }
-  }
-}
-
 export async function source(req, res) {
   const { id, type, season, episode } = req.query
   if (!id) return res.status(400).json({ error: 'TMDB ID is required' })
@@ -490,7 +422,6 @@ export async function source(req, res) {
         success: true,
         streamUrl: `/api/stream/creator/${id}.mp4`,
         directUrl: `/api/stream/creator/${id}.mp4`,
-        embedUrl: null,
         provider: 'creator',
         providerMode: 'file',
         subtitles: [],
@@ -583,63 +514,6 @@ export async function source(req, res) {
     const probeSteps = probeResults.flatMap((r) => (r.steps || []).map((s) => `[${r.provider}] ${s}`))
 
     if (!chosen || !chosen.streamUrl) {
-      const embedProxy = (u) => `/api/proxy-embed?url=${encodeURIComponent(u)}`
-      const embedCandidates = []
-      if (result.embedUrl) embedCandidates.push({ url: result.embedUrl, provider: result.provider })
-      for (const b of result.backups || []) {
-        if (b.embedUrl && embedCandidates.length < 3) embedCandidates.push({ url: b.embedUrl, provider: b.provider })
-      }
-
-      if (embedCandidates.length > 0) {
-        console.log(`[api/source] id=${id} type=${type || 'movie'} -> embed fallback (${probeResults.map((r) => r.reason).join(', ')})`)
-        const attempts = await Promise.allSettled(
-          embedCandidates.map(async (c) => ({ c, resolved: await resolveEmbedStream(c.url) }))
-        )
-        const ok = attempts.find((a) => a.status === 'fulfilled' && a.value?.resolved?.ok && a.value.resolved.streamUrl)
-        if (ok) {
-          const { c, resolved } = ok.value
-          console.log(`[api/source] id=${id} embed resolved -> ${resolved.streamUrl.slice(0, 60)}`)
-          return res.json({
-            success: true,
-            streamUrl: `/api/proxy/${resolved.streamUrl.replace('https://', '')}`,
-            embedUrl: embedProxy(c.url),
-            directUrl: resolved.streamUrl,
-            headers: resolved.headers,
-            subtitles: (result.subtitles || []).map((s) => ({ label: s.label, file: toProxy(s.file) })),
-            provider: c.provider,
-            providerMode: 'hls',
-            backups: [],
-            probe: probeResults,
-            debug: { steps: [...probeSteps, `[embed] resolved ${resolved.streamUrl.slice(0, 80)}`] },
-            fromCache: result.fromCache || false,
-            elapsed: result.elapsed || 0,
-            attempted: result.attempted || 0,
-            totalProviders: result.totalProviders || 0,
-          })
-        }
-        const reason = attempts
-          .map((a) => (a.status === 'fulfilled' ? a.value.resolved.reason : String(a.reason?.message || a.reason)))
-          .filter(Boolean)
-          .join('; ')
-        console.log(`[api/source] id=${id} embed not resolvable (${reason}) -> embed page`)
-        return res.json({
-          success: true,
-          streamUrl: null,
-          embedUrl: embedProxy(result.embedUrl),
-          directUrl: null,
-          headers: null,
-          subtitles: (result.subtitles || []).map((s) => ({ label: s.label, file: toProxy(s.file) })),
-          provider: result.provider,
-          providerMode: 'embed',
-          backups: [],
-          probe: probeResults,
-          debug: { steps: [...probeSteps, `[embed] resolve failed: ${reason}`] },
-          fromCache: result.fromCache || false,
-          elapsed: result.elapsed || 0,
-          attempted: result.attempted || 0,
-          totalProviders: result.totalProviders || 0,
-        })
-      }
 
       // Failures that are universal (the stream itself is bad) vs. failures that
       // may be server-IP-specific (CDN blocking Render's datacenter). For the
@@ -653,7 +527,6 @@ export async function source(req, res) {
         return res.json({
           success: true,
           streamUrl: `/api/proxy/${result.streamUrl.replace('https://', '')}`,
-          embedUrl: result.embedUrl ? `/api/proxy-embed?url=${encodeURIComponent(result.embedUrl)}` : null,
           directUrl: result.streamUrl,
           headers: softHeaders,
           subtitles: (result.subtitles || []).map((s) => ({ label: s.label, file: toProxy(s.file) })),
@@ -689,7 +562,6 @@ export async function source(req, res) {
     }
 
     const streamProxy = `/api/proxy/${chosen.streamUrl.replace('https://', '')}`
-    const embedProxy = result.embedUrl ? `/api/proxy-embed?url=${encodeURIComponent(result.embedUrl)}` : null
     const subtitles = (chosen.subtitles || []).map((s) => ({
       label: s.label,
       file: toProxy(s.file),
@@ -702,7 +574,6 @@ export async function source(req, res) {
 
     const backups = (result.backups || []).slice(0, 5).map((b) => ({
       streamUrl: b.streamUrl,
-      embedUrl: b.embedUrl,
       provider: b.provider,
       directUrl: b.streamUrl || null,
       headers: b.streamUrl ? backupHeaders(b.streamUrl) : null,
@@ -717,7 +588,6 @@ export async function source(req, res) {
     const response = {
       success: true,
       streamUrl: streamProxy,
-      embedUrl: embedProxy,
       directUrl: chosen.streamUrl,
       headers: playHeaders,
       duration: chosenProbe?.duration || null,
@@ -1226,82 +1096,5 @@ export async function proxy(req, res) {
   } catch (err) {
     console.error('[proxy] stream error:', err.message)
     if (!res.headersSent) res.status(500).send('Proxy stream failed')
-  }
-}
-
-const AD_PATTERNS = [
-  'doubleclick.net', 'googleadservices.com', 'googlesyndication.com',
-  'popads.net', 'propellerads.com', 'adsterra.com', 'exoclick.com',
-  'adf.ly', 'adfly', 'adserver', 'adnxs.com', 'rubiconproject.com',
-  'criteo.com', 'outbrain.com', 'taboola.com', 'revcontent.com',
-  'popcash.net', 'pushcrew.com', 'onesignal.com',
-  'advertising', 'ad-plus', 'ad_', '-ad.', '/ads/',
-  'pagead2.googlesyndication',
-]
-
-function stripAds(html) {
-  let cleaned = html
-
-  cleaned = cleaned.replace(/<script[^>]*>[\s\S]*?<\/script\s*>/gi, (match) => {
-    const lower = match.toLowerCase()
-    for (const ad of AD_PATTERNS) {
-      if (lower.includes(ad)) return ''
-    }
-    if (lower.includes('window.open') || lower.includes('popup') || lower.includes('open.new')) return ''
-    return match
-  })
-
-  cleaned = cleaned.replace(/<iframe[^>]*>[\s\S]*?<\/iframe\s*>/gi, (match) => {
-    const lower = match.toLowerCase()
-    for (const ad of AD_PATTERNS) {
-      if (lower.includes(ad)) return ''
-    }
-    if (lower.includes('window.open') || lower.match(/src\s*=\s*["'][^"']*about:/i)) return ''
-    return match
-  })
-
-  cleaned = cleaned.replace(/\s+onclick\s*=\s*["'][^"']*["']/gi, '')
-  cleaned = cleaned.replace(/\s+onload\s*=\s*["'][^"']*["']/gi, '')
-  cleaned = cleaned.replace(/\s+onerror\s*=\s*["'][^"']*["']/gi, '')
-  cleaned = cleaned.replace(/\s+onmouseover\s*=\s*["'][^"']*["']/gi, '')
-  cleaned = cleaned.replace(/\s+onmousedown\s*=\s*["'][^"']*["']/gi, '')
-
-  cleaned = cleaned.replace(/<div[^>]*id="[^"]*"?[^>]*style="[^"]*display:\s*none[^"]*"[^>]*>[\s\S]*?<\/div\s*>/gi, '')
-  cleaned = cleaned.replace(/<ins\s+class="adsbygoogle"[\s\S]*?<\/ins\s*>/gi, '')
-  cleaned = cleaned.replace(/<script[^>]*data-ad-[\s\S]*?<\/script\s*>/gi, '')
-
-  return cleaned
-}
-
-export async function proxyEmbed(req, res) {
-  const { url: embedUrl } = req.query
-  if (!embedUrl) return res.status(400).json({ error: 'embedUrl required' })
-
-  try {
-    const pageRes = await axios.get(embedUrl, {
-      headers: {
-        'User-Agent': UA,
-        Referer: embedUrl,
-        Accept: 'text/html,application/xhtml+xml',
-      },
-      timeout: 10000,
-      validateStatus: () => true,
-      responseType: 'text',
-    })
-
-    if (pageRes.status !== 200) {
-      return res.status(502).json({ error: `Embed returned ${pageRes.status}` })
-    }
-
-    const cleaned = stripAds(pageRes.data)
-
-    res.setHeader('Content-Type', 'text/html; charset=utf-8')
-    res.setHeader('Access-Control-Allow-Origin', '*')
-    res.setHeader('X-Robots-Tag', 'noindex, nofollow')
-    res.setHeader('X-Frame-Options', 'SAMEORIGIN')
-    res.send(cleaned)
-  } catch (err) {
-    console.error('[proxy-embed] error:', err.message)
-    res.status(502).json({ error: 'Failed to fetch embed' })
   }
 }

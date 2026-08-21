@@ -50,6 +50,50 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _nameCtl.text = user?.username ?? '';
     _bioCtl.text = user?.bio ?? '';
     _loadBilling();
+    _loadServerSettings();
+  }
+
+  Future<void> _loadServerSettings() async {
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getSettings();
+      final settings = (res.data['settings'] as Map<String, dynamic>?);
+      if (settings == null) return;
+      final store = ref.read(storeProvider);
+      final playback = settings['playbackSettings'];
+      final notif = settings['notificationSettings'];
+      if (playback is Map<String, dynamic>) {
+        ref.read(storeProvider.notifier).updatePlaybackSettings(
+          store.playbackSettings.copyWith(
+            defaultQuality: playback['defaultQuality'] as String? ?? store.playbackSettings.defaultQuality,
+            subtitleSize: (playback['subtitleSize'] as num?)?.toDouble() ?? store.playbackSettings.subtitleSize,
+            autoplay: playback['autoplay'] as bool? ?? store.playbackSettings.autoplay,
+            subtitleLanguage: playback['subtitleLanguage'] as String? ?? store.playbackSettings.subtitleLanguage,
+          ),
+        );
+      }
+      if (notif is Map<String, dynamic>) {
+        ref.read(storeProvider.notifier).updateNotificationSettings(
+          store.notificationSettings.copyWith(
+            newReleases: notif['newReleases'] as bool? ?? store.notificationSettings.newReleases,
+            watchlistUpdates: notif['watchlistUpdates'] as bool? ?? store.notificationSettings.watchlistUpdates,
+            creatorActivity: notif['creatorActivity'] as bool? ?? store.notificationSettings.creatorActivity,
+            marketing: notif['marketing'] as bool? ?? store.notificationSettings.marketing,
+          ),
+        );
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _syncServerSettings() async {
+    try {
+      final api = ref.read(apiServiceProvider);
+      final store = ref.read(storeProvider);
+      await api.updateSettings({
+        'playbackSettings': store.playbackSettings.toJson(),
+        'notificationSettings': store.notificationSettings.toJson(),
+      });
+    } catch (_) {}
   }
 
   @override
@@ -275,6 +319,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ref.read(storeProvider.notifier).updatePlaybackSettings(
                     store.playbackSettings.copyWith(defaultQuality: q),
                   );
+                  _syncServerSettings();
                 },
                 itemBuilder: (_) => _qualities.map((q) => PopupMenuItem(value: q, child: Text(q))).toList(),
                 child: Container(
@@ -301,6 +346,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ref.read(storeProvider.notifier).updatePlaybackSettings(
                   store.playbackSettings.copyWith(autoplay: v),
                 );
+                _syncServerSettings();
               },
             ),
           ]),
@@ -308,15 +354,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _section('Notifications', [
             _notifSwitch(store, Icons.notifications_active, 'New Releases', 'Get notified about new content', store.notificationSettings.newReleases, (v) {
               ref.read(storeProvider.notifier).updateNotificationSettings(store.notificationSettings.copyWith(newReleases: v));
+              _syncServerSettings();
             }),
             _notifSwitch(store, Icons.notifications, 'Watchlist Updates', 'When items change', store.notificationSettings.watchlistUpdates, (v) {
               ref.read(storeProvider.notifier).updateNotificationSettings(store.notificationSettings.copyWith(watchlistUpdates: v));
+              _syncServerSettings();
             }),
             _notifSwitch(store, Icons.campaign, 'Creator Activity', 'Updates from creators you follow', store.notificationSettings.creatorActivity, (v) {
               ref.read(storeProvider.notifier).updateNotificationSettings(store.notificationSettings.copyWith(creatorActivity: v));
+              _syncServerSettings();
             }),
             _notifSwitch(store, Icons.local_offer, 'Marketing', 'Promotions and offers', store.notificationSettings.marketing, (v) {
               ref.read(storeProvider.notifier).updateNotificationSettings(store.notificationSettings.copyWith(marketing: v));
+              _syncServerSettings();
             }),
           ]),
           const SizedBox(height: 24),

@@ -7,6 +7,7 @@ import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../widgets/ui/index.dart';
+import '../widgets/features/index.dart';
 
 final _productsProvider = FutureProvider<List<Map<String, dynamic>>>((
   ref,
@@ -328,41 +329,45 @@ class _StoreScreenState extends ConsumerState<StoreScreen> {
   }
 
   Widget _productGrid(List<Map<String, dynamic>> items) {
-    final width = MediaQuery.sizeOf(context).width;
-    final cols = width >= 900 ? 4 : (width >= 600 ? 3 : 2);
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: cols,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        childAspectRatio: 0.72,
-      ),
-      itemCount: items.length,
-      itemBuilder: (_, i) => _ProductCard(
-        item: items[i],
-        inCart: _cart.containsKey(_itemId(items[i])),
-        onToggle: () => setState(() {
-          final id = _itemId(items[i]);
-          if (_cart.containsKey(id)) {
-            _cart.remove(id);
-          } else {
-            _cart[id] = 1;
-          }
-        }),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cols = gridColumnsForWidth(constraints.maxWidth);
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: cols,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            childAspectRatio: 0.7,
+          ),
+          itemCount: items.length,
+          itemBuilder: (_, i) => _ProductCard(
+            item: items[i],
+            inCart: _cart.containsKey(_itemId(items[i])),
+            onToggle: () => setState(() {
+              final id = _itemId(items[i]);
+              if (_cart.containsKey(id)) {
+                _cart.remove(id);
+              } else {
+                _cart[id] = 1;
+              }
+            }),
+          ),
+        );
+      },
     );
   }
 
   Widget _cartDrawer() {
     final products = ref.read(_productsProvider).value ?? [];
+    final w = MediaQuery.sizeOf(context).width;
     return Positioned(
       right: 0,
       top: 0,
       bottom: 0,
       child: Container(
-        width: 420,
+        width: w >= 468 ? 420 : w - 48,
         color: AppColors.surfaceContainerLowest,
         child: Column(
           children: [
@@ -576,12 +581,13 @@ class _StoreScreenState extends ConsumerState<StoreScreen> {
   }
 
   Widget _ordersDrawer() {
+    final w = MediaQuery.sizeOf(context).width;
     return Positioned(
       right: 0,
       top: 0,
       bottom: 0,
       child: Container(
-        width: 420,
+        width: w >= 468 ? 420 : w - 48,
         color: AppColors.surfaceContainerLowest,
         child: FutureBuilder(
           future: ref.read(apiServiceProvider).getMyOrders(),

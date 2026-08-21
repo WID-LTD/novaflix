@@ -1,6 +1,12 @@
 import { v4 as uuidv4 } from 'uuid'
 import pool from '../config/database.js'
 
+const WEB_ORIGIN = process.env.WEB_ORIGIN || 'https://novaflix-web.vercel.app'
+
+function referralUrl(code) {
+  return `${WEB_ORIGIN}/register?ref=${code}`
+}
+
 function generateCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase()
 }
@@ -16,7 +22,7 @@ export async function generateReferral(req, res) {
     )
 
     if (existing[0]) {
-      return res.json({ success: true, code: existing[0].code, url: `${req.protocol}://${req.get('host')}/register?ref=${existing[0].code}` })
+      return res.json({ success: true, code: existing[0].code, url: referralUrl(existing[0].code) })
     }
 
     const code = generateCode()
@@ -29,7 +35,7 @@ export async function generateReferral(req, res) {
     res.json({
       success: true,
       code,
-      url: `${req.protocol}://${req.get('host')}/register?ref=${code}`,
+      url: referralUrl(code),
     })
   } catch (err) {
     res.status(500).json({ error: err.message })

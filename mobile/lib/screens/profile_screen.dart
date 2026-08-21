@@ -54,7 +54,7 @@ class ProfileScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 32),
             _section('Stats', [
-              _statCard(Icons.bookmark, 'Watchlist', '${store.continueWatching.length} items'),
+              _statCard(Icons.bookmark, 'Watchlist', '${store.watchlist.length} items'),
               _statCard(Icons.play_circle, 'Continue Watching', '${store.continueWatching.length} items'),
             ]),
             const SizedBox(height: 24),

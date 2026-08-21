@@ -219,6 +219,46 @@ export function getGenres(req, res) {
     })
 }
 
+export async function searchCategories(req, res) {
+  try {
+    const { q } = req.query
+    if (!q || q.trim().length < 2) {
+      return res.json({ success: true, categories: [] })
+    }
+    const query = `%${q.trim()}%`
+    
+    const tmdb = req.app.locals.tmdb
+    const [{ data: movieGenres }, { data: tvGenres }] = await Promise.all([
+      tmdb.get('/genre/movie/list', { params: { language: 'en-US' } }),
+      tmdb.get('/genre/tv/list', { params: { language: 'en-US' } }),
+    ])
+    
+    const allGenres = [
+      ...(movieGenres.genres || []).map(g => ({ ...g, type: 'movie' })),
+      ...(tvGenres.genres || []).map(g => ({ ...g, type: 'tv' })),
+    ]
+    
+    const matched = allGenres.filter(g => g.name.toLowerCase().includes(q.trim().toLowerCase()))
+    
+    // Also search creator upload genres from database
+    const pool = (await import('../config/database.js')).default
+    const { rows: creatorGenres } = await pool.query(
+      `SELECT DISTINCT genre FROM uploads WHERE genre ILIKE $1 LIMIT 20`,
+      [query]
+    )
+    
+    const categories = [
+      ...matched.map(g => ({ id: g.id, name: g.name, type: g.type, source: 'tmdb' })),
+      ...creatorGenres.map(g => ({ id: g.genre.toLowerCase().replace(/\s+/g, '-'), name: g.genre, type: 'creator', source: 'creator' })),
+    ]
+    
+    res.json({ success: true, categories: categories.slice(0, 20) })
+  } catch (err) {
+    console.error(err.message)
+    res.status(500).json({ error: err.message })
+  }
+}
+
 export function getCategoryMovies(req, res) {
   const tmdb = req.app.locals.tmdb
   const { id, type, page } = req.query
@@ -466,5 +506,107 @@ export function credits(req, res) {
     .catch((err) => {
       console.error(err.message)
       res.status(500).json({ success: false, error: 'Failed to fetch credits' })
+    })
+}
+
+export function getPersonCredits(req, res) {
+  const { id } = req.params
+  if (!id) return res.status(400).json({ error: 'Person ID is required' })
+
+  const tmdb = req.app.locals.tmdb
+
+  tmdb.get(`/person/${id}/combined_credits`, { params: { language: 'en-US' } })
+    .then(({ data }) => {
+      const sortByPopularity = (arr) => arr
+        .filter((c) => c.media_type === 'movie' || c.media_type === 'tv')
+        .sort((a, b) => (b.vote_count || 0) - (a.vote_count || 0))
+        .slice(0, 20)
+        .map((c) => ({
+          id: c.id,
+          title: c.title || c.name || '',
+          poster: c.poster_path
+            ? `https://image.tmdb.org/t/p/w500${c.poster_path}`
+            : null,
+          backdrop: c.backdrop_path
+            ? `https://image.tmdb.org/t/p/w1280${c.backdrop_path}`
+            : null,
+          type: c.media_type === 'tv' ? 'tv' : 'movie',
+          year: (c.release_date || c.first_air_date || '').split('-')[0] || 'N/A',
+          overview: c.overview || '',
+          character: c.character || '',
+          premium: (c.vote_average || 0) >= 8,
+        }))
+
+      const cast = sortByPopularity(data.cast || [])
+      const crew = sortByPopularity(data.crew || [])
+
+      res.json({
+        success: true,
+        id,
+        name: data.name || '',
+        profile_path: data.profile_path
+          ? `https://image.tmdb.org/t/p/w500${data.profile_path}`
+          : null,
+        cast,
+        crew,
+      })
+    })
+    .catch((err) => {
+      console.error(err.message)
+      res.status(500).json({ success: false, error: 'Failed to fetch person credits' })
+    })
+}
+
+// Batch check for creator profiles by TMDB person IDs
+export async function batchCheckCreators(req, res) {
+  try {
+    const { tmdbIds } = req.query
+    if (!tmdbIds) return res.status(400).json({ error: 'tmdbIds required' })
+    
+    const ids = tmdbIds.split(',').map(Number).filter(n => !isNaN(n))
+    const { rows } = await pool.query(
+      `SELECT tmdb_person_id FROM creator_profiles WHERE tmdb_person_id = ANY($1)`,
+      [ids]
+    )
+    
+    res.json({ 
+      success: true, 
+      linked: rows.map(r => r.tmdb_person_id) 
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export function searchPerson(req, res) {
+  const { query } = req.query
+  if (!query) return res.status(400).json({ error: 'Query param is required' })
+
+  const tmdb = req.app.locals.tmdb
+
+  tmdb.get('/search/person', { params: { query, language: 'en-US', page: 1 } })
+    .then(({ data }) => {
+      const results = (data.results || []).map((p) => ({
+        id: p.id,
+        name: p.name || '',
+        profile_path: p.profile_path
+          ? `https://image.tmdb.org/t/p/w500${p.profile_path}`
+          : null,
+        known_for_department: p.known_for_department || '',
+        known_for: (p.known_for || []).map((m) => ({
+          id: m.id,
+          title: m.title || m.name || '',
+          poster: m.poster_path
+            ? `https://image.tmdb.org/t/p/w500${m.poster_path}`
+            : null,
+          type: m.media_type === 'tv' ? 'tv' : 'movie',
+          year: (m.release_date || m.first_air_date || '').split('-')[0] || 'N/A',
+        })),
+      }))
+      res.json({ success: true, data: results })
+    })
+    .catch((err) => {
+      console.error(err.message)
+      res.json({ success: false, error: 'Failed to search people' })
     })
 }

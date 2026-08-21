@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from 'react'
 import Icon from '../components/ui/Icon'
 import { useStore } from '../store/useStore'
 import { useAuth } from '../lib/AuthContext'
-import { getMyAchievements, checkAchievements, uploadAvatar, getFollowStats, getFollowers, getFollowing, getGamification } from '../lib/auth'
+import { getMyAchievements, checkAchievements, uploadAvatar, getFollowStats, getFollowers, getFollowing, getGamification, getContinueWatching, getWatchlist } from '../lib/auth'
 import Button from '../components/ui/Button'
 import PremiumBadge from '../components/ui/PremiumBadge'
 import FollowButton from '../components/ui/FollowButton'
@@ -22,6 +22,8 @@ export default function Profile() {
   const [activeList, setActiveList] = useState<'followers' | 'following' | null>(null)
   const [listUsers, setListUsers] = useState<any[]>([])
   const [listLoading, setListLoading] = useState(false)
+  const [serverContinueWatching, setServerContinueWatching] = useState<any[]>([])
+  const [serverWatchlist, setServerWatchlist] = useState<any[]>([])
 
   useEffect(() => {
     (async () => {
@@ -35,9 +37,35 @@ export default function Profile() {
 
   useEffect(() => {
     if (!user) return
+    const token = localStorage.getItem('novaflix-token') || ''
+    getContinueWatching(token).then((res) => {
+      if (res.success && Array.isArray(res.history)) {
+        setServerContinueWatching(res.history)
+      }
+    })
+    getWatchlist(token).then((res) => {
+      if (res.success && Array.isArray(res.watchlist)) {
+        setServerWatchlist(res.watchlist)
+      }
+    })
+  }, [user])
+
+  useEffect(() => {
+    if (!user) return
     getFollowStats(user.id).then((r) => {
       if (r.success) setStats({ followers: r.followers, following: r.following })
     })
+  }, [user])
+
+  // Poll for realtime updates
+  useEffect(() => {
+    if (!user) return
+    const interval = setInterval(() => {
+      getFollowStats(user.id).then((r) => {
+        if (r.success) setStats({ followers: r.followers, following: r.following })
+      })
+    }, 60000)
+    return () => clearInterval(interval)
   }, [user])
 
   const openList = async (list: 'followers' | 'following') => {
@@ -50,11 +78,22 @@ export default function Profile() {
     setListLoading(false)
   }
 
-  const movieCount = watchlist.filter((w) => w.type === 'movie').length
-  const tvCount = watchlist.filter((w) => w.type === 'tv').length
-  const totalMinutes = continueWatching.reduce((acc, c) => acc + Math.round((c.progress || 0) / 60), 0)
-  const avgProgress = continueWatching.length > 0
-    ? Math.round(continueWatching.reduce((acc, c) => acc + ((c.progress || 0) / (c.duration || 1)) * 100, 0) / continueWatching.length)
+  const watchlistItems = serverWatchlist.length > 0 ? serverWatchlist : watchlist
+  const movieCount = watchlistItems.filter((w: any) => w.type === 'movie').length
+  const tvCount = watchlistItems.filter((w: any) => w.type === 'tv').length
+  const cwItems = serverContinueWatching.length > 0 ? serverContinueWatching.map((h) => ({
+    id: Number(h.content_id),
+    title: h.title || '',
+    poster: h.poster,
+    type: h.type === 'tv' ? 'tv' : 'movie',
+    season: h.season != null ? Number(h.season) : undefined,
+    episode: h.episode != null ? Number(h.episode) : undefined,
+    progress: Number(h.position_seconds || 0),
+    duration: Number(h.duration_seconds || 0),
+  })) : continueWatching
+  const totalMinutes = cwItems.reduce((acc, c) => acc + Math.round((c.progress || 0) / 60), 0)
+  const avgProgress = cwItems.length > 0
+    ? Math.round(cwItems.reduce((acc, c) => acc + ((c.progress || 0) / (c.duration || 1)) * 100, 0) / cwItems.length)
     : 0
 
   const handleLogout = () => {
@@ -141,7 +180,7 @@ export default function Profile() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-gutter mb-6 md:mb-10">
           <div className="bg-surface-container-high border border-white/5 rounded-xl p-4 md:p-5">
             <Icon name="bookmark" className="text-primary-container mb-3" />
-            <p className="text-2xl font-bold text-on-surface">{watchlist.length}</p>
+            <p className="text-2xl font-bold text-on-surface">{watchlistItems.length}</p>
             <p className="text-on-surface-variant/60 text-sm">Total Saved</p>
           </div>
           <div className="bg-surface-container-high border border-white/5 rounded-xl p-4 md:p-5">
@@ -180,11 +219,11 @@ export default function Profile() {
           </button>
         </div>
 
-        {continueWatching.length > 0 && (
+        {cwItems.length > 0 && (
           <div className="mb-10">
             <h2 className="font-label-md text-label-md text-on-surface uppercase tracking-widest mb-4">Continue Watching</h2>
             <div className="space-y-2">
-              {continueWatching.slice(0, 5).map((item) => (
+              {cwItems.slice(0, 5).map((item) => (
                 <div
                   key={`${item.id}-${item.type}`}
                   className="flex items-center gap-3 sm:gap-4 bg-surface-container-high border border-white/5 rounded-xl p-3 sm:p-4"
@@ -213,13 +252,18 @@ export default function Profile() {
                         }}
                       />
                     </div>
+                    <p className="text-xs text-on-surface-variant/60 mt-1">
+                      {item.duration > 0
+                        ? `${Math.round((item.progress / item.duration) * 100)}% • ${Math.round(item.progress / 60)}m / ${Math.round(item.duration / 60)}m`
+                        : `${Math.round(item.progress / 60)}m`}
+                    </p>
                   </div>
                   <div className="shrink-0">
                     <Button
                       size="sm"
                       variant="ghost"
                       onClick={() =>
-                        (window.location.href = `/watch?id=${item.id}&type=${item.type}${item.season ? `&season=${item.season}&episode=${item.episode}` : ''}`)
+                        (window.location.href = `/watch?id=${item.id}&type=${item.type}${item.season ? `&season=${item.season}&episode=${item.episode}` : ''}${item.progress > 0 ? `&resume=${Math.round(item.progress)}` : ''}`)
                       }
                     >
                       Resume

@@ -16,8 +16,12 @@ router.get('/tv-season', tmdbController.tvSeason)
 router.get('/trending', tmdbController.getTrending)
 router.get('/now-playing', tmdbController.getNowPlaying)
 router.get('/genres', tmdbController.getGenres)
+router.get('/categories/search', tmdbController.searchCategories)
 router.get('/category', tmdbController.getCategoryMovies)
 router.get('/discover', tmdbController.getDiscover)
 router.get('/search/all', tmdbController.searchAll)
+router.get('/search/person', tmdbController.searchPerson)
+router.get('/person/:id/credits', tmdbController.getPersonCredits)
+router.get('/creator/batch-check', tmdbController.batchCheckCreators)
 
 export default router

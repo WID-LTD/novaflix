@@ -866,14 +866,15 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
             ),
           );
         }
-        return GridView.builder(
-          padding: const EdgeInsets.all(16),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: gridColumnsFor(MediaQuery.sizeOf(context).width),
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 0.66,
-          ),
+        return LayoutBuilder(
+          builder: (context, constraints) => GridView.builder(
+            padding: const EdgeInsets.all(16),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: gridColumnsForWidth(constraints.maxWidth - 32),
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 0.66,
+            ),
           itemCount: data.items.length,
           itemBuilder: (_, i) {
             final item = data.items[i];
@@ -884,6 +885,7 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
               onEquip: () => _equipCosmetic(item),
             );
           },
+          ),
         );
       },
     );

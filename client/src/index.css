@@ -105,8 +105,12 @@
   }
 
   .card-hover-effect:hover {
-    transform: scale(1.05);
-    z-index: 10;
+    transform: scale(1.04);
+    z-index: 20;
+  }
+
+  .card-grid {
+    isolation: isolate;
   }
 
   .card-hover-effect:active {

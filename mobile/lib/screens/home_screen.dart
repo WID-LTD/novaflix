@@ -64,6 +64,36 @@ final _homeNewsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async
   return articles.cast<Map<String, dynamic>>();
 });
 
+final _continueWatchingProvider = FutureProvider<List<ContinueWatchingItem>>((
+  ref,
+) async {
+  final api = ref.read(apiServiceProvider);
+  final auth = ref.read(authProvider);
+  final local = ref.read(storeProvider).continueWatching;
+  if (auth.status != AuthStatus.authenticated) return local;
+  try {
+    final res = await api.getContinueWatching();
+    final history = res.data['history'] as List? ?? [];
+    final items = history.map((e) {
+      final m = e as Map<String, dynamic>;
+      return ContinueWatchingItem(
+        id: int.tryParse('${m['content_id']}') ?? 0,
+        title: m['title'] as String? ?? '',
+        poster: m['poster'] as String?,
+        type: m['type'] as String? ?? 'movie',
+        season: m['season'] as int?,
+        episode: m['episode'] as int?,
+        progress: (m['position_seconds'] as num?)?.toDouble() ?? 0,
+        duration: (m['duration_seconds'] as num?)?.toDouble() ?? 0,
+      );
+    }).toList();
+    if (items.isNotEmpty) return items;
+    return local;
+  } catch (_) {
+    return local;
+  }
+});
+
 final _categoryProvider = FutureProvider.family<List<MediaItem>, int>((
   ref,
   genreId,
@@ -141,6 +171,9 @@ class HomeScreen extends ConsumerWidget {
     final hasDownloads = dlState.items.isNotEmpty;
     final isAuthed = auth.status == AuthStatus.authenticated;
     final userName = auth.user?.username ?? 'You';
+    final continueWatching =
+        ref.watch(_continueWatchingProvider).valueOrNull ??
+        store.continueWatching;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -175,9 +208,9 @@ class HomeScreen extends ConsumerWidget {
             ),
             if (isAuthed && isOffline && hasDownloads)
               SliverToBoxAdapter(child: _offlineCta(context, dlState)),
-            if (store.continueWatching.isNotEmpty)
+            if (continueWatching.isNotEmpty)
               SliverToBoxAdapter(
-                child: _buildContinueWatching(context, store.continueWatching, userName),
+                child: _buildContinueWatching(context, continueWatching, userName),
               ),
             SliverToBoxAdapter(
               child: trending.when(
@@ -403,16 +436,24 @@ class HomeScreen extends ConsumerWidget {
                 itemCount: items.length,
                 itemBuilder: (_, i) {
                   final item = items[i];
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 16),
-                    child: SizedBox(
-                      width: isDesktop ? 220 : 160,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () => context.push('/watch?id=${item.id}&type=${item.type}'),
+                  final percent = item.duration > 0
+                            ? (item.progress / item.duration * 100).clamp(0, 100)
+                            : 0.0;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 16),
+                            child: SizedBox(
+                              width: isDesktop ? 220 : 160,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: GestureDetector(
+                                      onTap: () => context.push(
+                                        '/watch?id=${item.id}&type=${item.type}'
+                                        '${item.season != null ? '&season=${item.season}' : ''}'
+                                        '${item.episode != null ? '&episode=${item.episode}' : ''}'
+                                        '&resume=${item.progress.toStringAsFixed(0)}',
+                                      ),
                               child: Container(
                                 decoration: BoxDecoration(
                                   color: AppColors.surfaceContainerHigh,
@@ -450,6 +491,33 @@ class HomeScreen extends ConsumerWidget {
                                         ),
                                       ),
                                     ),
+                                    if (item.duration > 0)
+                                      Positioned(
+                                        left: 6,
+                                        bottom: 10,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 5,
+                                            vertical: 1,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withValues(
+                                              alpha: 0.7,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            '${percent.toStringAsFixed(0)}%',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 9.5,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
                                   ],
                                 ),
                               ),

@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid'
 import { addSubscription, getUserSubscription, updateUser, createTransaction, getTransactionByReference, updateTransactionByReference, getPlanBySlug, listPlans } from '../db.js'
 import { initializePayment, verifyPayment, isConfigured } from '../lib/gateway.js'
+import { signToken } from './authController.js'
 
 export async function listPricing(req, res) {
   try {
@@ -76,7 +77,10 @@ export async function verify(req, res) {
       await updateUser(req.userId, { plan: plan || 'basic' })
       await updateTransactionByReference(reference, { status: 'success' })
 
-      res.json({ success: true, subscription: sub, gateway })
+      const freshPlan = plan || 'basic'
+      const token = signToken({ id: req.userId, email: req.user.email, role: req.user.role || 'user', plan: freshPlan })
+
+      res.json({ success: true, subscription: sub, gateway, plan: freshPlan, token })
     } else {
       res.json({ success: false, error: 'Payment not completed', status: result.status })
     }

@@ -74,6 +74,21 @@ export async function updateUser(id, updates) {
   return rowToUser(rows[0])
 }
 
+export async function getUserSettings(id) {
+  const { rows } = await pool.query('SELECT settings FROM users WHERE id = $1', [id])
+  if (!rows[0]) return null
+  return rows[0].settings || {}
+}
+
+export async function updateUserSettings(id, settings) {
+  const { rows } = await pool.query(
+    `UPDATE users SET settings = $2, updated_at = NOW() WHERE id = $1 RETURNING settings`,
+    [id, JSON.stringify(settings)]
+  )
+  if (!rows[0]) return null
+  return rows[0].settings || {}
+}
+
 export async function addUpload(upload) {
   const { rows } = await pool.query(
     `INSERT INTO uploads (id, user_id, title, description, genre, filename, thumbnail_url, filesize, status, views, minutes_watched, revenue, source_type, youtube_id, youtube_url, quality, duration_seconds)
@@ -115,12 +130,34 @@ export async function getAllUploads() {
 
 export async function addWatchEntry(entry) {
   const { rows } = await pool.query(
-    `INSERT INTO watch_history (id, user_id, content_id, title, type, minutes, season, episode)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-    [entry.id, entry.userId, entry.contentId, entry.title, entry.type, entry.minutes || 0, entry.season || null, entry.episode || null]
+    `INSERT INTO watch_history (id, user_id, content_id, title, type, minutes, season, episode, position_seconds, duration_seconds, poster, watched_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+     ON CONFLICT (user_id, content_id, type, COALESCE(season, -1), COALESCE(episode, -1))
+     DO UPDATE SET
+       title = EXCLUDED.title,
+       minutes = EXCLUDED.minutes,
+       position_seconds = EXCLUDED.position_seconds,
+       duration_seconds = EXCLUDED.duration_seconds,
+       poster = COALESCE(EXCLUDED.poster, watch_history.poster),
+       watched_at = NOW(),
+       updated_at = NOW()
+     RETURNING *`,
+    [entry.id, entry.userId, entry.contentId, entry.title, entry.type, entry.minutes || 0, entry.season || null, entry.episode || null, entry.positionSeconds || 0, entry.durationSeconds || 0, entry.poster || null]
   )
   bumpUploadViewMinutes(entry.contentId, entry.minutes || 0).catch(() => {})
   return rows[0]
+}
+
+export async function getContinueWatching(userId) {
+  const { rows } = await pool.query(
+    `SELECT DISTINCT ON (content_id, type) *
+     FROM watch_history
+     WHERE user_id = $1
+       AND (duration_seconds IS NULL OR duration_seconds = 0 OR position_seconds < duration_seconds * 0.95)
+     ORDER BY content_id, type, updated_at DESC`,
+    [userId]
+  )
+  return rows
 }
 
 export async function getWatchHistory(userId) {

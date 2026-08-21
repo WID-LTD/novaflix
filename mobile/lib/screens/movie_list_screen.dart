@@ -52,7 +52,6 @@ class MovieListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final items = ref.watch(_listProvider(kind));
-    final columns = gridColumnsFor(MediaQuery.sizeOf(context).width);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -64,16 +63,21 @@ class MovieListScreen extends ConsumerWidget {
               child: Text('Nothing here yet', style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant)),
             );
           }
-          return GridView.builder(
-            padding: const EdgeInsets.all(16),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: columns,
-              childAspectRatio: 0.65,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-            ),
-            itemCount: list.length,
-            itemBuilder: (_, i) => MovieCard(item: list[i]),
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = gridColumnsForWidth(constraints.maxWidth - 32);
+              return GridView.builder(
+                padding: const EdgeInsets.all(16),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: columns,
+                  childAspectRatio: 0.65,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                ),
+                itemCount: list.length,
+                itemBuilder: (_, i) => MovieCard(item: list[i]),
+              );
+            },
           );
         },
         loading: () => const LoadingSpinner(),

@@ -6,6 +6,7 @@ import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../widgets/ui/index.dart';
+import '../widgets/features/index.dart';
 
 final _eventsProvider = FutureProvider.family<
     List<Map<String, dynamic>>,
@@ -143,22 +144,25 @@ class _LiveEventsScreenState extends ConsumerState<LiveEventsScreen> {
   }
 
   Widget _grid(List<Map<String, dynamic>> items) {
-    final width = MediaQuery.sizeOf(context).width;
-    final cols = width >= 1024 ? 3 : (width >= 600 ? 2 : 1);
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: cols,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        childAspectRatio: 0.92,
-      ),
-      itemCount: items.length,
-      itemBuilder: (_, i) => _EventCard(
-        event: items[i],
-        onTap: () => _openEvent(items[i]),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cols = gridColumnsForWidth(constraints.maxWidth).clamp(1, 3);
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: cols,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            childAspectRatio: 0.72,
+          ),
+          itemCount: items.length,
+          itemBuilder: (_, i) => _EventCard(
+            event: items[i],
+            onTap: () => _openEvent(items[i]),
+          ),
+        );
+      },
     );
   }
 

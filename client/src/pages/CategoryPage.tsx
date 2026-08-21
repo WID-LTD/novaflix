@@ -139,9 +139,9 @@ export default function CategoryPage() {
           </div>
         ) : movies.length > 0 ? (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-gutter">
+            <div className="card-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-gutter">
               {movies.map((item, i) => (
-                <HoverCard key={`${item.id}-${item.type}-${i}`} item={item} index={i} />
+                <HoverCard key={`${item.id}-${item.type}-${i}`} item={item} index={i} className="w-full min-w-0" />
               ))}
             </div>
             {page < totalPages && (

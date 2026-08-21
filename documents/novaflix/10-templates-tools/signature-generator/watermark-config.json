@@ -1,0 +1,33 @@
+{
+  "watermark": {
+    "image": {
+      "primary": "combination-mark-logo.png",
+      "fallback": ["nova-logo.png", "flix-logo.png", "pictoral-mark-logo.png"],
+      "sourceDir": "../../../../client/public/"
+    },
+    "placement": {
+      "mode": "diagonal-repeat",
+      "angle": -35,
+      "opacity": 0.06,
+      "scale": 0.25,
+      "spacing": { "x": 300, "y": 300 },
+      "offset": { "x": -50, "y": -50 }
+    },
+    "textFallback": {
+      "enabled": true,
+      "text": "NovaFlix \u00b7 WID Ltd",
+      "fontSize": 48,
+      "color": "#E50914",
+      "opacity": 0.04,
+      "fontFamily": "Inter, sans-serif",
+      "letterSpacing": "0.1em",
+      "angle": -35
+    },
+    "perDocumentClass": {
+      "classA": { "opacity": 0.08, "scale": 0.3 },
+      "classB": { "opacity": 0.06, "scale": 0.25 },
+      "classC": { "opacity": 0.04, "scale": 0.2 },
+      "classD": { "opacity": 0.03, "scale": 0.15 }
+    }
+  }
+}

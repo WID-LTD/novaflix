@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/ui/index.dart';
 
@@ -20,8 +21,13 @@ class PaymentSuccessScreen extends ConsumerWidget {
       if (reference.isEmpty) return 'no_reference';
       final api = ref.read(apiServiceProvider);
       try {
-        await api.verifyPayment(reference, plan);
-        ref.read(authProvider.notifier).refreshUser();
+        final res = await api.verifyPayment(reference, plan);
+        final data = res.data as Map<String, dynamic>;
+        final newToken = data['token'] as String?;
+        if (newToken != null) {
+          await ref.read(authServiceProvider).storeToken(newToken);
+        }
+        await ref.read(authProvider.notifier).refreshUser();
         return 'success';
       } catch (e) {
         return 'error:$e';

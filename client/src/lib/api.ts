@@ -90,6 +90,62 @@ export function searchAll(query: string): Promise<{ success: boolean; data: Medi
   return fetchJson(`${BASE}/search/all`, { q: query })
 }
 
+export interface Creator {
+  id: string
+  name: string
+  avatar: string | null
+  bio: string | null
+  known_for_department: string
+  tmdb_person_id: number | null
+  film_count: number
+  total_views: number
+  total_likes: number
+  followers_count: number
+}
+
+export function searchCreators(query: string): Promise<{ success: boolean; creators: Creator[]; error?: string }> {
+  return fetchJson(`${BASE}/creator/search`, { q: query })
+}
+
+export interface Category {
+  id: string | number
+  name: string
+  type: string
+  source: string
+}
+
+export function searchCategories(query: string): Promise<{ success: boolean; categories: Category[]; error?: string }> {
+  return fetchJson(`${BASE}/categories/search`, { q: query })
+}
+
+export interface Person {
+  id: number
+  name: string
+  profile_path: string | null
+  known_for_department: string
+  known_for: { id: number; title: string; poster: string | null; type: 'movie' | 'tv'; year: string }[]
+}
+
+export function searchPerson(query: string): Promise<{ success: boolean; data: Person[]; error?: string }> {
+  return fetchJson(`${BASE}/search/person`, { query })
+}
+
+export interface PersonCredit {
+  id: number
+  title: string
+  poster: string | null
+  backdrop: string | null
+  type: 'movie' | 'tv'
+  year: string
+  overview: string
+  character: string
+  premium: boolean
+}
+
+export function getPersonCredits(id: string): Promise<{ success: boolean; name: string; profile_path: string | null; cast: PersonCredit[]; crew: PersonCredit[]; error?: string }> {
+  return fetchJson(`${BASE}/person/${id}/credits`, {})
+}
+
 export function getNowPlaying(): Promise<{ success: boolean; data: MediaItem[]; error?: string }> {
   return fetchJson(`${BASE}/now-playing`)
 }

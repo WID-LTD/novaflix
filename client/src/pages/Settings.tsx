@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import Icon from '../components/ui/Icon'
 import Button from '../components/ui/Button'
 import PremiumBadge from '../components/ui/PremiumBadge'
 import { useAuth } from '../lib/AuthContext'
 import { useStore } from '../store/useStore'
-import { updateProfile, changePassword, deleteAccount, getUserStats, getPaymentStatus, getToken } from '../lib/auth'
+import { updateProfile, changePassword, deleteAccount, getUserStats, getPaymentStatus, getToken, getSettings, updateSettings } from '../lib/auth'
 import { getLocale, setLocale, type Locale } from '../i18n'
 
 const locales: { code: Locale; label: string }[] = [
@@ -49,7 +49,25 @@ export default function Settings() {
     if (!token) return
     getUserStats(token).then(r => { if (r.success) setStats(r.stats) })
     getPaymentStatus(token).then(r => { if (r.success) setBilling(r) })
+    getSettings(token).then(r => {
+      if (r.success && r.settings) {
+        const s = r.settings
+        if (s.playbackSettings) updatePlaybackSettings(s.playbackSettings)
+        if (s.notificationSettings) updateNotificationSettings(s.notificationSettings)
+      }
+    })
   }, [token])
+
+  const hydrated = useRef(false)
+  useEffect(() => {
+    if (!hydrated.current) return
+    if (!token) return
+    updateSettings(token, {
+      playbackSettings,
+      notificationSettings,
+    })
+  }, [playbackSettings, notificationSettings])
+  useEffect(() => { hydrated.current = true }, [])
 
   const handleSaveProfile = async () => {
     if (!token) return

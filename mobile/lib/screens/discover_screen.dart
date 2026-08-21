@@ -18,48 +18,71 @@ const _sortOptions = [
   ('newest', 'Newest'),
 ];
 
-const _genreOptions = [
-  ('', 'All Genres'),
-  ('action', 'Action'),
-  ('comedy', 'Comedy'),
-  ('drama', 'Drama'),
-  ('horror', 'Horror'),
-  ('romance', 'Romance'),
-  ('sci-fi', 'Sci-Fi'),
-  ('thriller', 'Thriller'),
-  ('animation', 'Animation'),
-  ('documentary', 'Documentary'),
+const _genreOptions = <(int?, String)>[
+  (null, 'All Genres'),
+  (28, 'Action'),
+  (35, 'Comedy'),
+  (18, 'Drama'),
+  (27, 'Horror'),
+  (10749, 'Romance'),
+  (878, 'Sci-Fi'),
+  (53, 'Thriller'),
+  (16, 'Animation'),
+  (99, 'Documentary'),
 ];
 
-const _keywordMap = {
-  'trending': 'avengers',
-  'top_rated': 'inception',
-  'popular': 'popular',
-  'newest': '2024',
-  'action': 'mission impossible',
-  'comedy': 'funny',
-  'drama': 'drama',
-  'horror': 'scary',
-  'romance': 'romance',
-  'sci-fi': 'space',
-  'thriller': 'thriller',
-  'animation': 'animated',
-  'documentary': 'documentary',
+const _sortByFor = {
+  'trending': {'movie': 'popularity.desc', 'tv': 'popularity.desc'},
+  'top_rated': {'movie': 'vote_average.desc', 'tv': 'vote_average.desc'},
+  'popular': {'movie': 'popularity.desc', 'tv': 'popularity.desc'},
+  'newest': {'movie': 'primary_release_date.desc', 'tv': 'first_air_date.desc'},
 };
 
-final _discoverResultsProvider = FutureProvider.family<List<MediaItem>, String>(
-  (ref, keyword) async {
-    if (keyword.isEmpty) return [];
+List<MediaItem> _parseList(dynamic raw) {
+  return (raw as List? ?? [])
+      .cast<Map<String, dynamic>>()
+      .map((e) => MediaItem.fromJson(e))
+      .toList();
+}
+
+final _discoverResultsProvider =
+    FutureProvider.family<List<MediaItem>, (String, String, int?, String)>(
+  (ref, key) async {
+    final (type, sort, genreId, query) = key;
     final api = ref.read(apiServiceProvider);
     try {
-      final movie = await api.searchMedia(keyword, type: 'movie');
-      final tv = await api.searchMedia(keyword, type: 'tv');
-      final movieData = (movie.data['data'] as List? ?? []).cast<Map<String, dynamic>>();
-      final tvData = (tv.data['data'] as List? ?? []).cast<Map<String, dynamic>>();
-      return [
-        ...movieData.map((e) => MediaItem.fromJson(e)),
-        ...tvData.map((e) => MediaItem.fromJson(e)),
-      ].take(40).toList();
+      if (query.trim().isNotEmpty) {
+        final items = <MediaItem>[];
+        if (type == 'all' || type == 'movie') {
+          final m = await api.searchMedia(query.trim(), type: 'movie');
+          items.addAll(_parseList(m.data['data']));
+        }
+        if (type == 'all' || type == 'tv') {
+          final t = await api.searchMedia(query.trim(), type: 'tv');
+          items.addAll(_parseList(t.data['data']));
+        }
+        return items.take(40).toList();
+      }
+      final items = <MediaItem>[];
+      if (type == 'all' || type == 'movie') {
+        final m = await api.getDiscover(
+          genreId: genreId,
+          type: 'movie',
+          sortBy: _sortByFor[sort]?['movie'],
+          minVotes: sort == 'top_rated' ? 100 : null,
+        );
+        items.addAll(_parseList(m.data['data']));
+      }
+      if (type == 'all' || type == 'tv') {
+        final t = await api.getDiscover(
+          genreId: genreId,
+          type: 'tv',
+          sortBy: _sortByFor[sort]?['tv'],
+          minVotes: sort == 'top_rated' ? 100 : null,
+        );
+        items.addAll(_parseList(t.data['data']));
+      }
+      return items.take(60).toList();
     } catch (_) {
       return [];
     }
@@ -78,7 +101,7 @@ class DiscoverScreen extends ConsumerStatefulWidget {
 class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
   String _type = 'all';
   String _sort = 'trending';
-  String _genre = '';
+  int? _genre;
   String _view = 'grid';
   final _searchCtl = TextEditingController();
   String _query = '';
@@ -97,15 +120,11 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
     super.dispose();
   }
 
-  String get _keyword {
-    if (_query.trim().isNotEmpty) return _query.trim();
-    if (_genre.isNotEmpty) return _keywordMap[_genre]!;
-    return _keywordMap[_sort]!;
-  }
+  String get _queryText => _query.trim();
 
   @override
   Widget build(BuildContext context) {
-    final results = ref.watch(_discoverResultsProvider(_keyword));
+    final results = ref.watch(_discoverResultsProvider((_type, _sort, _genre, _queryText)));
     final isDesktop = MediaQuery.of(context).size.width >= 1024;
     final hPadding = isDesktop ? 64.0 : 16.0;
 
@@ -202,7 +221,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                         ),
                       ],
                     ),
-                    const Spacer(),
+                    const SizedBox(width: 16),
                     _ViewToggle(
                       view: _view,
                       onChanged: (v) => setState(() => _view = v),
@@ -227,17 +246,22 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                         ),
                         const SizedBox(height: 16),
                         if (_view == 'grid')
-                          GridView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: gridColumnsFor(MediaQuery.of(context).size.width),
-                              childAspectRatio: 0.6,
-                              crossAxisSpacing: 20,
-                              mainAxisSpacing: 20,
+                          LayoutBuilder(
+                            builder: (context, constraints) => GridView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: gridColumnsForWidth(constraints.maxWidth),
+                                childAspectRatio: gridAspectForWidth(
+                                  constraints.maxWidth,
+                                  gridColumnsForWidth(constraints.maxWidth),
+                                ),
+                                crossAxisSpacing: 20,
+                                mainAxisSpacing: 20,
+                              ),
+                              itemCount: filtered.length,
+                              itemBuilder: (_, i) => MovieCard(item: filtered[i]),
                             ),
-                            itemCount: filtered.length,
-                            itemBuilder: (_, i) => MovieCard(item: filtered[i]),
                           )
                         else
                           Column(

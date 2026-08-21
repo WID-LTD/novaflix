@@ -146,13 +146,21 @@ export default function ExpandedCard({ details, cardRect, onClose, onMouseEnter,
     >
       <div className="relative bg-black" style={{ paddingBottom: '56.25%' }}>
         {details.trailerKey ? (
-          <iframe
-            src={`https://www.youtube-nocookie.com/embed/${details.trailerKey}?autoplay=1&mute=1&loop=1&playlist=${details.trailerKey}&controls=0&showinfo=0&rel=0&iv_load_policy=3&modestbranding=1`}
-            className="absolute inset-0 w-full h-full pointer-events-none"
-            allow="autoplay; encrypted-media"
-            allowFullScreen
-            title={`${details.title} Trailer`}
-          />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <img
+              src={`https://img.youtube.com/vi/${details.trailerKey}/maxresdefault.jpg`}
+              alt={details.title}
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+            <button
+              onClick={handlePlay}
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full bg-primary-container/90 flex items-center justify-center hover:scale-110 transition-transform backdrop-blur-sm pointer-events-auto"
+              aria-label={`Play ${details.title} trailer`}
+            >
+              <Icon name="play_arrow" fill={true} className="text-on-primary-container w-8 h-8 ml-1" />
+            </button>
+          </div>
         ) : (
           <img
             src={details.backdrop || details.poster || ''}

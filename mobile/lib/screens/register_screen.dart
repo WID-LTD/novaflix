@@ -4,11 +4,14 @@ import 'package:go_router/go_router.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../providers/auth_provider.dart';
+import '../services/api_service.dart';
 import '../widgets/features/index.dart';
 import '../widgets/ui/index.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
-  const RegisterScreen({super.key});
+  final String? refCode;
+
+  const RegisterScreen({super.key, this.refCode});
 
   @override
   ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
@@ -22,6 +25,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _ageCtl = TextEditingController();
   final List<String> _selectedGenres = [];
   final _codeCtl = TextEditingController();
+  bool _redeemed = false;
 
   final _genres = [
     ('Action', Icons.local_fire_department),
@@ -42,6 +46,17 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     super.dispose();
   }
 
+  /// Redeems the `?ref=` referral code once, after email verification
+  /// completes (mirrors web `Register.tsx`).
+  Future<void> _redeemIfNeeded() async {
+    final code = widget.refCode?.trim();
+    if (code == null || code.isEmpty || _redeemed) return;
+    _redeemed = true;
+    try {
+      await ref.read(apiServiceProvider).redeemReferral(code);
+    } catch (_) {}
+  }
+
   void _next() {
     if (_step < 3) {
       setState(() => _step++);
@@ -50,8 +65,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           .read(authProvider.notifier)
           .register(
             _emailCtl.text.trim(),
-            _passwordCtl.text,
-            _nameCtl.text.trim(),
+            _passwordCtl.text,            _nameCtl.text.trim(),
           );
     }
   }
@@ -75,9 +89,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final authState = ref.watch(authProvider);
 
     if (authState.status == AuthStatus.authenticated) {
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => context.go('/profiles'),
-      );
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await _redeemIfNeeded();
+        if (mounted) context.go('/profiles');
+      });
     }
 
     final maxWidth = MediaQuery.sizeOf(context).width;

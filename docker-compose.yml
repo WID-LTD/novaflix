@@ -1,0 +1,121 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: novaflix-postgres
+    environment:
+      POSTGRES_DB: novaflix
+      POSTGRES_USER: novaflix
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-novaflix_secure_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./server/migrations:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U novaflix -d novaflix"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: novaflix-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend-builder
+    container_name: novaflix-backend
+    environment:
+      DATABASE_URL: postgresql://novaflix:${POSTGRES_PASSWORD:-novaflix_secure_password}@postgres:5432/novaflix?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: development
+      PORT: 3030
+      TMDB_ACCESS_TOKEN: ${TMDB_ACCESS_TOKEN}
+      JWT_SECRET: ${JWT_SECRET}
+      PAYSTACK_SECRET_KEY: ${PAYSTACK_SECRET_KEY}
+      PAYSTACK_PUBLIC_KEY: ${PAYSTACK_PUBLIC_KEY}
+      FLW_SECRET_KEY: ${FLW_SECRET_KEY}
+      FLW_PUBLIC_KEY: ${FLW_PUBLIC_KEY}
+      FLW_ENCRYPTION_KEY: ${FLW_ENCRYPTION_KEY}
+      PERSONA_API_KEY: ${PERSONA_API_KEY}
+      PERSONA_TEMPLATE_ID: ${PERSONA_TEMPLATE_ID}
+      PERSONA_ENV_ID: ${PERSONA_ENV_ID}
+      PERSONA_WEBHOOK_SECRET: ${PERSONA_WEBHOOK_SECRET}
+      BREVO_API_KEY: ${BREVO_API_KEY}
+      BREVO_EMAIL: ${BREVO_EMAIL}
+      BREVO_NAME: ${BREVO_NAME}
+      APP_URL: http://localhost:3000
+      R2_ENDPOINT: ${R2_ENDPOINT}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
+      R2_BUCKET: ${R2_BUCKET}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL}
+    ports:
+      - "3030:3030"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./server:/app/server
+      - /app/server/node_modules
+    command: npm run dev
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend-builder
+    container_name: novaflix-frontend
+    environment:
+      VITE_API_BASE: http://localhost:3030/api
+      VITE_APP_URL: http://localhost:3000
+      VITE_PERSONA_TEMPLATE_ID: ${PERSONA_TEMPLATE_ID}
+      VITE_PERSONA_ENV_ID: ${PERSONA_ENV_ID}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./client:/app/client
+      - /app/client/node_modules
+    command: npm run dev
+
+  # Optional: Celery worker for background tasks (if needed)
+  # worker:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #     target: backend-builder
+  #   environment:
+  #     DATABASE_URL: postgresql://novaflix:${POSTGRES_PASSWORD}@postgres:5432/novaflix?sslmode=disable
+  #     REDIS_URL: redis://redis:6379
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   command: npm run worker
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  default:
+    name: novaflix-network

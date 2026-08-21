@@ -27,7 +27,8 @@ const authItems: NavItem[] = [
   { to: '/hooks', icon: 'video_library', label: 'Shorts', auth: true },
   { to: '/watchlist', icon: 'bookmark', label: 'Watchlist', auth: true },
   { to: '/referrals', icon: 'share', label: 'Refer & Earn', auth: true },
-  { to: '/downloads', icon: 'download', label: 'Downloads', auth: true },
+  { to: '/download-app', icon: 'smartphone', label: 'Download App' },
+  { to: '/downloads', icon: 'download', label: 'My Downloads', auth: true },
   { to: '/archive', icon: 'archive', label: 'Archive Vault', auth: true },
 ]
 
@@ -54,7 +55,6 @@ const extraItems: NavItem[] = [
   { to: '/pricing', icon: 'workspace_premium', label: 'Plans' },
   { to: '/store', icon: 'shopping_bag', label: 'Merch Store' },
   { to: '/learn', icon: 'school', label: 'E-Learning' },
-  { to: '/download-app', icon: 'smartphone', label: 'Get the App' },
   { to: '/watch-party', icon: 'diversity_3', label: 'Watch Party', auth: true },
 ]
 
@@ -104,7 +104,7 @@ export default function MobileDrawer() {
             className="fixed left-0 top-0 bottom-0 z-50 w-[85vw] max-w-[300px] min-w-[260px] bg-surface-container-lowest border-r border-white/5 flex flex-col lg:hidden"
           >
             <div className="flex items-center justify-between px-4 h-16 border-b border-white/5 shrink-0">
-              <img src="/leter-mark-logo.png" alt="" className="w-auto h-7" />
+              <img src="/leter-mark-logo.png" alt="" className="w-auto h-9" />
               <button
                 type="button"
                 onClick={(e) => {

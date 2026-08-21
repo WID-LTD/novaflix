@@ -63,7 +63,9 @@ class NotificationsScreen extends ConsumerWidget {
           side: BorderSide(color: AppColors.white.withValues(alpha: 0.1)),
         ),
         child: SizedBox(
-          width: 480,
+          width: MediaQuery.sizeOf(ctx).width >= 512
+              ? 480
+              : MediaQuery.sizeOf(ctx).width - 32,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,

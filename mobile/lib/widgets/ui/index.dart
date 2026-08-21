@@ -421,23 +421,35 @@ class AppTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-      ),
-      child: SizedBox(
-        height: 36,
-        child: scrollable
-            ? ListView(scrollDirection: Axis.horizontal, children: _buildTabs())
-            : Row(children: _buildTabs()),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final contentWidth = tabs.fold<double>(0, (sum, t) {
+          final approx = t.length * 7.0 + (scrollable ? 44.0 : 20.0);
+          return sum + approx;
+        });
+        final shouldScroll = scrollable || contentWidth > constraints.maxWidth;
+        return Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+          ),
+          child: SizedBox(
+            height: 36,
+            child: shouldScroll
+                ? ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: _buildTabs(scrollable: true),
+                  )
+                : Row(children: _buildTabs(scrollable: false)),
+          ),
+        );
+      },
     );
   }
 
-  List<Widget> _buildTabs() {
+  List<Widget> _buildTabs({required bool scrollable}) {
     return List.generate(tabs.length, (i) {
       final isActive = i == activeIndex;
       final tab = GestureDetector(
@@ -461,7 +473,9 @@ class AppTabs extends StatelessWidget {
           ),
         ),
       );
-      return scrollable ? Padding(padding: const EdgeInsets.only(right: 4), child: tab) : Expanded(child: tab);
+      return scrollable
+          ? Padding(padding: const EdgeInsets.only(right: 4), child: tab)
+          : Expanded(child: tab);
     });
   }
 }

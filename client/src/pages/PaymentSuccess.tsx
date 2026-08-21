@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { verifyPayment } from '../lib/auth'
+import { verifyPayment, setToken } from '../lib/auth'
 import { useAuth } from '../lib/AuthContext'
 import Icon from '../components/ui/Icon'
 import OnboardingTour from '../components/ui/OnboardingTour'
@@ -24,6 +24,7 @@ export default function PaymentSuccess() {
     const token = localStorage.getItem('novaflix-token') || ''
     verifyPayment(token, reference, plan).then((res) => {
       if (res.success) {
+        if (res.token) setToken(res.token)
         setStatus('success')
         refresh()
       } else {

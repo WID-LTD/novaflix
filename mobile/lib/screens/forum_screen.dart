@@ -874,11 +874,15 @@ class _ThreadTopicCard extends ConsumerWidget {
                 ),
               const SizedBox(width: 8),
               if (topic['created_at'] != null)
-                Text(
-                  _relativeDate(topic['created_at']),
-                  style: const TextStyle(
-                    color: AppColors.onSurfaceVariant,
-                    fontSize: 12,
+                Flexible(
+                  child: Text(
+                    _relativeDate(topic['created_at']),
+                    style: const TextStyle(
+                      color: AppColors.onSurfaceVariant,
+                      fontSize: 12,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               const Spacer(),

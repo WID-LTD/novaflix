@@ -12,11 +12,13 @@ import '../widgets/ui/index.dart';
 import '../widgets/features/index.dart';
 import '../widgets/movie_card.dart';
 
-final _suggestProvider = FutureProvider.family<List<MediaItem>, String>((ref, query) async {
+final _suggestProvider = FutureProvider.family<List<MediaItem>, ({String query, String type})>((ref, params) async {
+  final query = params.query;
+  final type = params.type;
   if (query.isEmpty) return [];
   final api = ref.read(apiServiceProvider);
   try {
-    final res = await api.searchMedia(query, type: 'movie');
+    final res = await api.searchMedia(query, type: type == 'tv' ? 'tv' : 'movie');
     final data = res.data['data'] as List? ?? [];
     return data.map((e) => MediaItem.fromJson(e as Map<String, dynamic>)).toList();
   } catch (_) {
@@ -30,6 +32,36 @@ final _searchResultsProvider = FutureProvider.family<List<MediaItem>, String>((r
   final res = await api.searchAll(query);
   final data = res.data['data'] as List? ?? [];
   return data.map((e) => MediaItem.fromJson(e as Map<String, dynamic>)).toList();
+});
+
+final _peopleResultsProvider = FutureProvider.family<List<Map<String, dynamic>>, String>((ref, query) async {
+  if (query.isEmpty) return [];
+  final api = ref.read(apiServiceProvider);
+  final res = await api.searchPerson(query);
+  final data = res.data['data'] as List? ?? [];
+  return data.cast<Map<String, dynamic>>();
+});
+
+final _creatorResultsProvider = FutureProvider.family<List<Map<String, dynamic>>, String>((ref, query) async {
+  if (query.isEmpty) return [];
+  final api = ref.read(apiServiceProvider);
+  final res = await api.searchCreators(query);
+  final data = res.data['creators'] as List? ?? [];
+  return data.cast<Map<String, dynamic>>();
+});
+
+final _categoryResultsProvider = FutureProvider.family<List<Map<String, dynamic>>, String>((ref, query) async {
+  if (query.isEmpty) return [];
+  final api = ref.read(apiServiceProvider);
+  final res = await api.searchCategories(query);
+  final data = res.data['categories'] as List? ?? [];
+  return data.cast<Map<String, dynamic>>();
+});
+
+final _personCreditsProvider = FutureProvider.family<Map<String, dynamic>, int>((ref, id) async {
+  final api = ref.read(apiServiceProvider);
+  final res = await api.getPersonCredits(id);
+  return res.data as Map<String, dynamic>? ?? {};
 });
 
 final _nowPlayingProvider = FutureProvider<List<MediaItem>>((ref) async {
@@ -74,6 +106,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   final _focusNode = FocusNode();
   String _query = '';
   String _type = 'movie';
+  int? _selectedPersonId;
+  String? _selectedCreatorId;
   bool _showSuggestions = false;
   Timer? _suggestDebounce;
 
@@ -99,7 +133,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final suggestions = ref.watch(_suggestProvider(_query.length > 0 ? _query : ''));
+    final suggestions = ref.watch(_suggestProvider((query: _query.length > 0 ? _query : '', type: _type == 'tv' ? 'tv' : 'movie')));
     final results = ref.watch(_searchResultsProvider(_query));
     final store = ref.watch(storeProvider);
     final nowPlaying = ref.watch(_nowPlayingProvider);
@@ -241,13 +275,23 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 ),
                 const SizedBox(height: 24),
                 AppTabs(
-                  tabs: const ['Movies', 'TV Shows'],
-                  activeIndex: _type == 'movie' ? 0 : 1,
-                  onChanged: (i) => setState(() => _type = i == 0 ? 'movie' : 'tv'),
+                  tabs: const ['Movies', 'TV Shows', 'People', 'Creators', 'Categories'],
+                  activeIndex: _type == 'movie' ? 0 : _type == 'tv' ? 1 : _type == 'people' ? 2 : _type == 'creators' ? 3 : 4,
+                  onChanged: (i) => setState(() {
+                    _type = ['movie', 'tv', 'people', 'creators', 'categories'][i];
+                    _selectedPersonId = null;
+                    _selectedCreatorId = null;
+                  }),
                 ),
                 const SizedBox(height: 24),
                 if (_query.isEmpty)
                   _buildRecentAndDiscover(store, nowPlaying, trending, actionMovies, comedyMovies, popularTv)
+                else if (_type == 'people')
+                  _buildPeopleResults()
+                else if (_type == 'creators')
+                  _buildCreatorResults()
+                else if (_type == 'categories')
+                  _buildCategoryResults()
                 else
                   _buildResults(results),
               ],
@@ -375,6 +419,163 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 
+  Widget _buildPeopleResults() {
+    final people = ref.watch(_peopleResultsProvider(_query));
+    final selected = _selectedPersonId;
+    if (selected != null) return _buildPersonCredits(selected);
+    return people.when(
+      data: (items) {
+        if (items.isEmpty) return const _EmptySearch();
+        final cols = gridColumnsForWidth(MediaQuery.of(context).size.width);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  '${items.length} person${items.length == 1 ? '' : 's'}',
+                  style: AppTypography.bodySm.copyWith(color: AppColors.onSurfaceVariant),
+                ),
+                const Spacer(),
+                const AppBadge(label: 'People'),
+              ],
+            ),
+            const SizedBox(height: 16),
+            LayoutBuilder(
+              builder: (context, constraints) => GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: cols,
+                  childAspectRatio: 0.62,
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                ),
+                itemCount: items.length,
+                itemBuilder: (_, i) {
+                  final p = items[i];
+                  final id = int.tryParse('${p['id']}') ?? 0;
+                  final name = p['name'] as String? ?? '';
+                  final profile = p['profile_path'] as String?;
+                  final dept = p['known_for_department'] as String? ?? '';
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedPersonId = id),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: AspectRatio(
+                            aspectRatio: 2 / 3,
+                            child: profile != null
+                                ? CachedNetworkImage(
+                                    imageUrl: profile,
+                                    fit: BoxFit.cover,
+                                    errorWidget: (_, _, _) => Container(
+                                      color: AppColors.surfaceContainer,
+                                      child: const Icon(Icons.person, color: AppColors.onSurfaceVariant, size: 40),
+                                    ),
+                                  )
+                                : Container(
+                                    color: AppColors.surfaceContainer,
+                                    child: const Icon(Icons.person, color: AppColors.onSurfaceVariant, size: 40),
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(name, style: AppTypography.labelMd.copyWith(color: AppColors.onSurface), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        if (dept.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(dept, style: AppTypography.bodySm.copyWith(color: AppColors.onSurfaceVariant), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ],
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+      loading: () => const SizedBox(height: 300, child: Center(child: LoadingSpinner())),
+      error: (_, _) => const _EmptySearch(),
+    );
+  }
+
+  Widget _buildPersonCredits(int personId) {
+    final credits = ref.watch(_personCreditsProvider(personId));
+    return credits.when(
+      data: (data) {
+        final name = data['name'] as String? ?? 'Person';
+        final cast = (data['cast'] as List? ?? []).cast<Map<String, dynamic>>();
+        final crew = (data['crew'] as List? ?? []).cast<Map<String, dynamic>>();
+        final cols = gridColumnsForWidth(MediaQuery.of(context).size.width);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back, color: AppColors.onSurface),
+                  onPressed: () => setState(() => _selectedPersonId = null),
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: Text(name, style: AppTypography.headlineMd, maxLines: 1, overflow: TextOverflow.ellipsis)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (cast.isEmpty && crew.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Text('No credits found.', style: TextStyle(color: AppColors.onSurfaceVariant)),
+              )
+            else ...[
+              if (cast.isNotEmpty) ...[
+                Text('Known For', style: AppTypography.labelMd.copyWith(color: AppColors.onSurfaceVariant)),
+                const SizedBox(height: 12),
+                LayoutBuilder(
+                  builder: (context, constraints) => GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: cols,
+                      childAspectRatio: gridAspectForWidth(constraints.maxWidth, cols),
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                    ),
+                    itemCount: cast.length,
+                    itemBuilder: (_, i) => MovieCard(item: MediaItem.fromJson(cast[i])),
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
+              if (crew.isNotEmpty) ...[
+                Text('Crew', style: AppTypography.labelMd.copyWith(color: AppColors.onSurfaceVariant)),
+                const SizedBox(height: 12),
+                LayoutBuilder(
+                  builder: (context, constraints) => GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: cols,
+                      childAspectRatio: gridAspectForWidth(constraints.maxWidth, cols),
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                    ),
+                    itemCount: crew.length,
+                    itemBuilder: (_, i) => MovieCard(item: MediaItem.fromJson(crew[i])),
+                  ),
+                ),
+              ],
+            ],
+          ],
+        );
+      },
+      loading: () => const SizedBox(height: 300, child: Center(child: LoadingSpinner())),
+      error: (_, _) => const _EmptySearch(),
+    );
+  }
+
   Widget _buildResults(AsyncValue<List<MediaItem>> results) {
     return results.when(
       data: (items) {
@@ -399,23 +600,252 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             if (filtered.isEmpty)
               const _EmptySearch()
             else
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: gridColumnsFor(MediaQuery.of(context).size.width),
-                  childAspectRatio: 0.65,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
+              LayoutBuilder(
+                builder: (context, constraints) => GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: gridColumnsForWidth(constraints.maxWidth),
+                    childAspectRatio: 0.65,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                  ),
+                  itemCount: filtered.length,
+                  itemBuilder: (_, i) => MovieCard(item: filtered[i]),
                 ),
-                itemCount: filtered.length,
-                itemBuilder: (_, i) => MovieCard(item: filtered[i]),
               ),
           ],
         );
       },
       loading: () => const SizedBox(height: 300, child: Center(child: LoadingSpinner())),
       error: (e, _) => const _EmptySearch(),
+    );
+  }
+
+  Widget _buildCreatorResults() {
+    final creators = ref.watch(_creatorResultsProvider(_query));
+    final selected = _selectedCreatorId;
+    if (selected != null) return _buildCreatorUploads(selected);
+    return creators.when(
+      data: (items) {
+        if (items.isEmpty) return const _EmptySearch();
+        final cols = gridColumnsForWidth(MediaQuery.of(context).size.width);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  '${items.length} creator${items.length == 1 ? '' : 's'}',
+                  style: AppTypography.bodySm.copyWith(color: AppColors.onSurfaceVariant),
+                ),
+                const Spacer(),
+                const AppBadge(label: 'Creators'),
+              ],
+            ),
+            const SizedBox(height: 16),
+            LayoutBuilder(
+              builder: (context, constraints) => GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: cols,
+                  childAspectRatio: 0.62,
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                ),
+                itemCount: items.length,
+                itemBuilder: (_, i) {
+                  final c = items[i];
+                  final id = c['id'] as String? ?? '';
+                  final name = c['name'] as String? ?? '';
+                  final avatar = c['avatar'] as String?;
+                  final dept = c['known_for_department'] as String? ?? '';
+                  final filmCount = c['film_count'] as int? ?? 0;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedCreatorId = id),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: AspectRatio(
+                            aspectRatio: 2 / 3,
+                            child: avatar != null
+                                ? CachedNetworkImage(
+                                    imageUrl: avatar,
+                                    fit: BoxFit.cover,
+                                    errorWidget: (_, _, _) => Container(
+                                      color: AppColors.surfaceContainer,
+                                      child: const Icon(Icons.person, color: AppColors.onSurfaceVariant, size: 40),
+                                    ),
+                                  )
+                                : Container(
+                                    color: AppColors.surfaceContainer,
+                                    child: const Icon(Icons.person, color: AppColors.onSurfaceVariant, size: 40),
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(name, style: AppTypography.labelMd.copyWith(color: AppColors.onSurface), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        if (dept.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(dept, style: AppTypography.bodySm.copyWith(color: AppColors.onSurfaceVariant), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ],
+                        Text('$filmCount films', style: AppTypography.bodySm.copyWith(color: AppColors.primary), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+      loading: () => const SizedBox(height: 300, child: Center(child: LoadingSpinner())),
+      error: (_, _) => const _EmptySearch(),
+    );
+  }
+
+  Widget _buildCreatorUploads(String creatorId) {
+    final uploadsProvider = FutureProvider.family<List<MediaItem>, String>((ref, id) async {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.get('/creator/$id/uploads');
+      final data = res.data['uploads'] as List? ?? [];
+      return data.map((e) => MediaItem.fromJson(e as Map<String, dynamic>)).toList();
+    });
+    final uploads = ref.watch(uploadsProvider(creatorId));
+    return uploads.when(
+      data: (items) {
+        if (items.isEmpty) {
+          return Column(
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back, color: AppColors.onSurface),
+                    onPressed: () => setState(() => _selectedCreatorId = null),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text('Creator', style: AppTypography.headlineMd, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Text('No uploads found.', style: TextStyle(color: AppColors.onSurfaceVariant)),
+              ),
+            ],
+          );
+        }
+        final cols = gridColumnsForWidth(MediaQuery.of(context).size.width);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back, color: AppColors.onSurface),
+                  onPressed: () => setState(() => _selectedCreatorId = null),
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: Text('Creator Films', style: AppTypography.headlineMd, maxLines: 1, overflow: TextOverflow.ellipsis)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            LayoutBuilder(
+              builder: (context, constraints) => GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: cols,
+                  childAspectRatio: gridAspectForWidth(constraints.maxWidth, cols),
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                ),
+                itemCount: items.length,
+                itemBuilder: (_, i) => MovieCard(item: items[i]),
+              ),
+            ),
+          ],
+        );
+      },
+      loading: () => const SizedBox(height: 300, child: Center(child: LoadingSpinner())),
+      error: (_, _) => const _EmptySearch(),
+    );
+  }
+
+  Widget _buildCategoryResults() {
+    final categories = ref.watch(_categoryResultsProvider(_query));
+    return categories.when(
+      data: (items) {
+        if (items.isEmpty) return const _EmptySearch();
+        final cols = gridColumnsForWidth(MediaQuery.of(context).size.width);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  '${items.length} categor${items.length == 1 ? 'y' : 'ies'}',
+                  style: AppTypography.bodySm.copyWith(color: AppColors.onSurfaceVariant),
+                ),
+                const Spacer(),
+                const AppBadge(label: 'Categories'),
+              ],
+            ),
+            const SizedBox(height: 16),
+            LayoutBuilder(
+              builder: (context, constraints) => GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: cols,
+                  childAspectRatio: 0.62,
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                ),
+                itemCount: items.length,
+                itemBuilder: (_, i) {
+                  final cat = items[i];
+                  final id = cat['id'] as String? ?? '';
+                  final name = cat['name'] as String? ?? '';
+                  final source = cat['source'] as String? ?? 'tmdb';
+                  return GestureDetector(
+                    onTap: () => context.go(source == 'tmdb' ? '/discover?genre_id=$id' : '/discover?sort=popular'),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: AspectRatio(
+                            aspectRatio: 2 / 3,
+                            child: Container(
+                              color: AppColors.surfaceContainer,
+                              child: Center(
+                                child: Icon(
+                                  source == 'creator' ? Icons.video_library : Icons.category,
+                                  color: AppColors.onSurfaceVariant,
+                                  size: 48,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(name, style: AppTypography.labelMd.copyWith(color: AppColors.onSurface), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text(source, style: AppTypography.bodySm.copyWith(color: AppColors.onSurfaceVariant), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+      loading: () => const SizedBox(height: 300, child: Center(child: LoadingSpinner())),
+      error: (_, _) => const _EmptySearch(),
     );
   }
 }

@@ -7,6 +7,7 @@ import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../widgets/ui/index.dart';
+import '../widgets/features/index.dart';
 
 final _coursesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final api = ref.read(apiServiceProvider);
@@ -247,34 +248,38 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
     List<Map<String, dynamic>> items,
     List<Map<String, dynamic>> enrollments,
   ) {
-    final width = MediaQuery.sizeOf(context).width;
-    final cols = width >= 900 ? 3 : (width >= 600 ? 2 : 1);
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: cols,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        childAspectRatio: 0.86,
-      ),
-      itemCount: items.length,
-      itemBuilder: (_, i) => _CourseCard(
-        course: items[i],
-        enrolled: _isEnrolled(enrollments, items[i]),
-        enrolling: _enrollingId == items[i]['id'].toString(),
-        onEnroll: () => _enroll(items[i]),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cols = gridColumnsForWidth(constraints.maxWidth).clamp(1, 3);
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: cols,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            childAspectRatio: 0.68,
+          ),
+          itemCount: items.length,
+          itemBuilder: (_, i) => _CourseCard(
+            course: items[i],
+            enrolled: _isEnrolled(enrollments, items[i]),
+            enrolling: _enrollingId == items[i]['id'].toString(),
+            onEnroll: () => _enroll(items[i]),
+          ),
+        );
+      },
     );
   }
 
   Widget _myCoursesDrawer(List<Map<String, dynamic>> enrollments) {
+    final w = MediaQuery.sizeOf(context).width;
     return Positioned(
       right: 0,
       top: 0,
       bottom: 0,
       child: Container(
-        width: 420,
+        width: w >= 468 ? 420 : w - 48,
         color: AppColors.surfaceContainerLowest,
         child: Column(
           children: [

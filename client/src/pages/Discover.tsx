@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import Icon from '../components/ui/Icon'
-import { searchMedia } from '../lib/api'
+import { searchMedia, getDiscover } from '../lib/api'
 import Button from '../components/ui/Button'
 import SearchInput from '../components/ui/SearchInput'
 import Tabs from '../components/ui/Tabs'
@@ -18,15 +18,15 @@ const sortOptions = [
 
 const genreOptions = [
   { id: '', label: 'All Genres' },
-  { id: 'action', label: 'Action' },
-  { id: 'comedy', label: 'Comedy' },
-  { id: 'drama', label: 'Drama' },
-  { id: 'horror', label: 'Horror' },
-  { id: 'romance', label: 'Romance' },
-  { id: 'sci-fi', label: 'Sci-Fi' },
-  { id: 'thriller', label: 'Thriller' },
-  { id: 'animation', label: 'Animation' },
-  { id: 'documentary', label: 'Documentary' },
+  { id: '28', label: 'Action' },
+  { id: '35', label: 'Comedy' },
+  { id: '18', label: 'Drama' },
+  { id: '27', label: 'Horror' },
+  { id: '10749', label: 'Romance' },
+  { id: '878', label: 'Sci-Fi' },
+  { id: '53', label: 'Thriller' },
+  { id: '16', label: 'Animation' },
+  { id: '99', label: 'Documentary' },
 ]
 
 const typeTabs = [
@@ -35,20 +35,11 @@ const typeTabs = [
   { id: 'tv', label: 'TV Shows' },
 ]
 
-const keywordMap: Record<string, string> = {
-  trending: 'avengers',
-  top_rated: 'inception',
-  popular: 'popular',
-  newest: '2024',
-  action: 'mission impossible',
-  comedy: 'funny',
-  drama: 'drama',
-  horror: 'scary',
-  romance: 'romance',
-  'sci-fi': 'space',
-  thriller: 'thriller',
-  animation: 'animated',
-  documentary: 'documentary',
+const sortByFor: Record<string, { movie: string; tv: string }> = {
+  trending: { movie: 'popularity.desc', tv: 'popularity.desc' },
+  top_rated: { movie: 'vote_average.desc', tv: 'vote_average.desc' },
+  popular: { movie: 'popularity.desc', tv: 'popularity.desc' },
+  newest: { movie: 'primary_release_date.desc', tv: 'first_air_date.desc' },
 }
 
 export default function Discover() {
@@ -73,22 +64,41 @@ export default function Discover() {
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const keyword = query || keywordMap[sort] || keywordMap[genre] || 'popular'
-      const searchType = type === 'all' ? null : type
-
       try {
-        const moviePromise = searchType === null || searchType === 'movie'
-          ? searchMedia(keyword, 'movie') : Promise.resolve(null)
-        const tvPromise = searchType === null || searchType === 'tv'
-          ? searchMedia(keyword, 'tv') : Promise.resolve(null)
-
-        const [movieRes, tvRes] = await Promise.all([moviePromise, tvPromise])
-
-        const items: MediaItem[] = []
-        if (movieRes?.success) items.push(...movieRes.data)
-        if (tvRes?.success) items.push(...tvRes.data)
-
-        setResults(items.slice(0, 40))
+        if (query.trim()) {
+          const moviePromise = type === 'all' || type === 'movie'
+            ? searchMedia(query.trim(), 'movie') : Promise.resolve(null)
+          const tvPromise = type === 'all' || type === 'tv'
+            ? searchMedia(query.trim(), 'tv') : Promise.resolve(null)
+          const [movieRes, tvRes] = await Promise.all([moviePromise, tvPromise])
+          const items: MediaItem[] = []
+          if (movieRes?.success) items.push(...movieRes.data)
+          if (tvRes?.success) items.push(...tvRes.data)
+          setResults(items.slice(0, 40))
+        } else {
+          const genreId = genre || undefined
+          const moviePromise = type === 'all' || type === 'movie'
+            ? getDiscover({
+                genre_id: genreId,
+                type: 'movie',
+                sort_by: sortByFor[sort]?.movie,
+                min_votes: sort === 'top_rated' ? 100 : undefined,
+              })
+            : Promise.resolve(null)
+          const tvPromise = type === 'all' || type === 'tv'
+            ? getDiscover({
+                genre_id: genreId,
+                type: 'tv',
+                sort_by: sortByFor[sort]?.tv,
+                min_votes: sort === 'top_rated' ? 100 : undefined,
+              })
+            : Promise.resolve(null)
+          const [movieRes, tvRes] = await Promise.all([moviePromise, tvPromise])
+          const items: MediaItem[] = []
+          if (movieRes?.success) items.push(...movieRes.data)
+          if (tvRes?.success) items.push(...tvRes.data)
+          setResults(items.slice(0, 60))
+        }
       } catch {}
       setLoading(false)
     }
@@ -185,12 +195,12 @@ export default function Discover() {
           <div
             className={
               viewMode === 'grid'
-                ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-7'
+                ? 'card-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-7'
                 : 'flex flex-col gap-3'
             }
           >
             {results.map((item, i) => (
-              <HoverCard key={`${item.id}-${item.type}`} item={item} index={i} />
+              <HoverCard key={`${item.id}-${item.type}`} item={item} index={i} className="w-full min-w-0" />
             ))}
           </div>
         ) : !loading ? (

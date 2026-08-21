@@ -393,42 +393,46 @@ class NewsScreen extends ConsumerWidget {
                 ),
               ),
             const Spacer(),
-            Container(
-              width: 280,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceContainerHigh,
-                border: Border.all(color: Colors.white10),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.search, size: 18, color: AppColors.onSurfaceVariant),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: searchCtl,
-                      style: const TextStyle(color: AppColors.onSurface, fontSize: 14),
-                      decoration: const InputDecoration(
-                        hintText: 'Search movie news...',
-                        hintStyle: TextStyle(color: AppColors.onSurfaceVariant),
-                        border: InputBorder.none,
-                        isDense: true,
-                      ),
-                      onSubmitted: (v) {
-                        ref.read(_newsQueryProvider.notifier).state = v.trim();
-                      },
-                    ),
+            Flexible(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 280, minWidth: 180),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceContainerHigh,
+                    border: Border.all(color: Colors.white10),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  if (searchCtl.text.isNotEmpty)
-                    IconButton(
-                      icon: const Icon(Icons.close, color: AppColors.onSurfaceVariant, size: 16),
-                      onPressed: () {
-                        searchCtl.clear();
-                        ref.read(_newsQueryProvider.notifier).state = '';
-                      },
-                    ),
-                ],
+                  child: Row(
+                    children: [
+                      const Icon(Icons.search, size: 18, color: AppColors.onSurfaceVariant),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: searchCtl,
+                          style: const TextStyle(color: AppColors.onSurface, fontSize: 14),
+                          decoration: const InputDecoration(
+                            hintText: 'Search movie news...',
+                            hintStyle: TextStyle(color: AppColors.onSurfaceVariant),
+                            border: InputBorder.none,
+                            isDense: true,
+                          ),
+                          onSubmitted: (v) {
+                            ref.read(_newsQueryProvider.notifier).state = v.trim();
+                          },
+                        ),
+                      ),
+                      if (searchCtl.text.isNotEmpty)
+                        IconButton(
+                          icon: const Icon(Icons.close, color: AppColors.onSurfaceVariant, size: 16),
+                          onPressed: () {
+                            searchCtl.clear();
+                            ref.read(_newsQueryProvider.notifier).state = '';
+                          },
+                        ),
+                    ],
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: 12),

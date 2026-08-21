@@ -173,6 +173,30 @@ export async function getUserStats(token: string): Promise<any> {
   }
 }
 
+export async function getSettings(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/user/settings`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function updateSettings(token: string, settings: Record<string, any>): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/user/settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ settings }),
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
 export async function uploadAvatar(token: string, file: File): Promise<any> {
   try {
     const formData = new FormData()
@@ -520,6 +544,17 @@ export async function recordWatch(token: string, data: any): Promise<any> {
 export async function getWatchHistory(token: string): Promise<any> {
   try {
     const res = await fetch(`${BASE}/user/watch-history`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function getContinueWatching(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/user/watch-history/continue`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     return res.json()
@@ -2003,6 +2038,190 @@ export async function equipCosmetic(id: string, equipped: boolean): Promise<any>
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ equipped }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+// ============ WALLET & PPM ============
+export async function getWalletBalance(): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/wallet/balance`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, balance_ngn: 0, error: 'Network error' } }
+}
+
+export async function getWalletTransactions(params?: { type?: string; from?: string; to?: string; limit?: number; offset?: number }): Promise<any> {
+  try {
+    const token = getToken()
+    const searchParams = new URLSearchParams()
+    if (params?.type) searchParams.set('type', params.type)
+    if (params?.from) searchParams.set('from', params.from)
+    if (params?.to) searchParams.set('to', params.to)
+    if (params?.limit) searchParams.set('limit', String(params.limit))
+    if (params?.offset) searchParams.set('offset', String(params.offset))
+    const res = await fetch(`${BASE}/wallet/transactions?${searchParams.toString()}`, { headers: { Authorization: `Bearer ${getToken()}` } })
+    return res.json()
+  } catch { return { success: false, transactions: [], error: 'Network error' } }
+}
+
+export async function getWalletEarnings(): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/wallet/earnings`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, summary: {}, error: 'Network error' } }
+}
+
+export async function getPPMConfig(): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/wallet/ppm/config`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, config: null, error: 'Network error' } }
+}
+
+export async function updatePPMConfig(baseRate: number): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/wallet/ppm/config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ baseRate })
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getPPMRate(contentType: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/wallet/ppm/rate?contentType=${encodeURIComponent(contentType)}`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function creditPPMWatch(creatorId: string, contentId: string, contentType: string, minutesWatched: number, userPlan?: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/wallet/ppm/credit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ creatorId, contentId, contentType, minutesWatched, userPlan })
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function creditTip(creatorId: string, amount: number, reference?: string, note?: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/wallet/tip`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ creatorId, amount, reference, note })
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function creditGift(creatorId: string, amount: number, reference?: string, note?: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/wallet/gift`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ creatorId, amount, reference, note })
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function previewWithdrawal(amountNgn: number, gateway: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/wallet/withdraw/preview?amountNgn=${amountNgn}&gateway=${gateway}`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function processWithdrawal(amountNgn: number, gateway: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/wallet/withdraw`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ amountNgn, gateway })
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+// ============ CLAIM FLOW ============
+export async function startClaim(tmdbPersonId: number, displayName?: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/creator/claim/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ tmdbPersonId, displayName })
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getClaimPreview(tmdbPersonId: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/creator/claim/preview/${tmdbPersonId}`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getClaimStatus(claimId: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/creator/claim/status/${claimId}`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+// ============ BENEFICIARY ============
+export async function createBeneficiary(data: { gateway: string; bankCode: string; accountNumber: string; accountName: string }): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/beneficiary`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data)
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getBeneficiaries(): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/beneficiary`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getBankCodes(gateway: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/banks?gateway=${gateway}`)
+    return res.json()
+  } catch { return { success: false, banks: [], error: 'Network error' } }
+}
+
+export async function verifyBankAccount(data: { gateway: string; bankCode: string; accountNumber: string; accountName: string }): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/banks/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data)
     })
     return res.json()
   } catch { return { success: false, error: 'Network error' } }

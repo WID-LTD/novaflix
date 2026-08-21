@@ -44,7 +44,8 @@ class User {
 
   bool get isCreator => role == 'creator';
   bool get isAdmin => role == 'admin';
-  bool get isPremium => plan != null && planRank >= 3;
+  bool get isPremium => plan != null && planRank >= 1;
+  bool get isStandardPlus => planRank >= 3;
   bool get isAuthenticated => token != null;
 
   int get planRank {
@@ -66,11 +67,11 @@ class User {
 
   Map<String, dynamic> get planFeatures {
     return {
-      'maxResolution': isPremium ? '2160p' : planRank >= 2 ? '720p' : '480p',
-      'concurrentScreens': isPremium ? 4 : planRank >= 2 ? 2 : 1,
-      'downloadDevices': isPremium ? 6 : planRank >= 1 ? 1 : 0,
-      'adFree': planRank >= 3,
-      'unlimitedSkips': planRank >= 3,
+      'maxResolution': isStandardPlus ? '2160p' : planRank >= 2 ? '720p' : '480p',
+      'concurrentScreens': isStandardPlus ? 4 : planRank >= 2 ? 2 : 1,
+      'downloadDevices': isStandardPlus ? 6 : planRank >= 1 ? 1 : 0,
+      'adFree': isStandardPlus,
+      'unlimitedSkips': isStandardPlus,
     };
   }
 }

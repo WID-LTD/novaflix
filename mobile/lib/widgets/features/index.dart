@@ -15,12 +15,42 @@ import '../../widgets/movie_card.dart';
 export '../movie_card.dart';
 export 'backdrops.dart';
 
-int gridColumnsFor(double width) {
+/// Number of poster columns for a given **available content width**.
+///
+/// Prefer this over [gridColumnsFor] inside the desktop shell, where the
+/// actual content width is smaller than the window (sidebar + padding).
+int gridColumnsForWidth(double width) {
   if (width >= 1400) return 6;
   if (width >= 1000) return 5;
   if (width >= 700) return 4;
   if (width >= 480) return 3;
   return 2;
+}
+
+/// Legacy helper kept for callers that only have the window width.
+///
+/// Estimates the content width by subtracting the desktop shell overhead
+/// (240px sidebar + 1px divider + typical 32px horizontal padding) so grids
+/// no longer over-request columns. Screens with a `LayoutBuilder` should pass
+/// `constraints.maxWidth` to [gridColumnsForWidth] instead.
+int gridColumnsFor(double width) {
+  if (width >= 900) {
+    return gridColumnsForWidth(width - 241 - 64);
+  }
+  return gridColumnsForWidth(width - 32);
+}
+
+/// Estimated horizontal content width (minus desktop sidebar + page padding).
+double contentWidthFor(double windowWidth) {
+  if (windowWidth >= 900) return windowWidth - 241 - 64;
+  return windowWidth - 32;
+}
+
+/// Child aspect ratio for poster grids so each card (2:3 poster + text block
+/// below) fully fits its cell — prevents card overlap/clipping.
+double gridAspectForWidth(double contentWidth, int columns, {double spacing = 20}) {
+  final cellWidth = (contentWidth - (columns - 1) * spacing) / columns;
+  return cellWidth / (cellWidth * 1.5 + 42);
 }
 
 class ContentRow extends StatelessWidget {

@@ -3,13 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../services/api_service.dart';
 import '../models/media_item.dart';
 import '../providers/auth_provider.dart';
 import '../providers/watchlist_provider.dart';
-import '../providers/downloads_provider.dart';
 import '../widgets/ui/index.dart';
 import '../widgets/features/index.dart';
 
@@ -53,13 +53,14 @@ final _movieDetailProvider = FutureProvider.family<MediaItem?, int>((
   }
 });
 
-final _similarProvider = FutureProvider.family<List<MediaItem>, int>((
+final _similarProvider = FutureProvider.family<List<MediaItem>, (int, String)>((
   ref,
-  id,
+  key,
 ) async {
+  final (id, type) = key;
   final api = ref.read(apiServiceProvider);
   try {
-    final res = await api.getSimilarRecommendations(id);
+    final res = await api.getSimilarRecommendations(id, type: type);
     final data = res.data['data'] as List? ?? [];
     return data
         .map((e) => MediaItem.fromJson(e as Map<String, dynamic>))
@@ -97,7 +98,7 @@ class MovieDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final type = mediaType ?? 'movie';
     final detail = ref.watch(_movieDetailProvider(movieId));
-    final similar = ref.watch(_similarProvider(movieId));
+    final similar = ref.watch(_similarProvider((movieId, type)));
     final credits = ref.watch(_creditsProvider(movieId));
     final auth = ref.watch(authProvider);
 
@@ -194,7 +195,13 @@ class MovieDetailScreen extends ConsumerWidget {
                         top: 24,
                         left: isDesktop ? 32 : 16,
                         child: IconButton(
-                          onPressed: () => context.pop(),
+                          onPressed: () {
+                            if (context.canPop()) {
+                              context.pop();
+                            } else {
+                              context.go('/home');
+                            }
+                          },
                           icon: const Icon(
                             Icons.arrow_back,
                             color: Colors.white,
@@ -349,7 +356,7 @@ class MovieDetailScreen extends ConsumerWidget {
                                     label: 'Download',
                                     icon: Icons.download,
                                     filled: false,
-                                    onTap: () => _handleDownload(context, ref, item),
+                                    onTap: () => context.go('/downloads'),
                                   ),
                                   Container(
                                     width: 56,
@@ -390,6 +397,14 @@ class MovieDetailScreen extends ConsumerWidget {
                                       '/watch-party?id=$movieId&type=$type',
                                     ),
                                   ),
+                                  if (item.trailerKey != null &&
+                                      item.trailerKey!.isNotEmpty)
+                                    _heroButton(
+                                      label: 'Watch Trailer',
+                                      icon: Icons.play_circle_outline,
+                                      filled: false,
+                                      onTap: () => _openTrailer(item.trailerKey!),
+                                    ),
                                 ],
                               ),
                             ],
@@ -453,6 +468,13 @@ class MovieDetailScreen extends ConsumerWidget {
         },
       ),
     );
+  }
+
+  Future<void> _openTrailer(String key) async {
+    final uri = Uri.parse('https://www.youtube.com/watch?v=$key');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   Widget _heroButton({
@@ -753,106 +775,5 @@ class MovieDetailScreen extends ConsumerWidget {
         ),
       ],
     );
-  }
-
-  Future<void> _handleDownload(
-    BuildContext context,
-    WidgetRef ref,
-    MediaItem item,
-  ) async {
-    final auth = ref.read(authProvider);
-    if (auth.status != AuthStatus.authenticated) {
-      context.push('/login');
-      return;
-    }
-    if (!(auth.user?.isPremium ?? false)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Downloads are available on Premium plans'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-      context.push('/pricing');
-      return;
-    }
-    if (item.isTV) {
-      final seasons = item.seasons;
-      if (seasons == null || seasons.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No seasons available to download')),
-        );
-        return;
-      }
-      final allEpisodes = <Map<String, dynamic>>[];
-      for (final s in seasons) {
-        final seasonNum = s.seasonNumber;
-        final episodeCount = s.episodeCount ?? 0;
-        for (var e = 1; e <= episodeCount; e++) {
-          allEpisodes.add({'season': seasonNum, 'episode': e});
-        }
-      }
-      if (allEpisodes.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No episodes available to download')),
-        );
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Downloading ${item.title} (${allEpisodes.length} episodes)...',
-          ),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-      try {
-        await ref
-            .read(downloadsProvider.notifier)
-            .startDownload(
-              contentId: item.id,
-              type: 'tv',
-              title: item.title,
-              poster: item.posterUrl,
-              backdrop: item.backdropUrl,
-              episodes: allEpisodes,
-            );
-      } catch (e) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Download failed: ${e.toString().replaceFirst('Exception: ', '')}'),
-              backgroundColor: Colors.redAccent,
-            ),
-          );
-        }
-      }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Downloading ${item.title}...'),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-      try {
-        await ref
-            .read(downloadsProvider.notifier)
-            .startDownload(
-              contentId: item.id,
-              type: 'movie',
-              title: item.title,
-              poster: item.posterUrl,
-              backdrop: item.backdropUrl,
-            );
-      } catch (e) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Download failed: ${e.toString().replaceFirst('Exception: ', '')}'),
-              backgroundColor: Colors.redAccent,
-            ),
-          );
-        }
-      }
-    }
   }
 }

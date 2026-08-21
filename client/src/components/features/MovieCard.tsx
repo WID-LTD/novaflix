@@ -13,9 +13,10 @@ interface MovieCardProps {
   progress?: number
   duration?: number
   className?: string
+  watchUrl?: string
 }
 
-export default function MovieCard({ item, index = 0, progress, duration, className }: MovieCardProps) {
+export default function MovieCard({ item, index = 0, progress, duration, className, watchUrl }: MovieCardProps) {
   const [imgLoaded, setImgLoaded] = useState(false)
   const [imgError, setImgError] = useState(false)
 
@@ -92,12 +93,18 @@ export default function MovieCard({ item, index = 0, progress, duration, classNa
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
           {(progress !== undefined && (duration ?? 0) > 0) && (
-            <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
-              <div
-                className="h-full bg-red-500 transition-all duration-300"
-                style={{ width: `${Math.min((progress / (duration ?? 1)) * 100, 100)}%` }}
-              />
-            </div>
+            <>
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
+                <div
+                  className="h-full bg-red-500 transition-all duration-300"
+                  style={{ width: `${Math.min((progress / (duration ?? 1)) * 100, 100)}%` }}
+                />
+              </div>
+              <div className="absolute bottom-2 left-2 z-10 bg-black/70 rounded px-1.5 py-0.5 text-[10px] font-bold text-white leading-tight flex flex-col gap-0.5">
+                <span>{Math.min(Math.round((progress / (duration ?? 1)) * 100), 100)}%</span>
+                <span className="text-[9px] font-normal opacity-90">{Math.round(progress / 60)}m / {Math.round((duration ?? 0) / 60)}m</span>
+              </div>
+            </>
           )}
 
           <div className="absolute inset-0 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
@@ -108,7 +115,7 @@ export default function MovieCard({ item, index = 0, progress, duration, classNa
                 className="w-12 h-12 rounded-full bg-primary-container flex items-center justify-center shadow-lg"
                 onClick={(e) => {
                   e.preventDefault()
-                  window.location.href = `/watch?id=${item.id}&type=${item.type}`
+                  window.location.href = watchUrl || `/watch?id=${item.id}&type=${item.type}`
                 }}
                 aria-label={`Play ${item.title}`}
               >

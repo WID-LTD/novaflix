@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { getTrendingFeed, getNowPlaying, getDetails, getHomeNews, getCategoryMovies, getDiscover } from '../lib/api'
+import { getContinueWatching } from '../lib/auth'
+import { useAuth } from '../lib/AuthContext'
 import { useStore } from '../store/useStore'
 import HeroBanner from '../components/features/HeroBanner'
 import ContentRow from '../components/features/ContentRow'
@@ -25,6 +27,8 @@ const HERO_COUNT = 6
 export default function Home() {
   const [heroItems, setHeroItems] = useState<MediaDetails[]>([])
   const continueWatching = useStore((s) => s.continueWatching)
+  const [serverContinueWatching, setServerContinueWatching] = useState<any[]>([])
+  const { user } = useAuth()
   const watchlist = useStore((s) => s.watchlist)
   const currentProfileId = useStore((s) => s.currentProfile)
   const profiles = useStore((s) => s.profiles)
@@ -57,6 +61,27 @@ export default function Home() {
     setShowScrollLeft(scrollLeft > 10)
     setShowScrollRight(scrollLeft < scrollWidth - clientWidth - 10)
   }
+
+  useEffect(() => {
+    if (!user) return
+    const token = localStorage.getItem('novaflix-token') || ''
+    getContinueWatching(token).then((res) => {
+      if (res.success && Array.isArray(res.history) && res.history.length > 0) {
+        setServerContinueWatching(res.history)
+      }
+    }).catch(() => {})
+  }, [user])
+
+  const cwItems: any[] = serverContinueWatching.length > 0 ? serverContinueWatching.map((h) => ({
+    id: Number(h.content_id),
+    title: h.title || '',
+    poster: h.poster,
+    type: h.type === 'tv' ? 'tv' : 'movie',
+    season: h.season != null ? Number(h.season) : undefined,
+    episode: h.episode != null ? Number(h.episode) : undefined,
+    progress: Number(h.position_seconds || 0),
+    duration: Number(h.duration_seconds || 0),
+  })) : continueWatching
 
   useEffect(() => {
     async function load() {
@@ -134,7 +159,7 @@ export default function Home() {
       <HeroBanner items={heroItems} loading={loading} />
 
       <main className="relative z-20 space-y-16 pb-nav">
-        {continueWatching.length > 0 && (
+        {cwItems.length > 0 && (
           <section className="relative mb-8 md:mb-10 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-headline-md text-on-surface flex items-center gap-2">
@@ -165,23 +190,27 @@ export default function Home() {
                 onScroll={handleCWScroll}
                 className="flex gap-4 overflow-x-auto hide-scrollbar pb-4 snap-x"
               >
-                {continueWatching.map((cw, i) => (
-                  <HoverCard
-                    key={`${cw.id}-${cw.type}`}
-                    item={{
-                      id: cw.id,
-                      title: cw.title,
-                      poster: cw.poster,
-                      backdrop: null,
-                      type: cw.type,
-                      year: '',
-                      overview: '',
-                    }}
-                    index={i}
-                    progress={cw.progress}
-                    duration={cw.duration}
-                  />
-                ))}
+                {cwItems.map((cw, i) => {
+                  const resumeUrl = `/watch?id=${cw.id}&type=${cw.type}${cw.season ? `&season=${cw.season}` : ''}${cw.episode ? `&episode=${cw.episode}` : ''}${cw.progress > 0 ? `&resume=${Math.round(cw.progress)}` : ''}`
+                  return (
+                    <HoverCard
+                      key={`${cw.id}-${cw.type}`}
+                      item={{
+                        id: cw.id,
+                        title: cw.title,
+                        poster: cw.poster,
+                        backdrop: null,
+                        type: cw.type,
+                        year: '',
+                        overview: '',
+                      }}
+                      index={i}
+                      progress={cw.progress}
+                      duration={cw.duration}
+                      watchUrl={resumeUrl}
+                    />
+                  )
+                })}
               </div>
 
               {showScrollRight && (

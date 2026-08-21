@@ -3,23 +3,15 @@ import { cacheGet, cacheSet } from './cache.js'
 const STREAM_PRIORITY_MAX = 5
 const BACKUP_GRACE_MS = 6000
 const STREAM_SETTLE_MS = 15000
-const EMBED_SETTLE_MS = 14000
 
 export default class ProviderEngine {
   constructor() {
     this.streamProviders = []
-    this.embedProviders = []
   }
 
   register(provider) {
-    const priority = provider.priority || 99
-    if (priority <= STREAM_PRIORITY_MAX) {
-      this.streamProviders.push(provider)
-      this.streamProviders.sort((a, b) => (a.priority || 99) - (b.priority || 99))
-    } else {
-      this.embedProviders.push(provider)
-      this.embedProviders.sort((a, b) => (a.priority || 99) - (b.priority || 99))
-    }
+    this.streamProviders.push(provider)
+    this.streamProviders.sort((a, b) => (a.priority || 99) - (b.priority || 99))
   }
 
   async resolve(tmdbId, type = 'movie', season = null, episode = null) {
@@ -36,13 +28,6 @@ export default class ProviderEngine {
     const result = await this.tryStreams(tmdbId, type, season, episode, allResults, startTime)
     if (result) {
       const output = this.buildOutput(result, allResults, startTime)
-      cacheSet(cacheKey, output)
-      return output
-    }
-
-    const embedResult = await this.tryEmbeds(tmdbId, type, season, episode, allResults, startTime)
-    if (embedResult) {
-      const output = this.buildOutput(embedResult, allResults, startTime)
       cacheSet(cacheKey, output)
       return output
     }
@@ -91,37 +76,17 @@ export default class ProviderEngine {
     return null
   }
 
-  async tryEmbeds(tmdbId, type, season, episode, allResults, startTime) {
-    if (this.embedProviders.length === 0) return null
-
-    let resolveWinner
-    const winnerPromise = new Promise(r => { resolveWinner = r })
-
-    const tasks = this.embedProviders.map(p =>
-      this.runProvider(p, tmdbId, type, season, episode, allResults).then(r => {
-        if (r) resolveWinner(r)
-      })
-    )
-
-    Promise.allSettled(tasks).then(() => resolveWinner(null))
-    const winner = await Promise.race([
-      winnerPromise,
-      new Promise(r => setTimeout(() => r(null), EMBED_SETTLE_MS)),
-    ])
-    return winner
-  }
-
   async runProvider(p, tmdbId, type, season, episode, allResults) {
     const pStart = Date.now()
     try {
       const result = await p.resolve(tmdbId, type, season, episode)
       const elapsed = Date.now() - pStart
-      if (result?.streamUrl || result?.embedUrl) {
+      if (result?.streamUrl) {
         result.provider = p.name
         result.priority = p.priority || 99
         result.elapsed = elapsed
         allResults.push(result)
-        console.log(`[engine] ${p.name} -> ${result.streamUrl ? '✅ stream' : result.embedUrl ? '🔄 embed' : '❌'} (${elapsed}ms)`)
+        console.log(`[engine] ${p.name} -> ✅ stream (${elapsed}ms)`)
         return result
       }
       console.log(`[engine] ${p.name} -> ❌ (${elapsed}ms)`)
@@ -136,22 +101,20 @@ export default class ProviderEngine {
     return {
       success: true,
       streamUrl: winner.streamUrl || null,
-      embedUrl: winner.embedUrl || null,
       directUrl: winner.streamUrl || null,
       subtitles: winner.subtitles || [],
       provider: winner.provider,
-      providerMode: winner.streamUrl ? 'hls' : 'embed',
+      providerMode: 'hls',
       backups: allResults
         .filter(r => r !== winner)
         .slice(0, 5)
         .map(r => ({
           streamUrl: r.streamUrl,
-          embedUrl: r.embedUrl,
           provider: r.provider,
           elapsed: r.elapsed,
           subtitles: r.subtitles || [],
         })),
-      totalProviders: this.streamProviders.length + this.embedProviders.length,
+      totalProviders: this.streamProviders.length,
       attempted: allResults.length,
       elapsed,
     }

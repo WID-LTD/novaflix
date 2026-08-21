@@ -99,11 +99,10 @@ export interface EggPlacement {
 export interface StreamSource {
   success: boolean
   streamUrl: string | null
-  embedUrl: string | null
   directUrl: string | null
   subtitles: Subtitle[]
   provider?: string
-  providerMode?: 'hls' | 'embed'
+  providerMode?: 'hls' | 'direct' | 'file'
   backups?: any[]
   fromCache?: boolean
   elapsed?: number

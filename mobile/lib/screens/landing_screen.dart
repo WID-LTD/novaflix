@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
-import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../widgets/features/index.dart';
 
 class LandingScreen extends ConsumerStatefulWidget {
   const LandingScreen({super.key});
@@ -77,7 +77,7 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
   Widget _nav(double hPadding) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: hPadding, vertical: 12),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border(
           bottom: BorderSide(color: AppColors.white.withValues(alpha: 0.05)),
@@ -250,8 +250,6 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
       (Icons.download, 'Smart Downloads', 'Download to watch offline. Choose quality or let our algorithm decide.'),
       (Icons.language, 'Global Library', 'Curated films from around the world, from indie gems to blockbusters.'),
     ];
-    final width = MediaQuery.sizeOf(context).width;
-    final cols = width >= 1024 ? 3 : (width >= 600 ? 2 : 1);
     return Padding(
       padding: EdgeInsets.fromLTRB(hPadding, 48, hPadding, 64),
       child: Center(
@@ -275,20 +273,21 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
                 ),
               ),
               const SizedBox(height: 48),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: cols,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  childAspectRatio: 1.4,
-                ),
-                itemCount: features.length,
-                itemBuilder: (_, i) {
-                  final f = features[i];
-                  return Container(
-                    padding: const EdgeInsets.all(24),
+              LayoutBuilder(
+                builder: (context, constraints) => GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: gridColumnsForWidth(constraints.maxWidth).clamp(2, 3),
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                    childAspectRatio: 1.4,
+                  ),
+                  itemCount: features.length,
+                  itemBuilder: (_, i) {
+                    final f = features[i];
+                    return Container(
+                      padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
                       color: AppColors.surfaceContainerHigh,
                       borderRadius: BorderRadius.circular(12),
@@ -320,9 +319,10 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
                           ),
                         ),
                       ],
-                    ),
-                  );
+),
+              );
                 },
+              ),
               ),
             ],
           ),
@@ -353,11 +353,9 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
         'Family-friendly mode',
       ], false),
     ];
-    final width = MediaQuery.sizeOf(context).width;
-    final cols = width >= 900 ? 3 : 1;
     return Container(
       padding: EdgeInsets.fromLTRB(hPadding, 48, hPadding, 64),
-      color: AppColors.surfaceSecondary.withValues(alpha: 0.5),
+      color: AppColors.surfaceVariant.withValues(alpha: 0.2),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1152),
@@ -379,20 +377,21 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
                 ),
               ),
               const SizedBox(height: 48),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: cols,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  childAspectRatio: 0.9,
-                ),
-                itemCount: plans.length,
-                itemBuilder: (_, i) {
-                  final p = plans[i];
-                  return Container(
-                    padding: const EdgeInsets.all(28),
+              LayoutBuilder(
+                builder: (context, constraints) => GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: gridColumnsForWidth(constraints.maxWidth).clamp(1, 3),
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                    childAspectRatio: 0.75,
+                  ),
+                  itemCount: plans.length,
+                  itemBuilder: (_, i) {
+                    final p = plans[i];
+                    return Container(
+                      padding: const EdgeInsets.all(28),
                     decoration: BoxDecoration(
                       color: AppColors.surfaceContainerHigh,
                       borderRadius: BorderRadius.circular(16),
@@ -512,6 +511,7 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
                   );
                 },
               ),
+              ),
             ],
           ),
         ),
@@ -525,8 +525,6 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
       ('Sarah K.', 'Indie Filmmaker', 'Uploading my short film and getting real analytics was a game-changer.'),
       ('Marcus J.', 'Creator', 'Finally a platform that pays creators based on actual watch time, not one-time fees.'),
     ];
-    final width = MediaQuery.sizeOf(context).width;
-    final cols = width >= 900 ? 3 : 1;
     return Padding(
       padding: EdgeInsets.fromLTRB(hPadding, 48, hPadding, 64),
       child: Center(
@@ -542,22 +540,23 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
                 ),
               ),
               const SizedBox(height: 48),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: cols,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  childAspectRatio: 1.6,
-                ),
-                itemCount: testimonials.length,
-                itemBuilder: (_, i) {
-                  final t = testimonials[i];
+              LayoutBuilder(
+                builder: (context, constraints) => GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: gridColumnsForWidth(constraints.maxWidth).clamp(1, 3),
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                    childAspectRatio: 1.4,
+                  ),
+                  itemCount: testimonials.length,
+                  itemBuilder: (_, i) {
+                    final t = testimonials[i];
                   return Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceSecondary,
+                      color: AppColors.surfaceContainerHigh,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: AppColors.white.withValues(alpha: 0.05),
@@ -604,6 +603,7 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
                   );
                 },
               ),
+              ),
             ],
           ),
         ),
@@ -614,7 +614,7 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
   Widget _newsletter(double hPadding) {
     return Container(
       padding: EdgeInsets.fromLTRB(hPadding, 48, hPadding, 64),
-      color: AppColors.surfaceSecondary.withValues(alpha: 0.3),
+      color: AppColors.surfaceContainerHigh.withValues(alpha: 0.3),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 512),
@@ -725,7 +725,7 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
   Widget _footer(double hPadding) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: hPadding, vertical: 32),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(
           top: BorderSide(color: AppColors.white.withValues(alpha: 0.05)),
         ),
@@ -733,7 +733,11 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1152),
-          child: Row(
+          child: Wrap(
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 24,
+            runSpacing: 12,
             children: [
               Image.asset(
                 'assets/brand/leter-mark-logo.png',
@@ -741,7 +745,6 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
                 fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) => const SizedBox(height: 24),
               ),
-              const Spacer(),
               Text(
                 '© 2026 NovaFlix. All rights reserved.',
                 style: AppTypography.labelXs.copyWith(

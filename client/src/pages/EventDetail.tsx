@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import Icon from '../components/ui/Icon'
 import { getEvent, getToken, purchaseEventTicket, getMyTickets } from '../lib/auth'
+import VideoPlayer from '../components/features/VideoPlayer'
 
 export default function EventDetail() {
   const { id } = useParams()
@@ -138,7 +139,12 @@ export default function EventDetail() {
 
             {isLive && hasTicket && event.stream_url && (
               <div className="aspect-video rounded-2xl overflow-hidden bg-black mb-6">
-                <iframe src={event.stream_url} className="w-full h-full" allow="autoplay; fullscreen" allowFullScreen title="Event stream" />
+                <VideoPlayer
+                  streamUrl={event.stream_url}
+                  autoPlay={true}
+                  muted={false}
+                  showControls={true}
+                />
               </div>
             )}
 

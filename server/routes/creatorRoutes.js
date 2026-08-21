@@ -10,6 +10,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 102
 const router = Router()
 
 router.get('/public', creatorController.getPublicCreators)
+router.get('/search', creatorController.searchCreators)
 router.post('/upload', authMiddleware, upload.fields([{ name: 'video', maxCount: 1 }, { name: 'thumbnail', maxCount: 1 }]), creatorController.addUploadHandler)
 router.post('/youtube/preview', authMiddleware, youtubeController.youtubePreview)
 router.post('/youtube/import', authMiddleware, youtubeController.youtubeImport)

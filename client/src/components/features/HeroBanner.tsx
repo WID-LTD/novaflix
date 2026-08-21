@@ -142,14 +142,24 @@ export default function HeroBanner({ items, loading, autoPlayInterval = 6000 }: 
               onMouseLeave={() => setTrailerActive(false)}
             />
             {trailerActive && currentItem.trailerKey && (
-              <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                <iframe
-                  src={`https://www.youtube-nocookie.com/embed/${currentItem.trailerKey}?autoplay=1&mute=1&loop=1&playlist=${currentItem.trailerKey}&controls=0&showinfo=0&rel=0&iv_load_policy=3&modestbranding=1`}
-                  className="absolute top-1/2 left-1/2 w-[200%] h-[200%] -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-                  allow="autoplay; encrypted-media"
-                  allowFullScreen
-                  title="Trailer"
-                />
+              <div className="absolute inset-0 overflow-hidden pointer-events-none flex items-center justify-center">
+                <div className="relative w-[60%] h-auto max-w-4xl">
+                  <div className="aspect-video rounded-lg overflow-hidden bg-black">
+                    <img
+                      src={`https://img.youtube.com/vi/${currentItem.trailerKey}/maxresdefault.jpg`}
+                      alt={currentItem.title}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+                    <button
+                      onClick={() => navigate(`/watch?id=${currentItem.id}&type=${currentItem.type}`)}
+                      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full bg-primary-container/90 flex items-center justify-center hover:scale-110 transition-transform backdrop-blur-sm"
+                      aria-label="Watch trailer"
+                    >
+                      <Icon name="play_arrow" fill={true} className="text-on-primary-container w-8 h-8 ml-1" />
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </motion.div>

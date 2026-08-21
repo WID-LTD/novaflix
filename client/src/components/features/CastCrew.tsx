@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react'
 import Icon from '../ui/Icon'
 import type { CastMember, CrewMember } from '../../lib/api'
+import { Link } from 'react-router-dom'
 
 const IMG_BASE = 'https://image.tmdb.org/t/p/w185'
 
-type Person = { id: number | string; name: string; profile_path: string | null; detail: string }
+type Person = { id: number | string; name: string; profile_path: string | null; detail: string; linked?: boolean }
 
 function initials(name: string) {
   return name
@@ -16,30 +17,53 @@ function initials(name: string) {
 }
 
 function PersonCard({ person }: { person: Person }) {
+  const isLinked = person.linked
+  const profileUrl = isLinked ? `/creator/profile/${person.id}` : null
+
   return (
     <div className="flex-shrink-0 w-[116px] snap-start">
-      {person.profile_path ? (
-        <div className="w-full aspect-square overflow-hidden rounded-full bg-surface-container-high border border-white/5 mb-3">
-          <img
-            src={`${IMG_BASE}${person.profile_path}`}
-            alt={person.name}
-            loading="lazy"
-            className="w-full h-full object-cover"
-            onError={(e) => { (e.currentTarget.parentElement as HTMLElement).classList.add('hidden') }}
-          />
-        </div>
+      <div className="relative">
+        {person.profile_path ? (
+          <div className="w-full aspect-square overflow-hidden rounded-full bg-surface-container-high border border-white/5 mb-3">
+            <img
+              src={`${IMG_BASE}${person.profile_path}`}
+              alt={person.name}
+              loading="lazy"
+              className="w-full h-full object-cover"
+              onError={(e) => { (e.currentTarget.parentElement as HTMLElement).classList.add('hidden') }}
+            />
+          </div>
+        ) : (
+          <div className="w-full aspect-square rounded-full bg-surface-container-high border border-white/5 mb-3 flex flex-col items-center justify-center gap-1 text-on-surface-variant/70">
+            <Icon name="person" className="text-3xl" />
+            <span className="text-xs font-bold tracking-wide text-on-surface-variant">{initials(person.name)}</span>
+          </div>
+        )}
+        {isLinked && (
+          <span className="absolute top-1 right-1 bg-green-500 text-white text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+            <Icon name="verified" size="sm" className="inline" /> Verified
+          </span>
+        )}
+      </div>
+      {profileUrl ? (
+        <Link to={profileUrl} className="block">
+          <p className="text-sm font-semibold text-on-surface leading-tight text-center truncate" title={person.name}>
+            {person.name}
+          </p>
+          <p className="text-xs text-on-surface-variant/80 leading-tight text-center truncate mt-0.5" title={person.detail}>
+            {person.detail}
+          </p>
+        </Link>
       ) : (
-        <div className="w-full aspect-square rounded-full bg-surface-container-high border border-white/5 mb-3 flex flex-col items-center justify-center gap-1 text-on-surface-variant/70">
-          <Icon name="person" className="text-3xl" />
-          <span className="text-xs font-bold tracking-wide text-on-surface-variant">{initials(person.name)}</span>
-        </div>
+        <>
+          <p className="text-sm font-semibold text-on-surface leading-tight text-center truncate" title={person.name}>
+            {person.name}
+          </p>
+          <p className="text-xs text-on-surface-variant/80 leading-tight text-center truncate mt-0.5" title={person.detail}>
+            {person.detail}
+          </p>
+        </>
       )}
-      <p className="text-sm font-semibold text-on-surface leading-tight text-center truncate" title={person.name}>
-        {person.name}
-      </p>
-      <p className="text-xs text-on-surface-variant/80 leading-tight text-center truncate mt-0.5" title={person.detail}>
-        {person.detail}
-      </p>
     </div>
   )
 }
@@ -47,9 +71,10 @@ function PersonCard({ person }: { person: Person }) {
 interface CastCrewProps {
   cast: CastMember[]
   crew: CrewMember[]
+  linkedCastIds?: Set<number>
 }
 
-export default function CastCrew({ cast, crew }: CastCrewProps) {
+export default function CastCrew({ cast, crew, linkedCastIds = new Set() }: CastCrewProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [showLeft, setShowLeft] = useState(false)
   const [showRight, setShowRight] = useState(true)
@@ -67,9 +92,9 @@ export default function CastCrew({ cast, crew }: CastCrewProps) {
     setShowRight(scrollLeft < scrollWidth - clientWidth - 10)
   }
 
-  const people: Person[] = [
-    ...cast.map((c) => ({ id: c.id, name: c.name, profile_path: c.profile_path, detail: c.character })),
-    ...crew.map((c) => ({ id: `c-${c.id}-${c.job}`, name: c.name, profile_path: c.profile_path, detail: c.job })),
+  const people = [
+    ...cast.map((c) => ({ id: c.id, name: c.name, profile_path: c.profile_path, detail: c.character, linked: linkedCastIds.has(c.id) })),
+    ...crew.map((c) => ({ id: `c-${c.id}-${c.job}`, name: c.name, profile_path: c.profile_path, detail: c.job, linked: false })),
   ]
 
   if (people.length === 0) return null
@@ -77,7 +102,7 @@ export default function CastCrew({ cast, crew }: CastCrewProps) {
   return (
     <div className="pt-4">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-headline-md">Cast &amp; Crew</h3>
+        <h3 className="text-headline-md">Cast & Crew</h3>
         <div className="flex items-center gap-2">
           {showLeft && (
             <button

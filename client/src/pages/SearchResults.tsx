@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import Icon from '../components/ui/Icon'
-import { searchAll } from '../lib/api'
+import { searchAll, searchPerson, getPersonCredits, searchCreators, searchCategories, type Creator, type Category } from '../lib/api'
+import type { Person, PersonCredit } from '../lib/api'
 import { API_BASE } from '../lib/config'
 import { useAuth } from '../lib/AuthContext'
 import HoverCard from '../components/features/HoverCard'
@@ -9,11 +10,16 @@ import RecommendationGrid from '../components/features/RecommendationGrid'
 import Skeleton from '../components/ui/Skeleton'
 import Tabs from '../components/ui/Tabs'
 import type { MediaItem } from '../types'
+import Button from '../components/ui/Button'
+import FollowButton from '../components/ui/FollowButton'
 
 const tabs = [
   { id: 'all', label: 'All' },
   { id: 'movie', label: 'Movies' },
   { id: 'tv', label: 'TV Shows' },
+  { id: 'people', label: 'People' },
+  { id: 'creators', label: 'Creators' },
+  { id: 'categories', label: 'Categories' },
   { id: 'creator', label: 'Creator Content' },
 ]
 
@@ -23,6 +29,15 @@ export default function SearchResults() {
   const query = searchParams.get('q') || ''
   const typeParam = searchParams.get('type') || 'all'
   const [results, setResults] = useState<MediaItem[]>([])
+  const [peopleResults, setPeopleResults] = useState<Person[]>([])
+  const [creatorResults, setCreatorResults] = useState<Creator[]>([])
+  const [categoryResults, setCategoryResults] = useState<Category[]>([])
+  const [selectedPerson, setSelectedPerson] = useState<{ id: number; name: string } | null>(null)
+  const [selectedCreator, setSelectedCreator] = useState<Creator | null>(null)
+  const [creatorUploads, setCreatorUploads] = useState<MediaItem[]>([])
+  const [creatorUploadsLoading, setCreatorUploadsLoading] = useState(false)
+  const [personCredits, setPersonCredits] = useState<{ cast: PersonCredit[]; crew: PersonCredit[] }>({ cast: [], crew: [] })
+  const [creditsLoading, setCreditsLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState(typeParam)
   const [recs, setRecs] = useState<MediaItem[]>([])
@@ -48,6 +63,57 @@ export default function SearchResults() {
     }).catch(() => setLoading(false))
   }, [query, user])
 
+  useEffect(() => {
+    if (activeTab !== 'people' || !query) return
+    setLoading(true)
+    searchPerson(query).then((res) => {
+      if (res.success) setPeopleResults(res.data)
+      setLoading(false)
+    }).catch(() => setLoading(false))
+  }, [activeTab, query])
+
+  useEffect(() => {
+    if (activeTab !== 'creators' || !query) return
+    setLoading(true)
+    searchCreators(query).then((res) => {
+      if (res.success) setCreatorResults(res.creators)
+      setLoading(false)
+    }).catch(() => setLoading(false))
+  }, [activeTab, query])
+
+  useEffect(() => {
+    if (activeTab !== 'categories' || !query) return
+    setLoading(true)
+    searchCategories(query).then((res) => {
+      if (res.success) setCategoryResults(res.categories)
+      setLoading(false)
+    }).catch(() => setLoading(false))
+  }, [activeTab, query])
+
+  const openPerson = async (person: Person) => {
+    setSelectedPerson({ id: person.id, name: person.name })
+    setCreditsLoading(true)
+    setPersonCredits({ cast: [], crew: [] })
+    try {
+      const res = await getPersonCredits(String(person.id))
+      if (res.success) setPersonCredits({ cast: res.cast || [], crew: res.crew || [] })
+    } catch {}
+    setCreditsLoading(false)
+  }
+
+  const openCreator = async (creator: Creator) => {
+    setSelectedCreator(creator)
+    setCreatorUploadsLoading(true)
+    try {
+      const res = await fetch(`/api/creator/${creator.id}/uploads`)
+      const data = await res.json()
+      if (data.success) {
+        setCreatorUploads(data.uploads || [])
+      }
+    } catch {}
+    setCreatorUploadsLoading(false)
+  }
+
   const filtered = activeTab === 'all' ? results : results.filter(r => {
     if (activeTab === 'creator') return r.source === 'creator' || r.source === 'archive'
     return r.type === activeTab && r.source === 'tmdb'
@@ -69,7 +135,247 @@ export default function SearchResults() {
         <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
 
         <div className="mt-6">
-          {loading ? (
+          {activeTab === 'people' && !selectedPerson ? (
+            loading ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
+                {Array.from({ length: 10 }).map((_, i) => (
+                  <div key={i}>
+                    <Skeleton variant="poster" className="w-full" />
+                    <Skeleton variant="text" className="w-3/4 mt-2" />
+                  </div>
+                ))}
+              </div>
+            ) : peopleResults.length === 0 ? (
+              <div className="text-center py-16">
+                <Icon name="search" className="w-16 h-16 text-on-surface-variant/40 mx-auto mb-4" />
+                <h3 className="font-label-md text-label-md text-on-surface-variant mb-2">No people found</h3>
+                <p className="text-on-surface-variant/60">Try a different search term</p>
+              </div>
+            ) : (
+              <>
+                <p className="text-on-surface-variant text-sm mb-4">{peopleResults.length} person{peopleResults.length !== 1 ? 's' : ''}</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 md:gap-6">
+                  {peopleResults.map((person) => (
+                    <button key={person.id} onClick={() => openPerson(person)} className="group text-left">
+                      {person.profile_path ? (
+                        <img src={person.profile_path} alt={person.name} className="w-full aspect-[2/3] rounded-xl object-cover bg-surface-container group-hover:opacity-90 transition-opacity" loading="lazy" />
+                      ) : (
+                        <div className="w-full aspect-[2/3] rounded-xl bg-surface-container flex items-center justify-center">
+                          <Icon name="person" className="text-on-surface-variant/40" />
+                        </div>
+                      )}
+                      <p className="mt-2 text-sm text-on-surface truncate group-hover:text-primary transition-colors">{person.name}</p>
+                      {person.known_for_department && (
+                        <p className="text-xs text-on-surface-variant truncate">{person.known_for_department}</p>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )
+          ) : activeTab === 'creators' && !selectedCreator ? (
+            loading ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
+                {Array.from({ length: 10 }).map((_, i) => (
+                  <div key={i}>
+                    <Skeleton variant="poster" className="w-full" />
+                    <Skeleton variant="text" className="w-3/4 mt-2" />
+                  </div>
+                ))}
+              </div>
+            ) : creatorResults.length === 0 ? (
+              <div className="text-center py-16">
+                <Icon name="search" className="w-16 h-16 text-on-surface-variant/40 mx-auto mb-4" />
+                <h3 className="font-label-md text-label-md text-on-surface-variant mb-2">No creators found</h3>
+                <p className="text-on-surface-variant/60">Try a different search term</p>
+              </div>
+            ) : (
+              <>
+                <p className="text-on-surface-variant text-sm mb-4">{creatorResults.length} creator{creatorResults.length !== 1 ? 's' : ''}</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 md:gap-6">
+                  {creatorResults.map((creator) => (
+                    <button key={creator.id} onClick={() => openCreator(creator)} className="group text-left">
+                      {creator.avatar ? (
+                        <img src={creator.avatar} alt={creator.name} className="w-full aspect-[2/3] rounded-xl object-cover bg-surface-container group-hover:opacity-90 transition-opacity" loading="lazy" />
+                      ) : (
+                        <div className="w-full aspect-[2/3] rounded-xl bg-surface-container flex items-center justify-center">
+                          <Icon name="person" className="text-on-surface-variant/40" />
+                        </div>
+                      )}
+                      <p className="mt-2 text-sm text-on-surface truncate group-hover:text-primary transition-colors">{creator.name}</p>
+                      {creator.known_for_department && (
+                        <p className="text-xs text-on-surface-variant truncate">{creator.known_for_department}</p>
+                      )}
+                      <p className="text-xs text-primary mt-1">{creator.film_count} films</p>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )
+          ) : activeTab === 'categories' && !selectedCreator ? (
+            loading ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
+                {Array.from({ length: 10 }).map((_, i) => (
+                  <div key={i}>
+                    <Skeleton variant="poster" className="w-full" />
+                    <Skeleton variant="text" className="w-3/4 mt-2" />
+                  </div>
+                ))}
+              </div>
+            ) : categoryResults.length === 0 ? (
+              <div className="text-center py-16">
+                <Icon name="search" className="w-16 h-16 text-on-surface-variant/40 mx-auto mb-4" />
+                <h3 className="font-label-md text-label-md text-on-surface-variant mb-2">No categories found</h3>
+                <p className="text-on-surface-variant/60">Try a different search term</p>
+              </div>
+            ) : (
+              <>
+                <p className="text-on-surface-variant text-sm mb-4">{categoryResults.length} categor{y(categoryResults.length !== 1 ? 'ies' : 'y')}</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 md:gap-6">
+                  {categoryResults.map((cat) => (
+                    <Link key={cat.id} to={cat.source === 'tmdb' ? `/discover?genre_id=${cat.id}&type=${cat.type}` : `/discover?sort=popular`} className="group text-left">
+                      <div className="w-full aspect-[2/3] rounded-xl bg-surface-container flex items-center justify-center">
+                        <Icon name={cat.source === 'creator' ? 'video_library' : 'category'} className="text-on-surface-variant/40 text-4xl group-hover:text-primary transition-colors" />
+                      </div>
+                      <p className="mt-2 text-sm text-on-surface truncate group-hover:text-primary transition-colors">{cat.name}</p>
+                      <p className="text-xs text-on-surface-variant capitalize">{cat.source}</p>
+                    </Link>
+                  ))}
+                </div>
+              </>
+            )
+          ) : selectedCreator ? (
+            <>
+              <div className="flex items-center gap-3 mb-6">
+                <button onClick={() => setSelectedCreator(null)} className="p-2 rounded-lg bg-surface-container-high border border-outline/20 hover:border-primary-container/50 transition-colors" aria-label="Back to creators">
+                  <Icon name="chevron_left" />
+                </button>
+                <div>
+                  <h2 className="text-headline-sm text-on-surface font-bold">{selectedCreator.name}</h2>
+                  {selectedCreator.known_for_department && (
+                    <p className="text-on-surface-variant text-sm">{selectedCreator.known_for_department}</p>
+                  )}
+                </div>
+              </div>
+              {selectedCreator.avatar && (
+                <div className="mb-6 flex items-start gap-6">
+                  <img src={selectedCreator.avatar} alt={selectedCreator.name} className="w-32 h-32 rounded-xl object-cover" />
+                  <div className="flex-1">
+                    <p className="text-on-surface-variant mb-4">{selectedCreator.bio || 'No bio available'}</p>
+                    <div className="flex flex-wrap gap-4 text-sm text-on-surface-variant">
+                      <span>{selectedCreator.film_count} films</span>
+                      <span>{selectedCreator.total_views} views</span>
+                      <span>{selectedCreator.followers_count} followers</span>
+                    </div>
+                    <div className="mt-4">
+                      <FollowButton creatorId={selectedCreator.id} />
+                    </div>
+                  </div>
+                </div>
+              )}
+              {creatorUploadsLoading ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-gutter">
+                  {Array.from({ length: 10 }).map((_, i) => (
+                    <div key={i}>
+                      <Skeleton variant="poster" className="w-full" />
+                      <Skeleton variant="text" className="w-3/4 mt-2" />
+                    </div>
+                  ))}
+                </div>
+              ) : creatorUploads.length === 0 ? (
+                <p className="text-on-surface-variant text-sm py-8">No uploads found.</p>
+              ) : (
+                <>
+                  <h3 className="text-on-surface-variant font-label-md mb-3">Films</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-gutter">
+                    {creatorUploads.map((item, i) => (
+                      <HoverCard
+                        key={`${item.id}-${item.type}`}
+                        item={{
+                          id: item.id,
+                          title: item.title,
+                          poster: item.poster,
+                          backdrop: item.backdrop,
+                          type: item.type,
+                          year: item.year,
+                          overview: item.overview,
+                        }}
+                        index={i}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
+          ) : selectedPerson ? (
+            <>
+              <div className="flex items-center gap-3 mb-6">
+                <button onClick={() => setSelectedPerson(null)} className="p-2 rounded-lg bg-surface-container-high border border-outline/20 hover:border-primary-container/50 transition-colors" aria-label="Back to people">
+                  <Icon name="chevron_left" />
+                </button>
+                <h2 className="text-headline-sm text-on-surface font-bold">{selectedPerson.name}</h2>
+              </div>
+              {creditsLoading ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-gutter">
+                  {Array.from({ length: 10 }).map((_, i) => (
+                    <div key={i}>
+                      <Skeleton variant="poster" className="w-full" />
+                      <Skeleton variant="text" className="w-3/4 mt-2" />
+                    </div>
+                  ))}
+                </div>
+              ) : personCredits.cast.length === 0 && personCredits.crew.length === 0 ? (
+                <p className="text-on-surface-variant text-sm py-8">No credits found.</p>
+              ) : (
+                <>
+                  {personCredits.cast.length > 0 && (
+                    <>
+                      <h3 className="text-on-surface-variant font-label-md mb-3">Known For</h3>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-gutter mb-8">
+                        {personCredits.cast.map((item, i) => (
+                          <HoverCard
+                            key={`${item.id}-${item.type}`}
+                            item={{
+                              id: item.id,
+                              title: item.title,
+                              poster: item.poster,
+                              backdrop: item.backdrop,
+                              type: item.type,
+                              year: item.year,
+                              overview: item.overview,
+                            }}
+                            index={i}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  {personCredits.crew.length > 0 && (
+                    <>
+                      <h3 className="text-on-surface-variant font-label-md mb-3">Crew</h3>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-gutter">
+                        {personCredits.crew.map((item, i) => (
+                          <HoverCard
+                            key={`${item.id}-${item.type}`}
+                            item={{
+                              id: item.id,
+                              title: item.title,
+                              poster: item.poster,
+                              backdrop: item.backdrop,
+                              type: item.type,
+                              year: item.year,
+                              overview: item.overview,
+                            }}
+                            index={i}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+            </>
+          ) : loading ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
               {Array.from({ length: 10 }).map((_, i) => (
                 <div key={i}>

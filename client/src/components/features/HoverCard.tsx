@@ -10,6 +10,7 @@ interface HoverCardProps {
   progress?: number
   duration?: number
   className?: string
+  watchUrl?: string
 }
 
 const detailsCache = new Map<string, { details: any; timestamp: number }>()
@@ -17,7 +18,7 @@ const CACHE_TTL = 5 * 60 * 1000
 const HOVER_DELAY = 400
 const CLOSE_GRACE = 200
 
-export default function HoverCard({ item, index, progress, duration, className }: HoverCardProps) {
+export default function HoverCard({ item, index, progress, duration, className, watchUrl }: HoverCardProps) {
   const [expanded, setExpanded] = useState(false)
   const [details, setDetails] = useState<any>(null)
   const cardRef = useRef<HTMLDivElement>(null)
@@ -103,7 +104,7 @@ export default function HoverCard({ item, index, progress, duration, className }
   }, [startCloseTimer])
 
   if (isTouchDevice.current) {
-    return <MovieCard item={item} index={index} progress={progress} duration={duration} className={className} />
+    return <MovieCard item={item} index={index} progress={progress} duration={duration} className={className} watchUrl={watchUrl} />
   }
 
   return (
@@ -113,7 +114,7 @@ export default function HoverCard({ item, index, progress, duration, className }
       onMouseLeave={handleMouseLeave}
       className={`relative ${className ?? ''}`}
     >
-      <MovieCard item={item} index={index} progress={progress} duration={duration} className={className} />
+      <MovieCard item={item} index={index} progress={progress} duration={duration} className={className} watchUrl={watchUrl} />
       {expanded && details && cardRectRef.current && (
         <ExpandedCard
           details={details}

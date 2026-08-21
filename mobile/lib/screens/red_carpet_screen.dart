@@ -7,6 +7,7 @@ import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../widgets/ui/index.dart';
+import '../widgets/features/index.dart';
 
 final _eventsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final api = ref.read(apiServiceProvider);
@@ -276,39 +277,43 @@ class _RedCarpetScreenState extends ConsumerState<RedCarpetScreen> {
     List<Map<String, dynamic>> items,
     List<Map<String, dynamic>> tickets,
   ) {
-    final width = MediaQuery.sizeOf(context).width;
-    final cols = width >= 1024 ? 3 : (width >= 600 ? 2 : 1);
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: cols,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        childAspectRatio: 0.95,
-      ),
-      itemCount: items.length,
-      itemBuilder: (_, i) => _EventCard(
-        event: items[i],
-        hasTicket: _hasTicket(tickets, items[i]),
-        purchasing: _purchasingId == items[i]['id'].toString(),
-        onPurchase: () => _purchase(items[i]),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cols = gridColumnsForWidth(constraints.maxWidth).clamp(1, 3);
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: cols,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            childAspectRatio: 0.8,
+          ),
+          itemCount: items.length,
+          itemBuilder: (_, i) => _EventCard(
+            event: items[i],
+            hasTicket: _hasTicket(tickets, items[i]),
+            purchasing: _purchasingId == items[i]['id'].toString(),
+            onPurchase: () => _purchase(items[i]),
+          ),
+        );
+      },
     );
   }
 
   Widget _pastGrid(List<Map<String, dynamic>> items) {
-    final width = MediaQuery.sizeOf(context).width;
-    final cols = width >= 1024 ? 5 : (width >= 600 ? 4 : 2);
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: cols,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 0.9,
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cols = gridColumnsForWidth(constraints.maxWidth).clamp(2, 5);
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: cols,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 0.75,
+          ),
       itemCount: items.length,
       itemBuilder: (_, i) {
         final ev = items[i];
@@ -371,6 +376,8 @@ class _RedCarpetScreenState extends ConsumerState<RedCarpetScreen> {
             ),
           ),
         );
+      },
+    );
       },
     );
   }

@@ -17,6 +17,7 @@ interface VideoPlayerProps {
   eggs?: EggPlacement[]
   collectedEggIds?: string[]
   onCollectEgg?: (keyId: string) => void
+  startTime?: number
 }
 
 const EGG_WINDOW = 2
@@ -48,6 +49,7 @@ export default function VideoPlayer({
   eggs = [],
   collectedEggIds = [],
   onCollectEgg,
+  startTime = 0,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -55,6 +57,7 @@ export default function VideoPlayer({
   const controlsTimeout = useRef<ReturnType<typeof setTimeout>>()
   const adTimerRef = useRef<ReturnType<typeof setInterval>>()
   const midRollTriggered = useRef<Set<number>>(new Set())
+  const seekAppliedRef = useRef<string | null>(null)
   const { planRank } = useAuth()
 
   const [playing, setPlaying] = useState(false)
@@ -236,6 +239,10 @@ export default function VideoPlayer({
     const onLoadedMeta = () => {
       setDuration(video.duration)
       onDuration?.(video.duration)
+      if (startTime > 0 && seekAppliedRef.current !== streamUrl) {
+        seekAppliedRef.current = streamUrl
+        video.currentTime = Math.min(startTime, video.duration)
+      }
     }
     const onProgressEvt = () => {
       if (video.buffered.length > 0) {
@@ -283,7 +290,7 @@ export default function VideoPlayer({
       video.removeEventListener('waiting', onWaiting)
       video.removeEventListener('canplay', onCanPlay)
     }
-  }, [onProgress, onDuration, planRank, ads, currentAd])
+  }, [onProgress, onDuration, planRank, ads, currentAd, startTime, streamUrl])
 
   const handleAdComplete = () => {
     setCurrentAd(null)

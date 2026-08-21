@@ -24,6 +24,8 @@ import CreatorCard from '../components/ui/CreatorCard'
 import ShareButton from '../components/ui/ShareButton'
 import { isMobileBrowser, routeToStore } from '../lib/platform'
 import type { MediaDetails } from '../types'
+import SEOMeta from '../components/ui/SEOMeta'
+import VideoPlayer from '../components/features/VideoPlayer'
 
 export default function MovieDetail() {
   const { id } = useParams<{ id: string }>()
@@ -60,6 +62,15 @@ export default function MovieDetail() {
   })
   const cast = creditsData?.success ? (creditsData.cast as CastMember[]) : []
   const crew = creditsData?.success ? (creditsData.crew as CrewMember[]) : []
+
+  // Batch check which cast members have internal creator profiles
+  const tmdbIds = cast.slice(0, 20).map(c => c.id).join(',')
+  const { data: batchCheck } = useQuery({
+    queryKey: ['creator-batch-check', tmdbIds],
+    queryFn: () => fetch(`/api/tmdb/creator/batch-check?tmdbIds=${tmdbIds}`).then(r => r.json()),
+    enabled: !!tmdbIds,
+  })
+  const linkedCastIds = new Set(batchCheck?.linked || [])
 
   const handleWatch = (season?: number, episode?: number) => {
     if (!user) {
@@ -142,8 +153,10 @@ export default function MovieDetail() {
     : null
 
   return (
-    <div className="min-h-screen">
-      {/* Hero Section */}
+    <>
+      <SEOMeta type="movie" data={details} />
+      <div className="min-h-screen">
+        {/* Hero Section */}
       <section className="relative w-full h-[618px] md:h-[751px] overflow-hidden">
         {backdrop ? (
           <div className="absolute inset-0 w-full h-full">
@@ -223,19 +236,25 @@ export default function MovieDetail() {
         {/* Info */}
         <div className="bg-surface-container p-8 rounded-xl border border-white/5 space-y-6">
           {details.trailerKey && (
-              <div className="aspect-video rounded-xl overflow-hidden mb-6 bg-black">
-                <iframe
-                  src={`https://www.youtube.com/embed/${details.trailerKey}?autoplay=0&rel=0`}
-                  title={`${details.title} Trailer`}
-                  className="w-full h-full"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
+              <div className="aspect-video rounded-xl overflow-hidden mb-6 bg-black relative">
+                <img
+                  src={`https://img.youtube.com/vi/${details.trailerKey}/maxresdefault.jpg`}
+                  alt={`${details.title} Trailer`}
+                  className="w-full h-full object-cover"
                 />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+                <button
+                  onClick={() => navigate(`/watch?id=${id}&type=${type}`)}
+                  className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full bg-primary-container/90 flex items-center justify-center hover:scale-110 transition-transform backdrop-blur-sm"
+                  aria-label="Watch trailer"
+                >
+                  <Icon name="play_arrow" fill={true} className="text-on-primary-container w-8 h-8 ml-1" />
+                </button>
               </div>
             )}
             <h3 className="text-headline-md">Synopsis</h3>
             <p className="text-body-md text-on-surface-variant leading-relaxed">{details.overview}</p>
-            {(cast.length > 0 || crew.length > 0) && <CastCrew cast={cast} crew={crew} />}
+            {(cast.length > 0 || crew.length > 0) && <CastCrew cast={cast} crew={crew} linkedCastIds={linkedCastIds} />}
             <div className="pt-4 grid grid-cols-2 sm:grid-cols-4 gap-6">
               <div>
                 <span className="block text-[10px] uppercase tracking-wider text-on-surface-variant mb-1">Rating</span>
@@ -336,5 +355,5 @@ export default function MovieDetail() {
         )}
       </section>
     </div>
-  )
+  </>
 }

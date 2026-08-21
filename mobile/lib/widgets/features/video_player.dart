@@ -59,6 +59,7 @@ class VideoPlayer extends ConsumerStatefulWidget {
   final String? title;
   final void Function(double progress)? onProgress;
   final void Function(double duration)? onDuration;
+  final double? startPosition;
   final bool isFreeTier;
   final bool bingePassActive;
   final List<VideoEgg> eggs;
@@ -75,6 +76,7 @@ class VideoPlayer extends ConsumerStatefulWidget {
     this.title,
     this.onProgress,
     this.onDuration,
+    this.startPosition,
     this.isFreeTier = true,
     this.bingePassActive = false,
     this.eggs = const [],
@@ -87,11 +89,16 @@ class VideoPlayer extends ConsumerStatefulWidget {
 }
 
 class _VideoPlayerState extends ConsumerState<VideoPlayer> {
-  final _player = Player();
+  final _player = Player(
+    configuration: PlayerConfiguration(
+      logLevel: MPVLogLevel.error,
+    ),
+  );
   late final VideoController _controller;
 
   double _currentTime = 0;
   double _duration = 0;
+  double _buffered = 0;
   bool _playing = false;
   bool _muted = false;
   double _volume = 1;
@@ -153,6 +160,10 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
   }
 
   Future<void> _initBrightness() async {
+    if (kIsWeb || defaultTargetPlatform == TargetPlatform.linux || defaultTargetPlatform == TargetPlatform.windows) {
+      _brightness = 1;
+      return;
+    }
     try {
       _brightness = await ScreenBrightness.instance.application;
     } catch (_) {
@@ -342,10 +353,22 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
       _debug('open: fallback OK (no-start watch will verify playback)');
       _player.setVolume(_muted ? 0 : _volume);
       _player.setRate(_playbackRate);
+      await _seekToResume();
       return true;
     } catch (e) {
       _debug('open: fallback ALSO failed -> $e');
       return false;
+    }
+  }
+
+  Future<void> _seekToResume() async {
+    final start = widget.startPosition ?? 0;
+    if (start <= 1) return;
+    try {
+      await _player.seek(Duration(milliseconds: (start * 1000).round()));
+      _debug('resume: sought to ${start.toStringAsFixed(1)}s');
+    } catch (e) {
+      _debug('resume: seek failed -> $e');
     }
   }
 
@@ -369,6 +392,7 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
       _debug('open: done in ${DateTime.now().difference(started).inMilliseconds}ms');
       _player.setVolume(_muted ? 0 : _volume);
       _player.setRate(_playbackRate);
+      await _seekToResume();
       if (mounted) {
         setState(() => _loading = false);
       }
@@ -734,7 +758,9 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
     _controlsTimer?.cancel();
     _progressTimer?.cancel();
     _player.dispose();
-    try { ScreenBrightness.instance.resetApplicationScreenBrightness(); } catch (_) {}
+    if (!kIsWeb && defaultTargetPlatform != TargetPlatform.linux && defaultTargetPlatform != TargetPlatform.windows) {
+      try { ScreenBrightness.instance.resetApplicationScreenBrightness(); } catch (_) {}
+    }
     super.dispose();
   }
 

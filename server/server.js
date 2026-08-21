@@ -14,9 +14,13 @@ import jwt from 'jsonwebtoken';
 import { closeBrowser } from './scraper.mjs';
 import { initDatabase } from './config/database.js';
 import apiRoutes from './routes/index.js';
+import claimRoutes from './routes/claimRoutes.js';
+import beneficiaryRoutes from './routes/beneficiaryRoutes.js';
+import walletRoutes from './routes/walletRoutes.js';
 import { getPlanRank } from './controllers/planUtils.js';
 import { joinTopicRoom, leaveTopicRoom, leaveAllTopicRooms } from './lib/realtime.js';
 import { resolveJwtSecret } from './config/jwtSecret.js';
+import { initializeCronJobs } from './services/cronJobs.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -147,6 +151,9 @@ app.locals.tmdb = axios.create({
 });
 
 app.use('/api', apiRoutes);
+app.use('/api', claimRoutes);
+app.use('/api', beneficiaryRoutes);
+app.use('/api', walletRoutes);
 
 // Render health check (also used by monitoring).
 app.get('/api/health', (req, res) => {
@@ -484,14 +491,17 @@ server.listen(PORT, () => {
 
   const hasDbUrl = !!process.env.DATABASE_URL;
   if (hasDbUrl) {
-    initDatabase().then(async () => {
-      await seedAchievements()
-      const { seedRoles } = await import('./controllers/adminController.js')
-      await seedRoles().catch((err) => console.warn('[roles] seed failed:', err.message))
-      deactivateExpiredSubscriptions()
-      setInterval(deactivateExpiredSubscriptions, 60 * 60 * 1000)
-      console.log('[db] Database features active');
-    }).catch((err) => {
+initDatabase().then(async () => {
+        await seedAchievements()
+        const { seedRoles } = await import('./controllers/adminController.js')
+        await seedRoles().catch((err) => console.warn('[roles] seed failed:', err.message))
+        deactivateExpiredSubscriptions()
+        setInterval(deactivateExpiredSubscriptions, 60 * 60 * 1000)
+        console.log('[db] Database features active');
+        
+        // Initialize cron jobs
+        await initializeCronJobs();
+      }).catch((err) => {
       console.warn('[server] Database unavailable, running without DB features:', err.message);
     });
   } else {
@@ -507,6 +517,7 @@ process.on('SIGINT', async () => {
 });
 
 process.on('SIGTERM', async () => {
+  console.log('Shutting down...');
   wss.close()
   await closeBrowser();
   server.close(() => process.exit(0));

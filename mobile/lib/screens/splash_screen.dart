@@ -26,7 +26,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     [
       Permission.notification,
       Permission.storage,
-    ].request().catchError((_) {});
+    ].request().then((_) {}, onError: (_) {});
   }
 
   void _navigateNext() {

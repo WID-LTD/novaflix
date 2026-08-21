@@ -26,16 +26,17 @@ class CreatorsScreen extends ConsumerWidget {
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Creators')),
       body: creators.when(
-        data: (items) => GridView.builder(
-          padding: const EdgeInsets.all(16),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: gridColumnsFor(
-              MediaQuery.sizeOf(context).width,
-            ).clamp(2, 4),
-            childAspectRatio: 0.9,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
+        data: (items) => LayoutBuilder(
+          builder: (context, constraints) => GridView.builder(
+            padding: const EdgeInsets.all(16),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: gridColumnsForWidth(
+                constraints.maxWidth - 32,
+              ).clamp(2, 4),
+              childAspectRatio: 0.9,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+            ),
           itemCount: items.length,
           itemBuilder: (_, i) {
             final creator = items[i];
@@ -83,6 +84,7 @@ class CreatorsScreen extends ConsumerWidget {
               ),
             );
           },
+          ),
         ),
         loading: () => const LoadingSpinner(),
         error: (e, _) => Center(child: Text('Error: $e')),

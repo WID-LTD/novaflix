@@ -56,7 +56,7 @@ async function recordLogin(req, user, deviceId, lat, lng, accuracy) {
   }
 }
 
-function signToken(user) {
+export function signToken(user) {
   return jwt.sign({ id: user.id, email: user.email, role: user.role, plan: user.plan || 'free' }, JWT_SECRET, { expiresIn: '30d' })
 }
 

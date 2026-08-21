@@ -115,15 +115,16 @@ class CategoryScreen extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: 24),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 4,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  childAspectRatio: 3.2,
-                ),
+              LayoutBuilder(
+                builder: (context, constraints) => GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: (gridColumnsForWidth(constraints.maxWidth) + 1).clamp(2, 5),
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                    childAspectRatio: 3.2,
+                  ),
                 itemCount: items.length,
                 itemBuilder: (_, i) {
                   final genre = items[i];
@@ -197,6 +198,7 @@ class CategoryScreen extends ConsumerWidget {
                     ),
                   );
                 },
+              ),
               ),
             ],
           ),
@@ -283,42 +285,44 @@ class _GenreBrowse extends ConsumerWidget {
                         ),
                       );
                     }
-                    return Column(
-                      children: [
-                        GridView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: gridColumnsFor(MediaQuery.of(context).size.width),
-                            childAspectRatio: 0.6,
-                            crossAxisSpacing: 20,
-                            mainAxisSpacing: 20,
+                    return LayoutBuilder(
+                      builder: (context, constraints) => Column(
+                        children: [
+                          GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: gridColumnsForWidth(constraints.maxWidth),
+                              childAspectRatio: 0.6,
+                              crossAxisSpacing: 20,
+                              mainAxisSpacing: 20,
+                            ),
+                            itemCount: result.items.length,
+                            itemBuilder: (_, i) => MovieCard(item: result.items[i]),
                           ),
-                          itemCount: result.items.length,
-                          itemBuilder: (_, i) => MovieCard(item: result.items[i]),
-                        ),
-                        if (page < result.totalPages) ...[
-                          const SizedBox(height: 24),
-                          Center(
-                            child: OutlinedButton(
-                              onPressed: () {
-                                ref.read(_categoryPageNumberProvider(id).notifier).state = page + 1;
-                              },
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                                side: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                          if (page < result.totalPages) ...[
+                            const SizedBox(height: 24),
+                            Center(
+                              child: OutlinedButton(
+                                onPressed: () {
+                                  ref.read(_categoryPageNumberProvider(id).notifier).state = page + 1;
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                                  side: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: Text(
+                                  'Load More',
+                                  style: AppTypography.labelMd.copyWith(color: AppColors.onSurface),
                                 ),
                               ),
-                              child: Text(
-                                'Load More',
-                                style: AppTypography.labelMd.copyWith(color: AppColors.onSurface),
-                              ),
                             ),
-                          ),
+                          ],
                         ],
-                      ],
+                      ),
                     );
                   },
                   loading: () => const SizedBox(

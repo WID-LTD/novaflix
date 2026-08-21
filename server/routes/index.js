@@ -39,6 +39,7 @@ import triviaRoutes from './triviaRoutes.js'
 import chatRoutes from './chatRoutes.js'
 import eggRoutes from './eggRoutes.js'
 import statsRoutes from './statsRoutes.js'
+import postRoutes from './postRoutes.js'
 
 const router = Router()
 
@@ -68,8 +69,6 @@ router.use('/events', eventRoutes)
 router.use('/store', storeRoutes)
 router.use('/courses', courseRoutes)
 router.use('/archive', archiveRoutes)
-router.use('/', tmdbRoutes)
-router.use('/', streamRoutes)
 router.use('/community', communityRoutes)
 router.use('/downloads', downloadRoutes)
 router.use('/achievements', achievementRoutes)
@@ -82,5 +81,10 @@ router.use('/trivia', triviaRoutes)
 router.use('/chat', chatRoutes)
 router.use('/eggs', eggRoutes)
 router.use('/stats', statsRoutes)
+router.use('/', sitemapRoutes)
+router.use('/cron', cronRoutes)
+router.use('/posts', postRoutes)
+router.use('/', tmdbRoutes)
+router.use('/', streamRoutes)
 
 export default router

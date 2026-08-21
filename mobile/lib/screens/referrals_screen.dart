@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../widgets/ui/index.dart';
-import 'package:flutter/services.dart';
+
+/// Web app origin where the `?ref=` registration flow lives.
+const String _webOrigin = 'https://novaflix-web.vercel.app';
 
 class ReferralsScreen extends ConsumerStatefulWidget {
   const ReferralsScreen({super.key});
@@ -20,6 +25,7 @@ class _ReferralsScreenState extends ConsumerState<ReferralsScreen> {
   Map<String, dynamic> _stats = const {};
   List<Map<String, dynamic>> _referrals = [];
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -31,9 +37,13 @@ class _ReferralsScreenState extends ConsumerState<ReferralsScreen> {
     final api = ref.read(apiServiceProvider);
     final user = ref.read(authProvider).user;
     if (user == null) {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
       return;
     }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final results = await Future.wait([
         api.generateReferral(),
@@ -42,31 +52,56 @@ class _ReferralsScreenState extends ConsumerState<ReferralsScreen> {
       final gen = results[0].data;
       final stats = results[1].data;
       if (gen is Map) {
-        _url = gen['url']?.toString() ?? '';
+        _url = _webUrl(gen['url']?.toString() ?? '');
       }
       if (stats is Map) {
         _stats = (stats['stats'] as Map?)?.cast<String, dynamic>() ?? const {};
         _referrals =
             (stats['referrals'] as List?)?.cast<Map<String, dynamic>>() ?? [];
       }
-    } catch (_) {}
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Failed to load referral data. $e');
+    }
     if (mounted) setState(() => _loading = false);
   }
 
-  void _copyLink() {
+  /// Server builds the URL from its own host (the API server), which has no
+  /// frontend. Rewrite it to the real web app origin.
+  String _webUrl(String url) {
+    if (url.isEmpty) return '';
+    final ref = Uri.tryParse(url)?.queryParameters['ref'] ?? '';
+    return ref.isEmpty ? url : '$_webOrigin/register?ref=$ref';
+  }
+
+  Future<void> _copyLink() async {
     if (_url.isEmpty) return;
     try {
-      Clipboard.setData(ClipboardData(text: _url));
-      _toast('Referral link copied!');
+      await Clipboard.setData(ClipboardData(text: _url));
+      if (mounted) _toast('Referral link copied!');
     } catch (_) {}
   }
 
-  void _shareWhatsApp() {
+  Future<void> _share() async {
+    if (_url.isEmpty) return;
+    try {
+      await Share.share(
+        'Join NovaFlix and discover amazing movies! Sign up using my link: $_url',
+      );
+    } catch (_) {
+      _copyLink();
+    }
+  }
+
+  Future<void> _shareWhatsApp() async {
+    if (_url.isEmpty) return;
     final text =
         'Join NovaFlix and discover amazing movies! Sign up using my link: $_url';
     final uri = Uri.https('wa.me', '/', {'text': text});
-    if (uri.host.isNotEmpty) {
-      _toast('Opening WhatsApp…');
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok && mounted) _toast('Could not open WhatsApp');
+    } catch (_) {
+      if (mounted) _toast('Could not open WhatsApp');
     }
   }
 
@@ -116,7 +151,9 @@ class _ReferralsScreenState extends ConsumerState<ReferralsScreen> {
       backgroundColor: AppColors.background,
       body: _loading
           ? const Center(child: LoadingSpinner())
-          : SingleChildScrollView(
+          : _error != null
+              ? _errorView()
+              : SingleChildScrollView(
               padding: EdgeInsets.fromLTRB(hPadding, 32, hPadding, 48),
               child: Center(
                 child: ConstrainedBox(
@@ -165,6 +202,42 @@ class _ReferralsScreenState extends ConsumerState<ReferralsScreen> {
                 ),
               ),
             ),
+    );
+  }
+
+  Widget _errorView() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.cloud_off,
+              size: 48,
+              color: AppColors.onSurfaceVariant,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _error ?? 'Something went wrong',
+              textAlign: TextAlign.center,
+              style: AppTypography.bodyMd.copyWith(
+                color: AppColors.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: _load,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Retry'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primaryContainer,
+                foregroundColor: AppColors.onPrimaryContainer,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -218,20 +291,30 @@ class _ReferralsScreenState extends ConsumerState<ReferralsScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _btn(Icons.content_copy, 'Copy Link', _copyLink),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _btn(Icons.share, 'Share', _copyLink),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _btn(Icons.chat, 'WhatsApp', _shareWhatsApp, isWhatsApp: true),
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final rows = constraints.maxWidth < 420 ? 3 : 1;
+              final children = <Widget>[
+                Expanded(child: _btn(Icons.content_copy, 'Copy Link', _copyLink)),
+                const SizedBox(width: 12),
+                Expanded(child: _btn(Icons.share, 'Share', _share)),
+                const SizedBox(width: 12),
+                Expanded(child: _btn(Icons.chat, 'WhatsApp', _shareWhatsApp, isWhatsApp: true)),
+              ];
+              if (rows == 3) {
+                return Column(
+                  children: [
+                    Row(children: children.take(3).toList()),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: _btn(Icons.chat, 'WhatsApp', _shareWhatsApp, isWhatsApp: true),
+                    ),
+                  ],
+                );
+              }
+              return Row(children: children);
+            },
           ),
         ],
       ),
@@ -277,9 +360,14 @@ class _ReferralsScreenState extends ConsumerState<ReferralsScreen> {
   }
 
   Widget _statsRow() {
-    final total = (_stats['total'] as num? ?? 0).toString();
-    final converted = (_stats['converted'] as num? ?? 0).toString();
-    final commission = (_stats['total_commission'] as num? ?? 0).toInt();
+    final total = (_stats['total'] as num?)?.toString() ??
+        _stats['total']?.toString() ??
+        '0';
+    final converted = (_stats['converted'] as num?)?.toString() ??
+        _stats['converted']?.toString() ??
+        '0';
+    final raw = _stats['total_commission'];
+    final commission = _num(raw);
     return Row(
       children: [
         _stat(Icons.group, total, 'TOTAL REFERRALS'),
@@ -289,6 +377,13 @@ class _ReferralsScreenState extends ConsumerState<ReferralsScreen> {
         _stat(Icons.payments, '₦$commission', 'COMMISSION'),
       ],
     );
+  }
+
+  /// Server returns numeric columns as strings (node-postgres bigint/numeric).
+  static int _num(dynamic v) {
+    if (v == null) return 0;
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString()) ?? 0;
   }
 
   Widget _stat(IconData icon, String value, String label) {
@@ -376,7 +471,7 @@ class _ReferralsScreenState extends ConsumerState<ReferralsScreen> {
 
   Widget _referralRow(Map<String, dynamic> r) {
     final status = r['status']?.toString() ?? '';
-    final commission = (r['commission'] as num? ?? 0).toInt();
+    final commission = _num(r['commission']);
     final created = r['created_at']?.toString() ?? '';
     Color color = const Color(0xFFFFC107);
     if (status == 'converted') color = AppColors.secondary;
@@ -436,8 +531,4 @@ class _ReferralsScreenState extends ConsumerState<ReferralsScreen> {
       ),
     );
   }
-}
-
-class MethodChannelMessengerForClipboard {
-  void copy(String _) {}
 }

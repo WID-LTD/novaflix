@@ -1,0 +1,59 @@
+{
+  "fonts": {
+    "founderSignature": {
+      "primary": "Great Vibes",
+      "fallback": ["Brush Script MT", "Lucida Handwriting", "Comic Sans MS"],
+      "googleFontUrl": "https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap",
+      "weight": "400",
+      "style": "normal"
+    },
+    "corporateSeal": {
+      "primary": "Inter",
+      "fallback": ["Helvetica", "Arial", "sans-serif"],
+      "weight": "700",
+      "style": "normal"
+    },
+    "documentBody": {
+      "primary": "Inter",
+      "fallback": ["system-ui", "-apple-system", "sans-serif"],
+      "weights": ["400", "500", "600", "700"]
+    },
+    "codeMono": {
+      "primary": "JetBrains Mono",
+      "fallback": ["Fira Code", "Monospace"],
+      "weights": ["400", "500"]
+    }
+  },
+  "colors": {
+    "novaRed": "#E50914",
+    "novaRedDark": "#C0000C",
+    "creatorGreen": "#53E076",
+    "creatorGreenDark": "#02B04C",
+    "surfaceBlack": "#050505",
+    "surfaceCharcoal": "#131313",
+    "textPrimary": "#E5E2E1",
+    "textSecondary": "#E9BCB6",
+    "textMuted": "#888888",
+    "signatureBlue": "#1E3A8A",
+    "sealGold": "#FBBF24"
+  },
+  "signature": {
+    "founder": {
+      "fontSize": 36,
+      "lineHeight": 1.2,
+      "letterSpacing": "0.02em",
+      "color": "novaRed"
+    },
+    "attestation": {
+      "fontSize": 9,
+      "lineHeight": 1.5,
+      "color": "textMuted"
+    },
+    "watermark": {
+      "fontSize": 48,
+      "opacity": 0.04,
+      "angle": -35,
+      "color": "novaRed"
+    }
+  }
+}

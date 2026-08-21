@@ -76,6 +76,10 @@ class AuthService {
     await _api.resendVerification(userId);
   }
 
+  Future<void> storeToken(String token) async {
+    await _api.saveToken(token);
+  }
+
   Future<User?> getCurrentUser() async {
     final token = await _api.getToken();
     if (token == null) return null;

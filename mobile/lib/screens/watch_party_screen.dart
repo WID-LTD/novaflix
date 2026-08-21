@@ -481,11 +481,13 @@ class _WatchPartyScreenState extends ConsumerState<WatchPartyScreen> {
   }
 
   Widget _desktopRoom() {
+    final w = MediaQuery.sizeOf(context).width;
+    final chatW = (w * 0.3).clamp(280.0, 360.0);
     return Row(
       children: [
         Expanded(flex: 3, child: _stagePanel()),
         Container(width: 1, color: AppColors.white.withValues(alpha: 0.05)),
-        SizedBox(width: 340, child: _chatPanel()),
+        SizedBox(width: chatW, child: _chatPanel()),
       ],
     );
   }

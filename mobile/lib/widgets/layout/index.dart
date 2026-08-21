@@ -201,7 +201,7 @@ class _TopBar extends StatelessWidget {
           GestureDetector(
             onTap: () => context.go('/home'),
             child: SizedBox(
-              height: 40,
+              height: 48,
               child: Image.asset(
                 'assets/brand/leter-mark-logo.png',
                 fit: BoxFit.contain,
@@ -288,7 +288,7 @@ const _mainNav = [
     authenticated: true,
   ),
   _SidebarItem(
-    label: 'Downloads',
+    label: 'My Downloads',
     icon: Icons.download_outlined,
     route: '/downloads',
     authenticated: true,
@@ -697,7 +697,7 @@ class _MobileDrawer extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(16),
               child: SizedBox(
-                height: 40,
+                height: 48,
                 child: Image.asset(
                   'assets/brand/leter-mark-logo.png',
                   fit: BoxFit.contain,

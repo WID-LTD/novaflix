@@ -88,6 +88,14 @@ const Forum = lazy(() => import('./pages/Forum'))
 const Trivia = lazy(() => import('./pages/Trivia'))
 const SecretRoom = lazy(() => import('./pages/SecretRoom'))
 const PublicProfile = lazy(() => import('./pages/PublicProfile'))
+const ClaimStart = lazy(() => import('./pages/ClaimStart'))
+const ClaimPreview = lazy(() => import('./pages/ClaimPreview'))
+const ClaimVerify = lazy(() => import('./pages/ClaimVerify'))
+const ClaimStatus = lazy(() => import('./pages/ClaimStatus'))
+const ClaimSuccess = lazy(() => import('./pages/ClaimSuccess'))
+const CreatorWallet = lazy(() => import('./pages/CreatorWallet'))
+const CreatorOnboarding = lazy(() => import('./pages/CreatorOnboarding'))
+const CreatorPPMSettings = lazy(() => import('./pages/CreatorPPMSettings'))
 
 function PageLoading() {
   return (
@@ -132,10 +140,15 @@ export default function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/profiles" element={<ProfileGateway />} />
-        <Route path="/creator/login" element={<CreatorLogin />} />
-        <Route path="/creator/forgot-password" element={<CreatorForgotPassword />} />
-        <Route path="/creator/reset-password" element={<CreatorResetPassword />} />
-        <Route path="/suspended" element={<SuspendedPage />} />
+<Route path="/creator/login" element={<CreatorLogin />} />
+          <Route path="/creator/forgot-password" element={<CreatorForgotPassword />} />
+          <Route path="/creator/reset-password" element={<CreatorResetPassword />} />
+          <Route path="/creator/claim/start" element={<ClaimStart />} />
+          <Route path="/creator/claim/preview/:tmdbPersonId" element={<ClaimPreview />} />
+          <Route path="/creator/claim/verify" element={<ClaimVerify />} />
+          <Route path="/creator/claim/status/:claimId" element={<ClaimStatus />} />
+          <Route path="/creator/claim/success" element={<ClaimSuccess />} />
+          <Route path="/suspended" element={<SuspendedPage />} />
         <Route element={<Layout />}>
           <Route path="/home" element={<Home />} />
           <Route path="/community" element={<AuthGuard><Community /></AuthGuard>} />
@@ -181,6 +194,9 @@ export default function App() {
           <Route path="/memberships/:creatorId" element={<AuthGuard><CreatorMembershipManager /></AuthGuard>} />
           <Route path="/creator/memberships" element={<CreatorGuard><CreatorMembershipManager /></CreatorGuard>} />
           <Route path="/creator/events" element={<CreatorGuard><CreatorEventsManager /></CreatorGuard>} />
+          <Route path="/creator/wallet" element={<CreatorGuard><CreatorWallet /></CreatorGuard>} />
+          <Route path="/creator/onboarding" element={<CreatorGuard><CreatorOnboarding /></CreatorGuard>} />
+          <Route path="/creator/ppm" element={<CreatorGuard><CreatorPPMSettings /></CreatorGuard>} />
           <Route path="/events" element={<LiveEvents />} />
           <Route path="/events/:id" element={<EventDetail />} />
           <Route path="/red-carpet" element={<RedCarpet />} />

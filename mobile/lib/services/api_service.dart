@@ -140,6 +140,9 @@ class ApiService {
   Future<Response> updateProfile(Map<String, dynamic> data) =>
       put('/user/profile', data: data);
   Future<Response> getUserStats() => get('/user/stats');
+  Future<Response> getSettings() => get('/user/settings');
+  Future<Response> updateSettings(Map<String, dynamic> settings) =>
+      put('/user/settings', data: {'settings': settings});
   Future<Response> uploadAvatar(FormData data) =>
       uploadFile('/user/avatar', data);
   Future<Response> changePassword(String current, String newPw) => post(
@@ -150,6 +153,7 @@ class ApiService {
   Future<Response> recordWatch(Map<String, dynamic> data) =>
       post('/user/watch-history', data: data);
   Future<Response> getWatchHistory() => get('/user/watch-history');
+  Future<Response> getContinueWatching() => get('/user/watch-history/continue');
 
   Future<Response> getWatchlist() => get('/user/watchlist');
   Future<Response> addToWatchlist(Map<String, dynamic> data) =>
@@ -187,6 +191,14 @@ class ApiService {
       get('/search', params: {'query': query, if (type != null) 'type': type});
   Future<Response> searchAll(String query) =>
       get('/search/all', params: {'q': query});
+  Future<Response> searchPerson(String query) =>
+      get('/search/person', params: {'query': query});
+  Future<Response> searchCreators(String query) =>
+      get('/creator/search', params: {'q': query});
+  Future<Response> searchCategories(String query) =>
+      get('/categories/search', params: {'q': query});
+  Future<Response> getPersonCredits(int id) =>
+      get('/person/$id/credits');
   Future<Response> getDetails(int id, String type) =>
       get('/details', params: {'id': id, 'type': type});
   Future<Response> getCredits(int id, String type) =>
@@ -261,6 +273,29 @@ class ApiService {
   );
   Future<Response> getHooksFeed({int? page}) =>
       get('/hooks', params: {if (page != null) 'page': page});
+
+  Future<Response> getShorts({int? page, int? limit}) => get(
+        '/shorts',
+        params: {
+          if (page != null) 'page': page,
+          if (limit != null) 'limit': limit,
+        },
+      );
+
+  Future<Response> getShort(int id) => get('/shorts/$id');
+
+  Future<Response> recordShortView(int id) => post('/shorts/$id/view');
+
+  Future<Response> likeShort(int id) => post('/shorts/$id/like');
+
+  Future<Response> bookmarkShort(int id) => post('/shorts/$id/bookmark');
+
+  Future<Response> shareShort(int id) => post('/shorts/$id/share');
+
+  Future<Response> getShortComments(int id) => get('/shorts/$id/comments');
+
+  Future<Response> createShortComment(int id, String text) =>
+      post('/shorts/$id/comment', data: {'text': text});
 
   Future<Response> toggleLike(
     int contentId,

@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid'
 import bcrypt from 'bcryptjs'
-import { findUserById, updateUser, getUploadsByUserId, getTotalMinutesWatched, getUserSubscription, addWatchEntry, getWatchHistory, checkAndAwardAchievements, addXp, addToWatchlist, getWatchlistByUserId, removeFromWatchlist, getWatchlistCount } from '../db.js'
+import { findUserById, updateUser, getUserSettings, updateUserSettings, getUploadsByUserId, getTotalMinutesWatched, getUserSubscription, addWatchEntry, getWatchHistory, getContinueWatching, checkAndAwardAchievements, addXp, addToWatchlist, getWatchlistByUserId, removeFromWatchlist, getWatchlistCount } from '../db.js'
 import { uploadFile } from '../lib/r2.js'
 
 export async function updateProfile(req, res) {
@@ -79,7 +79,7 @@ export async function getStats(req, res) {
 
 export async function addWatchEntryHandler(req, res) {
   try {
-    const { contentId, title, type, minutes, season, episode } = req.body
+    const { contentId, title, type, minutes, season, episode, positionSeconds, durationSeconds, poster } = req.body
     const entry = {
       id: uuidv4(),
       userId: req.userId,
@@ -89,6 +89,9 @@ export async function addWatchEntryHandler(req, res) {
       minutes: minutes || 0,
       season: season || null,
       episode: episode || null,
+      positionSeconds: positionSeconds || 0,
+      durationSeconds: durationSeconds || 0,
+      poster: poster || null,
     }
     await addWatchEntry(entry)
     addXp(req.userId, 5).catch(() => {})
@@ -103,6 +106,35 @@ export async function getWatchHistoryHandler(req, res) {
   try {
     const history = await getWatchHistory(req.userId)
     res.json({ success: true, history })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+export async function getContinueWatchingHandler(req, res) {
+  try {
+    const history = await getContinueWatching(req.userId)
+    res.json({ success: true, history })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+export async function getSettingsHandler(req, res) {
+  try {
+    const settings = await getUserSettings(req.userId)
+    res.json({ success: true, settings: settings || {} })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+export async function updateSettingsHandler(req, res) {
+  try {
+    const body = req.body || {}
+    const settings = typeof body.settings === 'object' && body.settings !== null ? body.settings : body
+    const saved = await updateUserSettings(req.userId, settings)
+    res.json({ success: true, settings: saved || {} })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

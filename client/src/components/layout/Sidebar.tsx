@@ -20,7 +20,8 @@ const navItems: NavItem[] = [
   { to: '/discover?sort=top_rated', icon: 'star', label: 'Top Rated' },
   { to: '/discover', icon: 'explore', label: 'Discover' },
   { to: '/watchlist', icon: 'bookmark', label: 'Watchlist', auth: true },
-  { to: '/downloads', icon: 'download', label: 'Downloads', auth: true },
+  { to: '/download-app', icon: 'smartphone', label: 'Download App' },
+  { to: '/downloads', icon: 'download', label: 'My Downloads', auth: true },
   { to: '/referrals', icon: 'share', label: 'Refer & Earn', auth: true },
   { to: '/archive', icon: 'archive', label: 'Archive Vault', auth: true },
   { to: '/events', icon: 'event', label: 'Live Events' },
@@ -88,7 +89,7 @@ export default function Sidebar() {
             >
               <Icon name="menu" />
             </button>
-            <img src="/leter-mark-logo.png" alt="" className="w-auto h-8" />
+            <img src="/leter-mark-logo.png" alt="" className="w-auto h-[70px]" />
           </div>
         )}
 
