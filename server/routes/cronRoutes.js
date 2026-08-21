@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { authMiddleware, adminMiddleware } from '../middleware/auth.js';
 import { tmdbSyncService } from '../services/tmdbSyncService.js';
 import { refreshBaselineVPM } from '../services/ppmService.js';
-import { scrapeBankCodes } from '../services/bankService.js';
 
 const router = Router();
 
@@ -38,16 +37,6 @@ router.post('/ppm/refresh-baseline', async (req, res) => {
   try {
     await refreshBaselineVPM();
     res.json({ success: true, message: 'Baseline VPM refreshed' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Manual trigger bank codes refresh
-router.post('/banks/refresh', async (req, res) => {
-  try {
-    await scrapeBankCodes();
-    res.json({ success: true, message: 'Bank codes refreshed' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

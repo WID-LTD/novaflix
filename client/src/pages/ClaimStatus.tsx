@@ -47,9 +47,8 @@ export default function ClaimStatus() {
             <h2 className="text-headline-sm font-bold text-on-surface">Checking claim status...</h2>
             <p className="text-body-md text-on-surface-variant mt-2">This usually takes a few moments</p>
           </div>
-        </Layout>
+</Layout>
     )
-  }
 
   if (!claim) {
     return (
@@ -63,8 +62,8 @@ export default function ClaimStatus() {
             </Button>
           </div>
         </Layout>
-    )
-  }
+      )
+    }
 
   const statusConfig = {
     pending: { icon: 'hourglass_empty', text: 'Verification in Progress', color: 'text-primary', bg: 'bg-primary-container/10' },

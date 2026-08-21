@@ -1,4 +1,4 @@
-import { watchService } from './services/watchService.js';
+import { runHourlyJobs, runWebhookRetryJob, runPayoutStatusJob } from './watchService.js';
 
 class CronScheduler {
   constructor() {
@@ -9,13 +9,13 @@ class CronScheduler {
     console.log('[cron] Starting scheduled jobs...');
 
     // Hourly: Baseline VPM refresh
-    this.schedule('hourly-vpm', 0, '*', '*', '*', '*', () => watchService.runHourlyJobs());
+    this.schedule('hourly-vpm', 0, '*', '*', '*', '*', runHourlyJobs);
 
     // Every 5 minutes: Webhook retry
-    this.schedule('webhook-retry', '*/5', '*', '*', '*', '*', () => watchService.runWebhookRetryJob());
+    this.schedule('webhook-retry', '*/5', '*', '*', '*', '*', runWebhookRetryJob);
 
     // Every 10 minutes: Payout status check
-    this.schedule('payout-status', '*/10', '*', '*', '*', '*', () => watchService.runPayoutStatusJob());
+    this.schedule('payout-status', '*/10', '*', '*', '*', '*', runPayoutStatusJob);
 
     console.log('[cron] All jobs scheduled');
   }

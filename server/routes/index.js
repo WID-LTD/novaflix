@@ -40,6 +40,8 @@ import chatRoutes from './chatRoutes.js'
 import eggRoutes from './eggRoutes.js'
 import statsRoutes from './statsRoutes.js'
 import postRoutes from './postRoutes.js'
+import sitemapRoutes from './sitemapRoutes.js'
+import cronRoutes from './cronRoutes.js'
 
 const router = Router()
 

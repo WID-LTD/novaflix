@@ -1358,6 +1358,107 @@ export async function togglePostLike(postId, userId) {
   return { liked: !exists, likeCount: parseInt(rows[0].count) || 0 }
 }
 
+// ============ POSTS (User-generated content) ============
+
+export async function createUserPost(post) {
+  const { rows } = await pool.query(
+    `INSERT INTO posts (id, user_id, content, media_urls, visibility, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [post.id, post.userId, post.content, JSON.stringify(post.mediaUrls || []), post.visibility, post.createdAt]
+  )
+  return rows[0]
+}
+
+export async function getUserPostsById(userId, limit, offset) {
+  const { rows } = await pool.query(
+    `SELECT p.*, u.name as author_name, u.avatar as author_avatar,
+           (SELECT COUNT(*) FROM post_likes WHERE post_id = p.id) as likes_count,
+           (SELECT COUNT(*) FROM post_comments WHERE post_id = p.id) as comments_count
+     FROM posts p
+     JOIN users u ON u.id = p.user_id
+     WHERE p.user_id = $1
+     ORDER BY p.created_at DESC
+     LIMIT $2 OFFSET $3`,
+    [userId, limit, offset]
+  )
+  return rows.map(r => ({ ...r, mediaUrls: JSON.parse(r.media_urls || '[]') }))
+}
+
+export async function getPostsFeed(userId, limit, offset) {
+  const { rows } = await pool.query(
+    `SELECT p.*, u.name as author_name, u.avatar as author_avatar,
+           (SELECT COUNT(*) FROM post_likes WHERE post_id = p.id) as likes_count,
+           (SELECT COUNT(*) FROM post_comments WHERE post_id = p.id) as comments_count,
+           ${userId ? 'EXISTS(SELECT 1 FROM post_likes WHERE post_id = p.id AND user_id = $1) as liked' : 'false as liked'}
+    FROM posts p
+    JOIN users u ON u.id = p.user_id
+    WHERE p.visibility = 'public' OR p.user_id = $1
+    ORDER BY p.created_at DESC
+    LIMIT $2 OFFSET $3`,
+    [userId || '00000000-0000-0000-0000-000000000000', limit, offset]
+  )
+  return rows.map(r => ({
+    ...r,
+    mediaUrls: JSON.parse(r.media_urls || '[]'),
+  }))
+}
+
+export async function addPostLike(userId, postId) {
+  await pool.query(
+    'INSERT INTO post_likes (user_id, post_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    [userId, postId]
+  )
+}
+
+export async function removePostLike(userId, postId) {
+  await pool.query(
+    'DELETE FROM post_likes WHERE user_id = $1 AND post_id = $2',
+    [userId, postId]
+  )
+}
+
+export async function getPostLikes(postId) {
+  const { rows } = await pool.query('SELECT COUNT(*) as count FROM post_likes WHERE post_id = $1', [postId])
+  return parseInt(rows[0].count) || 0
+}
+
+export async function hasLikedPost(userId, postId) {
+  const { rows } = await pool.query('SELECT 1 FROM post_likes WHERE user_id = $1 AND post_id = $2 LIMIT 1', [userId, postId])
+  return rows.length > 0
+}
+
+export async function getPostComments(postId, limit, offset, viewerId = null) {
+  const { rows } = await pool.query(
+    `SELECT c.*, u.name as user_name, u.avatar as user_avatar
+     FROM post_comments c
+     JOIN users u ON u.id = c.user_id
+     WHERE c.post_id = $1 AND c.parent_id IS NULL
+     ORDER BY c.created_at DESC
+     LIMIT $2 OFFSET $3`,
+    [postId, limit, offset]
+  )
+  return rows
+}
+
+export async function addPostComment(userId, postId, text, options = {}) {
+  const { v4: uuidv4 } = await import('uuid')
+  const id = uuidv4()
+  const { rows } = await pool.query(
+    `INSERT INTO post_comments (id, user_id, post_id, text, parent_id, media_url, media_type, duration_seconds, unlock_at, milestone_unlock)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+    [id, userId, postId, text, options.parentId || null, options.mediaUrl || null, options.mediaType || null, options.durationSeconds || null, options.unlockAt || null, options.milestoneUnlock || null]
+  )
+  return rows[0]
+}
+
+export async function deleteUserPost(postId, userId) {
+  const { rows } = await pool.query(
+    'DELETE FROM posts WHERE id = $1 AND user_id = $2 RETURNING *',
+    [postId, userId]
+  )
+  return rows[0] || null
+}
+
 // Actors
 export async function upsertActor(actor) {
   const { rows } = await pool.query(

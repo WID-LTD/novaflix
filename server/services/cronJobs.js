@@ -1,7 +1,6 @@
 import { cronScheduler } from './cronScheduler.js';
 import { tmdbSyncService } from './tmdbSyncService.js';
 import { refreshBaselineVPM } from './ppmService.js';
-import { scrapeBankCodes } from './bankService.js';
 
 export async function initializeCronJobs() {
   console.log('[Cron] Initializing scheduled jobs...');
@@ -10,12 +9,6 @@ export async function initializeCronJobs() {
   cronScheduler.schedule('hourly-vpm', '0', '*', '*', '*', '*', async () => {
     console.log('[Cron] Running hourly baseline VPM refresh...');
     await refreshBaselineVPM();
-  });
-
-  // Every 6 hours: Scrape bank codes from Paystack and Flutterwave
-  cronScheduler.schedule('bank-codes', '0', '*/6', '*', '*', '*', async () => {
-    console.log('[Cron] Running bank codes refresh...');
-    await scrapeBankCodes();
   });
 
   // Daily at 3 AM: TMDB incremental sync (new popular people)

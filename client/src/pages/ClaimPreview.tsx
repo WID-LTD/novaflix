@@ -155,7 +155,8 @@ export default function ClaimPreview() {
                   </p>
                 </div>
               </div>
-            </motion.div>
+            </div>
+          </motion.div>
 
             <Button onClick={handleClaim} size="lg" className="w-full" loading={claiming}>
               <Icon name="verified_user" size="sm" className="mr-2" />
@@ -166,4 +167,3 @@ export default function ClaimPreview() {
       </Layout>
     )
   }
-}

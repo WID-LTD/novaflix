@@ -3,6 +3,11 @@ import {
   getUnreadCount, 
   markNotificationRead, 
   markAllNotificationsRead,
+  createNotification,
+  addXp,
+  checkAndAwardAchievements,
+} from '../db.js'
+import { 
   createAndSendNotification,
   notifyLiveStreamStarted,
   notifyNewContent,
