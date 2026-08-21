@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { searchPersonList } from '../lib/api'
+import { searchPerson } from '../lib/api'
 import { useToast } from '../components/ui/Toast'
 import Layout from '../components/layout/Layout'
 import Icon from '../components/ui/Icon'
@@ -21,7 +21,7 @@ export default function ClaimStart() {
     if (!query.trim()) return
     setSearching(true)
     try {
-      const res = await searchPersonList(query)
+      const res = await searchPerson(query)
       setResults(res.data || [])
     } catch (err) {
       toast.error('Search failed')

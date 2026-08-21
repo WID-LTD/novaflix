@@ -563,6 +563,17 @@ export async function getContinueWatching(token: string): Promise<any> {
   }
 }
 
+export async function getWatchlist(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/user/watchlist`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
 export async function getEggs(token: string, contentId: string): Promise<any> {
   try {
     const res = await fetch(`${BASE}/eggs?contentId=${encodeURIComponent(contentId)}`, {

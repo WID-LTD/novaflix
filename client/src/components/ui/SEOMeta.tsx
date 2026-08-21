@@ -9,7 +9,7 @@ interface SEOMetaProps {
   description?: string;
   image?: string;
   url?: string;
-  type?: 'website' | 'article' | 'profile' | 'video.movie' | 'video.tv_show';
+  ogType?: 'website' | 'article' | 'profile' | 'video.movie' | 'video.tv_show';
   publishedTime?: string;
   modifiedTime?: string;
   author?: string;
@@ -24,7 +24,7 @@ export default function SEOMeta({
   description,
   image,
   url,
-  type: pageType = 'website',
+  ogType: pageType = 'website',
   publishedTime,
   modifiedTime,
   author,
@@ -69,7 +69,5 @@ export default function SEOMeta({
       {meta.section && <meta property="article:section" content={meta.section} />}
       {meta.tags?.map((tag, i) => <meta key={i} property="article:tag" content={tag} />)}
     </Helmet>
-  );
+  )
 }
-
-export default SEOMeta;

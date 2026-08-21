@@ -355,5 +355,6 @@ export default function MovieDetail() {
         )}
       </section>
     </div>
-  </>
+    </>
+  )
 }

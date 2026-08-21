@@ -141,9 +141,7 @@ export default function EventDetail() {
               <div className="aspect-video rounded-2xl overflow-hidden bg-black mb-6">
                 <VideoPlayer
                   streamUrl={event.stream_url}
-                  autoPlay={true}
-                  muted={false}
-                  showControls={true}
+                  title={event.title}
                 />
               </div>
             )}

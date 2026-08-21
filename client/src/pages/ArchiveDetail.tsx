@@ -82,9 +82,7 @@ export default function ArchiveDetail() {
                 ) : item.content_type === 'video' ? (
                   <VideoPlayer
                     streamUrl={item.media_url}
-                    autoPlay={false}
-                    muted={false}
-                    showControls={true}
+                    title={item.title}
                   />
                 ) : item.content_type === 'audio' ? (
                   <audio src={item.media_url} controls className="w-full mt-4" />
