@@ -68,7 +68,7 @@ export const useStore = create<Store>()(
       watchlist: [],
       continueWatching: [],
       recentlySearched: [],
-      sidebarCollapsed: false,
+      sidebarCollapsed: true,
       mobileDrawerOpen: false,
       currentProfile: null,
       profiles: [],

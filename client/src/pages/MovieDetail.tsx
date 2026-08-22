@@ -86,42 +86,12 @@ export default function MovieDetail() {
     navigate(url)
   }
 
-  const [downloading, setDownloading] = useState(false)
-  const handleDownload = async () => {
+  const handleDownload = () => {
     if (isMobileBrowser()) {
       routeToStore()
       return
     }
-    if (!id || !details) return
-    setDownloading(true)
-    try {
-      const token = localStorage.getItem('novaflix-token') || ''
-      // Fetch stream source for download
-      const src = await getStreamSource(id!, type, seasonParam || undefined, episodeParam || undefined)
-      const streamUrl = src?.streamUrl || src?.directUrl
-      if (!streamUrl) {
-        // fallback to direct navigation to watch with download intent
-        navigate(`/watch?id=${id}&type=${type}`)
-        return
-      }
-      const dlUrl = `${window.location.origin}/api/download?url=${encodeURIComponent(streamUrl)}&title=${encodeURIComponent(details.title)}&save=true`
-      const res = await fetch(dlUrl, { headers: { Authorization: `Bearer ${token}` } })
-      const data = await res.json().catch(() => ({}))
-      if (data.success) {
-        navigate('/downloads')
-      } else {
-        const a = document.createElement('a')
-        a.href = streamUrl
-        a.download = `${details.title}.mp4`
-        a.target = '_blank'
-        a.click()
-      }
-    } catch {
-      const fallbackUrl = `/watch?id=${id}&type=${type}`
-      navigate(fallbackUrl)
-    } finally {
-      setDownloading(false)
-    }
+    navigate('/download-app')
   }
 
   const handleAddToWatchlist = () => {
@@ -237,11 +207,10 @@ export default function MovieDetail() {
             </button>
             <button
               onClick={handleDownload}
-              disabled={downloading}
-              className="flex items-center justify-center gap-2 px-8 py-4 rounded-lg font-bold text-lg border transition-all shadow-md bg-surface-variant/40 backdrop-blur-md text-on-surface border-white/10 hover:bg-surface-variant/60 active:scale-95 disabled:opacity-50"
-              title={downloading ? 'Downloading...' : 'Download for offline viewing'}
+              className="flex items-center justify-center gap-2 px-8 py-4 rounded-lg font-bold text-lg border transition-all shadow-md bg-surface-variant/40 backdrop-blur-md text-on-surface border-white/10 hover:bg-surface-variant/60 active:scale-95"
+              title="Get the Novaflix app to download"
             >
-              <Icon name="download" /> {downloading ? 'Downloading...' : 'Download'}
+              <Icon name="download" /> Download
             </button>
             <button
               onClick={handleAddToWatchlist}

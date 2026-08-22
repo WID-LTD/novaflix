@@ -197,41 +197,12 @@ export default function Watch() {
   }
 
   const handleDownload = async () => {
-    // On mobile browsers, direct to the app store; on desktop/web, download directly.
+    // Web: all users (free or paid) are routed to download-app; downloads only in mobile app
     if (isMobileBrowser()) {
       routeToStore()
       return
     }
-    if (!currentStreamUrl || !id || !details) return
-    setDownloading(true)
-    setDownloadDone(false)
-    try {
-      const token = localStorage.getItem('novaflix-token') || ''
-      const dlUrl = `${window.location.origin}/api/download?url=${encodeURIComponent(currentStreamUrl)}&title=${encodeURIComponent(details.title)}&save=true`
-      const res = await fetch(dlUrl, { headers: { Authorization: `Bearer ${token}` } })
-      const data = await res.json()
-      if (data.success) {
-        setDownloadDone(true)
-        setTimeout(() => setDownloadDone(false), 3000)
-      } else if (data.error) {
-        // fallback: trigger browser download via anchor
-        const a = document.createElement('a')
-        a.href = currentStreamUrl
-        a.download = `${details.title}.mp4`
-        a.target = '_blank'
-        a.click()
-      }
-    } catch {
-      // fallback direct link
-      if (currentStreamUrl && details) {
-        const a = document.createElement('a')
-        a.href = currentStreamUrl
-        a.download = `${details.title}.mp4`
-        a.target = '_blank'
-        a.click()
-      }
-    }
-    setDownloading(false)
+    navigate('/download-app')
   }
 
   const handleEpisodeSelect = (ep: number) => {

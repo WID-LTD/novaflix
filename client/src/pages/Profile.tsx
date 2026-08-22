@@ -78,10 +78,11 @@ export default function Profile() {
     setListLoading(false)
   }
 
-  const watchlistItems = serverWatchlist.length > 0 ? serverWatchlist : watchlist
+  // Prefer server truth — no fallback to local storage
+  const watchlistItems = serverWatchlist
   const movieCount = watchlistItems.filter((w: any) => w.type === 'movie').length
   const tvCount = watchlistItems.filter((w: any) => w.type === 'tv').length
-  const cwItems = serverContinueWatching.length > 0 ? serverContinueWatching.map((h) => ({
+  const cwItems = serverContinueWatching.map((h) => ({
     id: Number(h.content_id),
     title: h.title || '',
     poster: h.poster,
@@ -90,7 +91,7 @@ export default function Profile() {
     episode: h.episode != null ? Number(h.episode) : undefined,
     progress: Number(h.position_seconds || 0),
     duration: Number(h.duration_seconds || 0),
-  })) : continueWatching
+  }))
   const totalMinutes = cwItems.reduce((acc, c) => acc + Math.round((c.progress || 0) / 60), 0)
   const avgProgress = cwItems.length > 0
     ? Math.round(cwItems.reduce((acc, c) => acc + ((c.progress || 0) / (c.duration || 1)) * 100, 0) / cwItems.length)
