@@ -593,18 +593,19 @@ class ApiService {
 
   // ---------- Trivia & Rewards ----------
   Future<Response> getDailyTrivia() => get('/trivia/today');
-  Future<Response> submitDailyTrivia(Map<String, dynamic> answers) =>
+  Future<Response> submitDailyTrivia(List<Map<String, dynamic>> answers) =>
       post('/trivia/submit', data: {'answers': answers});
   Future<Response> getTriviaStreak() => get('/trivia/streak');
   Future<Response> getTriviaLeaderboard() => get('/trivia/leaderboard');
   Future<Response> getGuessMovie() => get('/trivia/guess');
-  Future<Response> submitGuess(String answer) =>
-      post('/trivia/guess/submit', data: {'answer': answer});
+  Future<Response> submitGuess(String questionId, int answerIndex) =>
+      post('/trivia/guess/submit', data: {'questionId': questionId, 'answerIndex': answerIndex});
   Future<Response> getCoinsBalance() => get('/trivia/coins');
   Future<Response> getCosmetics() => get('/trivia/cosmetics');
-  Future<Response> purchaseCosmetic(int id) =>
+  Future<Response> purchaseCosmetic(String id) =>
       post('/trivia/cosmetics/$id/purchase');
-  Future<Response> equipCosmetic(int id) => post('/trivia/cosmetics/$id/equip');
+  Future<Response> equipCosmetic(String id, bool equipped) =>
+      post('/trivia/cosmetics/$id/equip', data: {'equipped': equipped});
 
   // ---------- Notifications ----------
   Future<Response> getNotifications({int? limit}) =>
@@ -649,14 +650,14 @@ class ApiService {
   Future<Response> createForumTopic(Map<String, dynamic> data) =>
       post('/forum/topics', data: data);
   Future<Response> voteForumTopic(int id, int value) =>
-      post('/forum/topics/$id/vote', data: {'value': value});
+      post('/forum/topics/$id/vote', data: {'vote': value});
   Future<Response> addForumReply(int id, String content, {int? parentId}) =>
       post(
         '/forum/topics/$id/replies',
         data: {'content': content, if (parentId != null) 'parentId': parentId},
       );
   Future<Response> voteForumReply(int replyId, int value) =>
-      post('/forum/replies/$replyId/vote', data: {'value': value});
+      post('/forum/replies/$replyId/vote', data: {'vote': value});
 
   // ---------- Public profiles / fan ----------
   Future<Response> getFollowStats(String userId) =>

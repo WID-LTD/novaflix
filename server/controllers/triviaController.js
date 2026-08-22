@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid'
+import pool from '../config/database.js'
 import * as db from '../db.js'
 
 function shuffle(arr) {
@@ -152,6 +153,14 @@ export async function submitDaily(req, res) {
     for (const a of answers) {
       const q = await db.getTriviaQuestion(a.id)
       if (!q) continue
+      // Prevent farming: skip if already answered today
+      try {
+        const { rows: dup } = await pool.query(
+          `SELECT 1 FROM trivia_attempts WHERE user_id = $1 AND question_id = $2 AND answered_at::date = CURRENT_DATE LIMIT 1`,
+          [req.userId, q.id]
+        )
+        if (dup.length > 0) continue
+      } catch {}
       const correct = q.answer_index === a.answerIndex
       const points = correct ? 10 : 0
       coins += points

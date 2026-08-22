@@ -11,11 +11,21 @@ function generateCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase()
 }
 
+async function generateUniqueCode() {
+  for (let i = 0; i < 10; i++) {
+    const code = generateCode()
+    const { rows } = await pool.query('SELECT 1 FROM affiliate_referrals WHERE code = $1', [code])
+    if (rows.length === 0) return code
+  }
+  // fallback to uuid slice
+  return uuidv4().slice(0, 8).toUpperCase()
+}
+
 export async function generateReferral(req, res) {
   try {
     const userId = req.userId
 
-    // Check if user already has a code
+    // Return existing pending code if any (single active code per user)
     const { rows: existing } = await pool.query(
       'SELECT * FROM affiliate_referrals WHERE referrer_id = $1 AND status = $2',
       [userId, 'pending']
@@ -25,12 +35,26 @@ export async function generateReferral(req, res) {
       return res.json({ success: true, code: existing[0].code, url: referralUrl(existing[0].code) })
     }
 
-    const code = generateCode()
+    const code = await generateUniqueCode()
     const id = uuidv4()
-    await pool.query(
-      `INSERT INTO affiliate_referrals (id, referrer_id, code, status) VALUES ($1, $2, $3, 'pending')`,
-      [id, userId, code]
-    )
+    try {
+      await pool.query(
+        `INSERT INTO affiliate_referrals (id, referrer_id, code, status) VALUES ($1, $2, $3, 'pending')`,
+        [id, userId, code]
+      )
+    } catch (e) {
+      if (e.code === '23505') {
+        // unique violation on code, retry once
+        const retryCode = await generateUniqueCode()
+        const retryId = uuidv4()
+        await pool.query(
+          `INSERT INTO affiliate_referrals (id, referrer_id, code, status) VALUES ($1, $2, $3, 'pending')`,
+          [retryId, userId, retryCode]
+        )
+        return res.json({ success: true, code: retryCode, url: referralUrl(retryCode) })
+      }
+      throw e
+    }
 
     res.json({
       success: true,
@@ -82,13 +106,33 @@ export async function redeemReferral(req, res) {
       return res.json({ success: false, error: 'Invalid or expired referral code' })
     }
 
+    // Prevent self-referral
+    if (rows[0].referrer_id === req.userId) {
+      return res.json({ success: false, error: 'You cannot use your own referral code' })
+    }
+
+    // Prevent already-referred users from redeeming again
+    const { rows: already } = await pool.query(
+      'SELECT 1 FROM affiliate_referrals WHERE referred_id = $1 LIMIT 1',
+      [req.userId]
+    )
+    if (already.length > 0) {
+      return res.json({ success: false, error: 'You have already used a referral code' })
+    }
+
     // Mark as converted
     await pool.query(
       `UPDATE affiliate_referrals SET status = 'converted', referred_id = $1, converted_at = NOW() WHERE id = $2`,
       [req.userId, rows[0].id]
     )
 
-    res.json({ success: true, message: 'Referral applied!' })
+    // Notify referrer in realtime (best-effort)
+    try {
+      const { notifyUser } = await import('../services/realtime.js')
+      notifyUser(rows[0].referrer_id, { type: 'referral_converted', referredId: req.userId, code: rows[0].code })
+    } catch {}
+
+    res.json({ success: true, message: 'Referral applied! You will earn the referrer 10% commission on your first paid plan.' })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

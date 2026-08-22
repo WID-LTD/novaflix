@@ -5,6 +5,7 @@ import { getDetails } from '../lib/api'
 import { getCredits } from '../lib/api'
 import type { CastMember, CrewMember } from '../lib/api'
 import { getSimilarRecommendations, checkAchievements } from '../lib/auth'
+import { getStreamSource } from '../lib/api'
 import { useStore } from '../store/useStore'
 import { useAuth } from '../lib/AuthContext'
 import Button from '../components/ui/Button'
@@ -85,12 +86,42 @@ export default function MovieDetail() {
     navigate(url)
   }
 
-  const handleDownload = () => {
+  const [downloading, setDownloading] = useState(false)
+  const handleDownload = async () => {
     if (isMobileBrowser()) {
       routeToStore()
       return
     }
-    navigate('/download-app')
+    if (!id || !details) return
+    setDownloading(true)
+    try {
+      const token = localStorage.getItem('novaflix-token') || ''
+      // Fetch stream source for download
+      const src = await getStreamSource(id!, type, seasonParam || undefined, episodeParam || undefined)
+      const streamUrl = src?.streamUrl || src?.directUrl
+      if (!streamUrl) {
+        // fallback to direct navigation to watch with download intent
+        navigate(`/watch?id=${id}&type=${type}`)
+        return
+      }
+      const dlUrl = `${window.location.origin}/api/download?url=${encodeURIComponent(streamUrl)}&title=${encodeURIComponent(details.title)}&save=true`
+      const res = await fetch(dlUrl, { headers: { Authorization: `Bearer ${token}` } })
+      const data = await res.json().catch(() => ({}))
+      if (data.success) {
+        navigate('/downloads')
+      } else {
+        const a = document.createElement('a')
+        a.href = streamUrl
+        a.download = `${details.title}.mp4`
+        a.target = '_blank'
+        a.click()
+      }
+    } catch {
+      const fallbackUrl = `/watch?id=${id}&type=${type}`
+      navigate(fallbackUrl)
+    } finally {
+      setDownloading(false)
+    }
   }
 
   const handleAddToWatchlist = () => {
@@ -206,10 +237,11 @@ export default function MovieDetail() {
             </button>
             <button
               onClick={handleDownload}
-              className="flex items-center justify-center gap-2 px-8 py-4 rounded-lg font-bold text-lg border transition-all shadow-md bg-surface-variant/40 backdrop-blur-md text-on-surface border-white/10 hover:bg-surface-variant/60 active:scale-95"
-              title="Get the Novaflix app to download"
+              disabled={downloading}
+              className="flex items-center justify-center gap-2 px-8 py-4 rounded-lg font-bold text-lg border transition-all shadow-md bg-surface-variant/40 backdrop-blur-md text-on-surface border-white/10 hover:bg-surface-variant/60 active:scale-95 disabled:opacity-50"
+              title={downloading ? 'Downloading...' : 'Download for offline viewing'}
             >
-              <Icon name="download" /> Download
+              <Icon name="download" /> {downloading ? 'Downloading...' : 'Download'}
             </button>
             <button
               onClick={handleAddToWatchlist}

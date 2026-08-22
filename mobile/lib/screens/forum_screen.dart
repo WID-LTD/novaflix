@@ -1,10 +1,14 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../services/api_service.dart';
+import '../services/ws_service.dart';
 import '../widgets/ui/index.dart';
 
 final _forumCategoriesProvider = FutureProvider<List<String>>((ref) async {
@@ -444,7 +448,7 @@ class _ForumScreenState extends ConsumerState<ForumScreen> {
                                   final api = ref.read(apiServiceProvider);
                                   final res = await api.createForumTopic({
                                     'title': titleCtl.text.trim(),
-                                    'body': bodyCtl.text.trim(),
+                                    'content': bodyCtl.text.trim(),
                                     'category': selectedCategory ??
                                         (categories.isEmpty
                                             ? 'General'
@@ -575,10 +579,10 @@ class _TopicCard extends ConsumerWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (topic['body'] != null) ...[
+                    if ((topic['content'] ?? topic['body']) != null) ...[
                       const SizedBox(height: 4),
                       Text(
-                        topic['body'].toString(),
+                        (topic['content'] ?? topic['body']).toString(),
                         style: AppTypography.bodySm.copyWith(
                           color: AppColors.onSurfaceVariant.withValues(alpha: 0.7),
                         ),
@@ -724,6 +728,37 @@ class _ThreadView extends ConsumerStatefulWidget {
 
 class _ThreadViewState extends ConsumerState<_ThreadView> {
   int? _replyingTo;
+  WebSocketChannel? _channel;
+  StreamSubscription? _wsSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _connectWs();
+  }
+
+  Future<void> _connectWs() async {
+    try {
+      final ch = await WsService.connect('/ws');
+      _channel = ch;
+      ch.sink.add(jsonEncode({'type': 'topic-join', 'payload': {'topicId': widget.topicId}}));
+      _wsSub = ch.stream.listen((msg) {
+        try {
+          final data = jsonDecode(msg is String ? msg : msg.toString());
+          if (data is Map && data['type'] == 'topic-reply' && '${data['topicId']}' == '${widget.topicId}') {
+            if (mounted) ref.invalidate(_forumTopicProvider(widget.topicId));
+          }
+        } catch {}
+      });
+    } catch {}
+  }
+
+  @override
+  void dispose() {
+    _wsSub?.cancel();
+    try { _channel?.sink.close(); } catch {}
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -904,7 +939,7 @@ class _ThreadTopicCard extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            topic['body']?.toString() ?? '',
+            (topic['content'] ?? topic['body'])?.toString() ?? '',
             style: AppTypography.bodyMd.copyWith(color: AppColors.onSurface, height: 1.5),
           ),
           const SizedBox(height: 16),

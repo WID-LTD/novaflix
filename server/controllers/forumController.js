@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid'
 import * as db from '../db.js'
 import { broadcastTopicReply } from '../lib/realtime.js'
-import { notifyUser } from '../services/realtime.js'
+import { broadcastFeed, notifyUser } from '../services/realtime.js'
 
 export async function listTopics(req, res) {
   try {
@@ -29,6 +29,8 @@ export async function createTopic(req, res) {
       content,
       authorId: req.userId,
     })
+    // Broadcast new topic to all connected clients for realtime feed
+    try { broadcastFeed({ type: 'forum-topic-created', topic }) } catch {}
     res.json({ success: true, topic })
   } catch (err) {
     res.status(500).json({ error: err.message })

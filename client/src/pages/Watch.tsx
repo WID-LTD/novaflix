@@ -197,12 +197,11 @@ export default function Watch() {
   }
 
   const handleDownload = async () => {
-    // On mobile browsers, direct to the app store; on desktop, point to the app page.
+    // On mobile browsers, direct to the app store; on desktop/web, download directly.
     if (isMobileBrowser()) {
       routeToStore()
       return
     }
-    navigate('/download-app')
     if (!currentStreamUrl || !id || !details) return
     setDownloading(true)
     setDownloadDone(false)
@@ -214,8 +213,24 @@ export default function Watch() {
       if (data.success) {
         setDownloadDone(true)
         setTimeout(() => setDownloadDone(false), 3000)
+      } else if (data.error) {
+        // fallback: trigger browser download via anchor
+        const a = document.createElement('a')
+        a.href = currentStreamUrl
+        a.download = `${details.title}.mp4`
+        a.target = '_blank'
+        a.click()
       }
-    } catch {}
+    } catch {
+      // fallback direct link
+      if (currentStreamUrl && details) {
+        const a = document.createElement('a')
+        a.href = currentStreamUrl
+        a.download = `${details.title}.mp4`
+        a.target = '_blank'
+        a.click()
+      }
+    }
     setDownloading(false)
   }
 

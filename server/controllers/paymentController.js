@@ -1,7 +1,31 @@
 import { v4 as uuidv4 } from 'uuid'
+import pool from '../config/database.js'
 import { addSubscription, getUserSubscription, updateUser, createTransaction, getTransactionByReference, updateTransactionByReference, getPlanBySlug, listPlans } from '../db.js'
 import { initializePayment, verifyPayment, isConfigured } from '../lib/gateway.js'
 import { signToken } from './authController.js'
+
+async function creditReferralCommission(referredUserId, planSlug) {
+  try {
+    const { rows: refRows } = await pool.query(
+      `SELECT * FROM affiliate_referrals WHERE referred_id = $1 AND status = 'converted' LIMIT 1`,
+      [referredUserId]
+    )
+    if (!refRows[0]) return
+    const planRow = await getPlanBySlug(planSlug || refRows[0].plan || 'basic')
+    const price = Number(planRow?.price || 0)
+    if (!price) return
+    const commission = Math.round(price * 0.10 * 100) / 100
+    await pool.query(`UPDATE affiliate_referrals SET commission = $1, status = 'paid' WHERE id = $2`, [commission, refRows[0].id])
+    // Credit referrer coins (or wallet) — using coins for simplicity
+    await pool.query(`UPDATE users SET coins = COALESCE(coins,0) + $1 WHERE id = $2`, [Math.round(commission), refRows[0].referrer_id])
+    try {
+      const { notifyUser } = await import('../services/realtime.js')
+      notifyUser(refRows[0].referrer_id, { type: 'referral_paid', commission, referredId: referredUserId, plan: planSlug })
+    } catch {}
+  } catch (e) {
+    console.error('[referral] commission error', e.message)
+  }
+}
 
 export async function listPricing(req, res) {
   try {
@@ -76,6 +100,7 @@ export async function verify(req, res) {
       await addSubscription(sub)
       await updateUser(req.userId, { plan: plan || 'basic' })
       await updateTransactionByReference(reference, { status: 'success' })
+      await creditReferralCommission(req.userId, plan || 'basic')
 
       const freshPlan = plan || 'basic'
       const token = signToken({ id: req.userId, email: req.user.email, role: req.user.role || 'user', plan: freshPlan })
@@ -109,6 +134,7 @@ export async function webhook(req, res) {
         await addSubscription(sub)
         await updateUser(tx.user_id, { plan: tx.plan || 'basic' })
         await updateTransactionByReference(reference, { status: 'success', amount: amount / 100 })
+        await creditReferralCommission(tx.user_id, tx.plan || 'basic')
       }
     }
 
@@ -127,6 +153,7 @@ export async function webhook(req, res) {
         await addSubscription(sub)
         await updateUser(tx.user_id, { plan: tx.plan || 'basic' })
         await updateTransactionByReference(tx_ref, { status: 'success', amount })
+        await creditReferralCommission(tx.user_id, tx.plan || 'basic')
       }
     }
 

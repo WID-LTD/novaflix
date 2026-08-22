@@ -67,7 +67,7 @@ export default function Sidebar() {
     <motion.nav
       animate={{ width: collapsed ? 64 : 240 }}
       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-      className="hidden lg:flex fixed left-0 top-0 h-screen bg-surface-container-lowest border-r border-white/5 z-30 flex-col py-4 overflow-hidden pt-16"
+      className="hidden lg:flex fixed left-0 top-0 h-screen bg-surface-container-lowest border-r border-white/5 z-30 flex-col py-4 overflow-visible pt-[96px]"
     >
         {collapsed ? (
           <div className="flex flex-col items-center gap-2 px-4 mb-6">
@@ -81,7 +81,7 @@ export default function Sidebar() {
             <span className="text-headline-md font-extrabold text-primary-container tracking-tight">N</span>
           </div>
         ) : (
-          <div className="flex items-center gap-3 px-4 mb-6 h-10">
+          <div className="flex items-center gap-3 px-4 mb-6 h-[64px] shrink-0">
             <button
               onClick={toggleSidebar}
               className="shrink-0 p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-colors"
@@ -89,7 +89,7 @@ export default function Sidebar() {
             >
               <Icon name="menu" />
             </button>
-            <img src="/leter-mark-logo.png" alt="" className="w-auto h-[70px]" />
+            <img src="/leter-mark-logo.png" alt="" className="w-auto h-[70px] lg:h-[80px] xl:h-[88px] object-contain max-h-full" />
           </div>
         )}
 

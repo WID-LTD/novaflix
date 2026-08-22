@@ -399,8 +399,9 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
       if (!mounted) return;
       if (body is Map && body['success'] == true) {
         final correct = _int(body['score']) == 1;
-        final isLast = idx >= total - 1;
+        final isLast = _qIndex >= total - 1;
         ref.invalidate(_coinsProvider);
+        ref.invalidate(_leaderboardProvider);
         setState(() {
           if (correct) _correctCount++;
           _coinsEarned += _int(body['coinsEarned']);
@@ -410,7 +411,7 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
           if (isLast) {
             _dailyDone = true;
           } else {
-            _qIndex = idx + 1;
+            _qIndex = _qIndex + 1;
           }
         });
       } else {
@@ -671,10 +672,7 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
       _guessSelected = idx;
     });
     try {
-      final res = await api.dio.post(
-        '/trivia/guess/submit',
-        data: {'questionId': q['id'], 'answerIndex': idx},
-      );
+      final res = await api.submitGuess(q['id'].toString(), idx);
       final body = res.data;
       if (!mounted) return;
       if (body is Map && body['success'] == true) {
@@ -913,7 +911,8 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
   Future<void> _equipCosmetic(Map<String, dynamic> item) async {
     final api = ref.read(apiServiceProvider);
     try {
-      await api.equipCosmetic(_itemId(item));
+      final bool currentlyEquipped = item['equipped'] == true;
+      await api.equipCosmetic(_itemId(item), !currentlyEquipped);
       if (mounted) {
         ref.invalidate(_cosmeticsProvider);
         ref.invalidate(_coinsProvider);
@@ -923,9 +922,9 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
     }
   }
 
-  int _itemId(Map<String, dynamic> item) {
+  String _itemId(Map<String, dynamic> item) {
     final id = item['id'];
-    return id is num ? id.toInt() : int.tryParse(id.toString()) ?? 0;
+    return id?.toString() ?? '';
   }
 
   // ---------- Tab 4: Leaderboard ----------
