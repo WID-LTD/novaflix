@@ -20,7 +20,7 @@ export default function DownloadApp() {
       {/* Nav */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-surface/80 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <Link to="/landing" className="flex items-center gap-3">
+          <Link to="/" className="flex items-center gap-3">
             <img src="/leter-mark-logo.png" alt="" className="h-7 w-auto" />
           </Link>
           <div className="flex items-center gap-4">
@@ -118,7 +118,7 @@ export default function DownloadApp() {
           <p className="text-gray-400 mb-8">Download the app today and start streaming in minutes.</p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link to="/login" className="bg-primary-container text-on-primary-container px-8 py-3.5 rounded-xl font-semibold hover:brightness-110 transition-colors">Sign Up Free</Link>
-            <Link to="/landing" className="bg-surface-variant/20 text-on-surface px-8 py-3.5 rounded-xl font-semibold hover:bg-surface-variant/40 transition-colors border border-outline/20">Back to Homepage</Link>
+            <Link to="/" className="bg-surface-variant/20 text-on-surface px-8 py-3.5 rounded-xl font-semibold hover:bg-surface-variant/40 transition-colors border border-outline/20">Back to Homepage</Link>
           </div>
         </div>
       </section>

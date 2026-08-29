@@ -41,7 +41,15 @@ export default function Login() {
     setLoading(false)
 
     if (result.success && !result.userId) {
-      navigate(redirect)
+      // Role-based routing after successful login
+      const role = (result as any).user?.role
+      if (role === 'creator') {
+        navigate(redirect)
+      } else if (role === 'admin') {
+        navigate('/admin')
+      } else {
+        navigate(redirect)
+      }
     } else if ('needsLoginVerification' in result && result.needsLoginVerification) {
       const reason = (result as { reason?: 'new-device' | 'inactive' | 'unknown-location' }).reason
       setVerifyReason(reason || 'new-device')

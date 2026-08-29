@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid'
 import bcrypt from 'bcryptjs'
 import { findUserById, updateUser, getUserSettings, updateUserSettings, getUploadsByUserId, getTotalMinutesWatched, getUserSubscription, addWatchEntry, getWatchHistory, getContinueWatching, checkAndAwardAchievements, addXp, addToWatchlist, getWatchlistByUserId, removeFromWatchlist, getWatchlistCount } from '../db.js'
+import { notifyUser } from '../services/realtime.js'
 import { uploadFile } from '../lib/r2.js'
 
 export async function updateProfile(req, res) {
@@ -134,6 +135,8 @@ export async function updateSettingsHandler(req, res) {
     const body = req.body || {}
     const settings = typeof body.settings === 'object' && body.settings !== null ? body.settings : body
     const saved = await updateUserSettings(req.userId, settings)
+    // Broadcast to user's other devices
+    try { notifyUser(req.userId, { type: 'settings:updated', settings: saved }) } catch {}
     res.json({ success: true, settings: saved || {} })
   } catch (err) {
     res.status(500).json({ error: err.message })

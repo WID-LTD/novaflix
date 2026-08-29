@@ -61,7 +61,7 @@ function signToken(user) {
 
 export async function register(req, res) {
   try {
-    const { email, password, name, displayName } = req.body
+    const { email, password, name, displayName, bio, category, portfolioUrl, portfolio_url } = req.body
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' })
 
     if (!isEmailConfigured()) {
@@ -72,18 +72,34 @@ export async function register(req, res) {
     if (existing) return res.status(409).json({ error: 'Email already registered' })
 
     const hashed = await bcrypt.hash(password, 10)
+    const userName = name || displayName || email.split('@')[0]
     const user = {
       id: uuidv4(),
       email,
-      name: name || email.split('@')[0],
+      name: userName,
       password: hashed,
       role: 'creator',
       plan: 'free',
       avatar: null,
-      bio: '',
+      bio: bio || '',
       email_verified: false,
     }
     await createUser(user)
+
+    // Save creator profile with category and portfolio URL
+    const displayCategory = category || ''
+    const displayPortfolio = portfolioUrl || portfolio_url || ''
+    if (displayCategory || displayPortfolio || bio) {
+      await pool.query(`
+        INSERT INTO creator_profiles (user_id, display_name, bio, category, portfolio_url, approval_status, approved_at)
+        VALUES ($1, $2, $3, $4, $5, 'approved', NOW())
+        ON CONFLICT (user_id) DO UPDATE
+          SET display_name = $2, bio = $3, category = $4, portfolio_url = $5, approval_status = 'approved', approved_at = NOW()
+      `, [user.id, userName, bio || '', displayCategory, displayPortfolio])
+    }
+
+    // Mark user as creator_approved
+    await pool.query('UPDATE users SET creator_approved = true WHERE id = $1', [user.id])
 
     const code = generateCode()
     await saveVerificationCode(user.id, code)
@@ -168,6 +184,10 @@ export async function loginVerify(req, res) {
     if (!user) return res.status(404).json({ error: 'User not found' })
     if (user.role !== 'creator' && user.role !== 'admin') {
       return res.status(403).json({ error: 'This login is for creators only' })
+    }
+
+    if (!user.email_verified) {
+      await updateUser(userId, { email_verified: true })
     }
 
     await recordLogin(req, user, deviceId, lat, lng, accuracy)

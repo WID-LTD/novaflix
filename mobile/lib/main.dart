@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
@@ -15,13 +17,13 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
-  await Firebase.initializeApp();
-  
-  // Initialize notifications
-  await NotificationService.initialize();
-  
-  // Set background handler
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  final isLinuxDesktop = Platform.isLinux && !kIsWeb;
+  if (!isLinuxDesktop) {
+    await Firebase.initializeApp();
+    await NotificationService.initialize();
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  }
   
   runApp(const ProviderScope(child: NovaflixApp()));
 }

@@ -1,7 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/wallet_provider.dart';
-import '../services/wallet_service.dart';
 import '../widgets/ui/index.dart';
 import '../widgets/layout/index.dart';
 
@@ -87,7 +87,7 @@ class _CreatorOnboardingScreenState extends ConsumerState<CreatorOnboardingScree
       if (res.success) {
         setState(() {
           _verified = true;
-          _verifiedName = res.verifiedName;
+          _verifiedName = res.verifiedName ?? '';
           _step = 2;
         });
         ScaffoldMessenger.of(context).showSnackBar(
@@ -228,8 +228,8 @@ class _CreatorOnboardingScreenState extends ConsumerState<CreatorOnboardingScree
                   : const Icon(Icons.arrow_forward_ios),
               onTap: completed ? null : () => setState(() => _handleGatewaySelect(g['id'] as String)),
             ),
-          ),
-        ).toList(),
+          );
+        }).toList(),
       ],
     );
   }
@@ -353,7 +353,8 @@ class _CreatorOnboardingScreenState extends ConsumerState<CreatorOnboardingScree
             ),
           ],
         ],
-      );
+      ],
+    );
   }
 
   Widget _buildComplete() {
@@ -387,6 +388,7 @@ class _CreatorOnboardingScreenState extends ConsumerState<CreatorOnboardingScree
               ),
             ],
           ),
+        ),
           const SizedBox(height: 24),
           FilledButton.icon(
             icon: const Icon(Icons.account_balance_wallet),

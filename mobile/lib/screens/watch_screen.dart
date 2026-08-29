@@ -229,7 +229,10 @@ class _WatchScreenState extends ConsumerState<WatchScreen> {
       )),
     );
     final authState = ref.watch(authProvider);
-    final isFreeTier = !(authState.user?.isPremium ?? false);
+    // Tier matrix: ads on free/student (adFree=false); skip caps on free/student/basic
+    final features = authState.user?.planFeatures ?? const {};
+    final isFreeTier = !(features['adFree'] == true);
+    final skipsCapped = !(features['unlimitedSkips'] == true);
 
     final episodeInfo = widget.episode != null
         ? 'S${widget.season} E${widget.episode}'
@@ -298,6 +301,7 @@ class _WatchScreenState extends ConsumerState<WatchScreen> {
                                   ? '${detail.valueOrNull?.title} - $episodeInfo'
                                   : detail.valueOrNull?.title,
                               isFreeTier: isFreeTier,
+                              skipsCapped: skipsCapped,
                               onProgress: _onPlaybackProgress,
                               onDuration: (d) {
                                 if (mounted) setState(() => _duration = d);

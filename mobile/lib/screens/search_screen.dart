@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../core/responsive.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../services/api_service.dart';
@@ -141,13 +142,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final actionMovies = ref.watch(_genreProvider(28));
     final comedyMovies = ref.watch(_genreProvider(35));
     final popularTv = ref.watch(_popularTvProvider);
-    final isDesktop = MediaQuery.of(context).size.width >= 1024;
-    final hPadding = isDesktop ? 64.0 : 16.0;
+    final width = MediaQuery.of(context).size.width;
+    final size = screenSizeFor(width);
+    final hPadding = responsivePadding(width);
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(hPadding, isDesktop ? 40 : 24, hPadding, 48),
+        padding: EdgeInsets.fromLTRB(hPadding, size == ScreenSize.desktop ? 40 : 24, hPadding, 48),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 896),
@@ -426,7 +428,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     return people.when(
       data: (items) {
         if (items.isEmpty) return const _EmptySearch();
-        final cols = gridColumnsForWidth(MediaQuery.of(context).size.width);
+        final cols = gridColumns(MediaQuery.of(context).size.width);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -447,7 +449,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: cols,
-                  childAspectRatio: 0.62,
+                  childAspectRatio: gridAspectRatio(MediaQuery.of(context).size.width, cols),
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
                 ),
@@ -509,7 +511,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         final name = data['name'] as String? ?? 'Person';
         final cast = (data['cast'] as List? ?? []).cast<Map<String, dynamic>>();
         final crew = (data['crew'] as List? ?? []).cast<Map<String, dynamic>>();
-        final cols = gridColumnsForWidth(MediaQuery.of(context).size.width);
+        final cols = gridColumns(MediaQuery.of(context).size.width);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -539,7 +541,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     physics: const NeverScrollableScrollPhysics(),
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: cols,
-                      childAspectRatio: gridAspectForWidth(constraints.maxWidth, cols),
+                      childAspectRatio: gridAspectRatio(constraints.maxWidth, cols),
                       crossAxisSpacing: 16,
                       mainAxisSpacing: 16,
                     ),
@@ -558,7 +560,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     physics: const NeverScrollableScrollPhysics(),
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: cols,
-                      childAspectRatio: gridAspectForWidth(constraints.maxWidth, cols),
+                      childAspectRatio: gridAspectRatio(constraints.maxWidth, cols),
                       crossAxisSpacing: 16,
                       mainAxisSpacing: 16,
                     ),
@@ -605,8 +607,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: gridColumnsForWidth(constraints.maxWidth),
-                    childAspectRatio: 0.65,
+                    crossAxisCount: gridColumns(constraints.maxWidth),
+                    childAspectRatio: gridAspectRatio(constraints.maxWidth, gridColumns(constraints.maxWidth)),
                     crossAxisSpacing: 16,
                     mainAxisSpacing: 16,
                   ),
@@ -629,7 +631,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     return creators.when(
       data: (items) {
         if (items.isEmpty) return const _EmptySearch();
-        final cols = gridColumnsForWidth(MediaQuery.of(context).size.width);
+        final cols = gridColumns(MediaQuery.of(context).size.width);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -650,7 +652,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: cols,
-                  childAspectRatio: 0.62,
+                  childAspectRatio: gridAspectRatio(MediaQuery.of(context).size.width, cols),
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
                 ),
@@ -738,7 +740,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             ],
           );
         }
-        final cols = gridColumnsForWidth(MediaQuery.of(context).size.width);
+        final cols = gridColumns(MediaQuery.of(context).size.width);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -759,7 +761,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: cols,
-                  childAspectRatio: gridAspectForWidth(constraints.maxWidth, cols),
+                  childAspectRatio: gridAspectRatio(constraints.maxWidth, cols),
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
                 ),
@@ -780,7 +782,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     return categories.when(
       data: (items) {
         if (items.isEmpty) return const _EmptySearch();
-        final cols = gridColumnsForWidth(MediaQuery.of(context).size.width);
+        final cols = gridColumns(MediaQuery.of(context).size.width);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -801,7 +803,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: cols,
-                  childAspectRatio: 0.62,
+                  childAspectRatio: gridAspectRatio(MediaQuery.of(context).size.width, cols),
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
                 ),

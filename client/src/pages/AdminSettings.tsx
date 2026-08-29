@@ -3,10 +3,17 @@ import { getToken, adminAuditLog } from '../lib/auth'
 import PageHeader from '../components/admin/PageHeader'
 import StatusBadge from '../components/admin/StatusBadge'
 import StatCard from '../components/admin/StatCard'
+import { useAdminEvent, AdminEvents } from '../hooks/useAdminEvents'
 
 export default function AdminSettings() {
   const [logs, setLogs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Real-time updates for audit log
+  useAdminEvent('admin:audit.action', (data) => {
+    console.log('[AdminSettings] New audit action:', data)
+    setLogs((prev) => [data, ...prev])
+  })
 
   useEffect(() => {
     const token = getToken()

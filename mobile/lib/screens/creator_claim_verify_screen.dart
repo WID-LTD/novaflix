@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:webview_flutter/webview_flutter.dart';
 import '../services/api_service.dart';
+import '../core/config.dart';
 
 class ClaimVerifyScreen extends ConsumerStatefulWidget {
   final String claimId;
@@ -70,7 +74,7 @@ class _ClaimVerifyScreenState extends ConsumerState<ClaimVerifyScreen> {
         script.onload = function() {
           window.PersonaClient = new Persona.Client({
             templateId: '$templateId',
-            referenceId: '$claimId',
+            referenceId: '${widget.claimId}',
             environmentId: '$environmentId',
             onReady: function() { window.PersonaClient.open(); },
             onComplete: function(data) {
@@ -92,9 +96,9 @@ class _ClaimVerifyScreenState extends ConsumerState<ClaimVerifyScreen> {
   void _startPolling() {
     _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
       try {
-        final token = await ApiService.getToken();
+        final token = await ApiService().getToken();
         final res = await http.get(
-          Uri.parse('https://api.nova-flix.com.ng/api/creator/claim/status/${widget.claimId}'),
+          Uri.parse('${AppConfig.apiBaseUrl}/creator/claim/status/${widget.claimId}'),
           headers: {'Authorization': 'Bearer $token'},
         );
         final data = jsonDecode(res.body);

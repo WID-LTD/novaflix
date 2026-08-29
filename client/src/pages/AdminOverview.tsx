@@ -4,6 +4,7 @@ import PageHeader from '../components/admin/PageHeader'
 import StatCard from '../components/admin/StatCard'
 import StatusBadge from '../components/admin/StatusBadge'
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, BarChart, Bar } from 'recharts'
+import { useAdminEvent, AdminEvents } from '../hooks/useAdminEvents'
 
 interface OverviewData {
   stats: any
@@ -20,6 +21,40 @@ interface OverviewData {
 
 export default function AdminOverview() {
   const [data, setData] = useState<OverviewData | null>(null)
+  const [pendingCreatorApps, setPendingCreatorApps] = useState(0)
+
+  // Real-time updates for dashboard stats
+  useAdminEvent('admin:user.signup', (data) => {
+    console.log('[AdminOverview] New user signup:', data)
+    if (data.isCreatorApply) {
+      setPendingCreatorApps(prev => prev + 1)
+    }
+  })
+
+  useAdminEvent('admin:creator.application.approved', () => {
+    setPendingCreatorApps(prev => Math.max(0, prev - 1))
+  })
+
+  useAdminEvent('admin:creator.application.denied', () => {
+    setPendingCreatorApps(prev => Math.max(0, prev - 1))
+  })
+
+  useAdminEvent('admin:user.signup', () => {
+    console.log('[AdminOverview] New user signup - refreshing overview')
+    // Could trigger a stat refresh or optimistic increment
+  })
+
+  useAdminEvent('admin:user.role.changed', () => {
+    console.log('[AdminOverview] User role changed - stats may need refresh')
+  })
+
+  useAdminEvent('admin:user.banned', () => {
+    console.log('[AdminOverview] User banned - stats may need refresh')
+  })
+
+  useAdminEvent('admin:report.resolved', () => {
+    console.log('[AdminOverview] Report resolved - open reports count may change')
+  })
 
   useEffect(() => {
     const token = getToken()
@@ -43,6 +78,7 @@ export default function AdminOverview() {
         <StatCard label="Watch Hours" value={Math.round(Number(data.stats.totalMinutesWatched || 0) / 60)} icon="schedule" />
         <StatCard label="Live Viewers" value={data.live} icon="sensors" tone="secondary" />
         <StatCard label="Open Reports" value={data.stats.openReports} icon="gavel" tone={data.stats.openReports > 0 ? 'error' : 'default'} />
+        <StatCard label="Pending Creators" value={pendingCreatorApps} icon="person_add" tone={pendingCreatorApps > 0 ? 'primary' : 'default'} />
       </div>
 
       <div className="grid md:grid-cols-2 gap-gutter mb-6">

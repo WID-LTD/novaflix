@@ -27,7 +27,7 @@ export default function Layout() {
       <MobileDrawer />
 
       <main
-        className={`min-h-screen pt-[112px] pb-nav lg:pb-0 transition-all duration-300 ease-in-out ${
+        className={`min-h-screen pt-14 pb-nav lg:pb-0 transition-all duration-300 ease-in-out ${
           collapsed ? 'lg:ml-16' : 'lg:ml-60'
         }`}
       >

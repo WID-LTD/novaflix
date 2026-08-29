@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../core/responsive.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
@@ -103,8 +104,8 @@ class _StoreScreenState extends ConsumerState<StoreScreen> {
   @override
   Widget build(BuildContext context) {
     final products = ref.watch(_productsProvider);
-    final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
-    final hPadding = isDesktop ? 64.0 : 16.0;
+    final width = MediaQuery.sizeOf(context).width;
+    final hPadding = responsivePadding(width);
     final categories = <String>[
       'All',
       ...products.value?.map((p) => p['category']?.toString() ?? '').where((c) => c.isNotEmpty).toSet() ?? [],
@@ -339,7 +340,7 @@ class _StoreScreenState extends ConsumerState<StoreScreen> {
             crossAxisCount: cols,
             crossAxisSpacing: 16,
             mainAxisSpacing: 16,
-            childAspectRatio: 0.7,
+            childAspectRatio: gridAspectRatio(constraints.maxWidth, cols, spacing: 16),
           ),
           itemCount: items.length,
           itemBuilder: (_, i) => _ProductCard(

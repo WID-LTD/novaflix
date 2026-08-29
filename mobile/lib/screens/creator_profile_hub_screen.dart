@@ -6,6 +6,7 @@ import '../models/user.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
+import '../core/responsive.dart';
 import '../widgets/ui/index.dart';
 
 final _creatorMeProvider = FutureProvider<User?>((ref) async {
@@ -99,7 +100,7 @@ class CreatorProfileHubScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 12),
                     GridView.count(
-                      crossAxisCount: MediaQuery.sizeOf(context).width >= 768 ? 2 : 1,
+                      crossAxisCount: screenSizeFor(MediaQuery.sizeOf(context).width) != ScreenSize.mobile ? 2 : 1,
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       crossAxisSpacing: 12,

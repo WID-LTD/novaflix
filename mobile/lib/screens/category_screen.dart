@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../core/responsive.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../services/api_service.dart';
@@ -91,18 +92,19 @@ class CategoryScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isDesktop = MediaQuery.of(context).size.width >= 1024;
-    final hPadding = isDesktop ? 64.0 : 16.0;
+    final width = MediaQuery.of(context).size.width;
+    final size = screenSizeFor(width);
+    final hPadding = responsivePadding(width);
 
     if (slug != null) {
-      return _GenreBrowse(slug: slug!, hPadding: hPadding, isDesktop: isDesktop);
+      return _GenreBrowse(slug: slug!, hPadding: hPadding);
     }
 
     final genres = ref.watch(_genresProvider);
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(hPadding, isDesktop ? 40 : 24, hPadding, 48),
+        padding: EdgeInsets.fromLTRB(hPadding, size == ScreenSize.desktop ? 40 : 24, hPadding, 48),
         child: genres.when(
           data: (items) => Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -120,7 +122,7 @@ class CategoryScreen extends ConsumerWidget {
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: (gridColumnsForWidth(constraints.maxWidth) + 1).clamp(2, 5),
+                    crossAxisCount: (gridColumns(constraints.maxWidth) + 1).clamp(2, 5),
                     crossAxisSpacing: 16,
                     mainAxisSpacing: 16,
                     childAspectRatio: 3.2,
@@ -216,23 +218,23 @@ class CategoryScreen extends ConsumerWidget {
 class _GenreBrowse extends ConsumerWidget {
   final String slug;
   final double hPadding;
-  final bool isDesktop;
 
   const _GenreBrowse({
     required this.slug,
     required this.hPadding,
-    required this.isDesktop,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final genreId = ref.watch(_genreIdBySlugProvider(slug));
     final genreName = slug.replaceAll('-', ' ');
+    final width = MediaQuery.of(context).size.width;
+    final size = screenSizeFor(width);
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(hPadding, isDesktop ? 40 : 24, hPadding, 48),
+        padding: EdgeInsets.fromLTRB(hPadding, size == ScreenSize.desktop ? 40 : 24, hPadding, 48),
         child: genreId.when(
           data: (id) {
             if (id == null) {
@@ -292,8 +294,8 @@ class _GenreBrowse extends ConsumerWidget {
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
                             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: gridColumnsForWidth(constraints.maxWidth),
-                              childAspectRatio: 0.6,
+                              crossAxisCount: gridColumns(constraints.maxWidth),
+                              childAspectRatio: gridAspectRatio(constraints.maxWidth, gridColumns(constraints.maxWidth)),
                               crossAxisSpacing: 20,
                               mainAxisSpacing: 20,
                             ),

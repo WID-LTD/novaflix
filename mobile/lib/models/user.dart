@@ -66,12 +66,68 @@ class User {
   }
 
   Map<String, dynamic> get planFeatures {
-    return {
-      'maxResolution': isStandardPlus ? '2160p' : planRank >= 2 ? '720p' : '480p',
-      'concurrentScreens': isStandardPlus ? 4 : planRank >= 2 ? 2 : 1,
-      'downloadDevices': isStandardPlus ? 6 : planRank >= 1 ? 1 : 0,
-      'adFree': isStandardPlus,
-      'unlimitedSkips': isStandardPlus,
-    };
+    // Tier matrix (locked): free/student/basic/standard/premium
+    switch (planRank) {
+      case 4: // premium: 4K + Dolby Vision/HDR10, spatial audio, 4 screens, 6 downloads, premier
+        return {
+          'maxResolution': '4K',
+          'maxResolutionNum': 2160,
+          'concurrentScreens': 4,
+          'downloadDevices': 6,
+          'adFree': true,
+          'unlimitedSkips': true,
+          'spatialAudio': true,
+          'hdrDolby': true,
+          'premierAccess': true,
+        };
+      case 3: // standard: 1080p, 2 screens, 2 downloads, ad-free, unlimited skips
+        return {
+          'maxResolution': '1080p',
+          'maxResolutionNum': 1080,
+          'concurrentScreens': 2,
+          'downloadDevices': 2,
+          'adFree': true,
+          'unlimitedSkips': true,
+          'spatialAudio': false,
+          'hdrDolby': false,
+          'premierAccess': false,
+        };
+      case 2: // basic: identical to student but ad-free
+        return {
+          'maxResolution': '720p',
+          'maxResolutionNum': 720,
+          'concurrentScreens': 1,
+          'downloadDevices': 1,
+          'adFree': true,
+          'unlimitedSkips': false,
+          'spatialAudio': false,
+          'hdrDolby': false,
+          'premierAccess': false,
+        };
+      case 1: // student: ads on, 6 skips/hr
+        return {
+          'maxResolution': '720p',
+          'maxResolutionNum': 720,
+          'concurrentScreens': 1,
+          'downloadDevices': 1,
+          'adFree': false,
+          'unlimitedSkips': false,
+          'spatialAudio': false,
+          'hdrDolby': false,
+          'premierAccess': false,
+        };
+      default: // free
+        return {
+          'maxResolution': '480p',
+          'maxResolutionNum': 480,
+          'concurrentScreens': 1,
+          'downloadDevices': 0,
+          'adFree': false,
+          'unlimitedSkips': false,
+          'spatialAudio': false,
+          'hdrDolby': false,
+          'premierAccess': false,
+        };
+    }
   }
 }

@@ -3,6 +3,7 @@ import axios from 'axios';
 const TMDB = axios.create({
   baseURL: 'https://api.themoviedb.org/3',
   headers: { Authorization: `Bearer ${process.env.TMDB_ACCESS_TOKEN}` },
+  timeout: 8000,
 });
 
 export async function searchPerson(query) {

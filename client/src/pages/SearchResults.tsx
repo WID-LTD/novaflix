@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import Icon from '../components/ui/Icon'
 import { searchAll, searchPerson, getPersonCredits, searchCreators, searchCategories, type Creator, type Category } from '../lib/api'
@@ -8,19 +8,26 @@ import { useAuth } from '../lib/AuthContext'
 import HoverCard from '../components/features/HoverCard'
 import RecommendationGrid from '../components/features/RecommendationGrid'
 import Skeleton from '../components/ui/Skeleton'
-import Tabs from '../components/ui/Tabs'
 import type { MediaItem } from '../types'
 import Button from '../components/ui/Button'
 import FollowButton from '../components/ui/FollowButton'
 
-const tabs = [
-  { id: 'all', label: 'All' },
-  { id: 'movie', label: 'Movies' },
-  { id: 'tv', label: 'TV Shows' },
-  { id: 'people', label: 'People' },
-  { id: 'creators', label: 'Creators' },
-  { id: 'categories', label: 'Categories' },
-  { id: 'creator', label: 'Creator Content' },
+interface FilterChip {
+  id: string
+  label: string
+  icon: string
+  count: number
+  active: boolean
+}
+
+const initialChips: FilterChip[] = [
+  { id: 'all', label: 'All', icon: 'apps', count: 0, active: true },
+  { id: 'movie', label: 'Movies', icon: 'movie', count: 0, active: false },
+  { id: 'tv', label: 'TV Shows', icon: 'live_tv', count: 0, active: false },
+  { id: 'people', label: 'People', icon: 'person', count: 0, active: false },
+  { id: 'creators', label: 'Creators', icon: 'person_add', count: 0, active: false },
+  { id: 'categories', label: 'Categories', icon: 'category', count: 0, active: false },
+  { id: 'creator', label: 'Creator Content', icon: 'video_library', count: 0, active: false },
 ]
 
 export default function SearchResults() {
@@ -39,56 +46,59 @@ export default function SearchResults() {
   const [personCredits, setPersonCredits] = useState<{ cast: PersonCredit[]; crew: PersonCredit[] }>({ cast: [], crew: [] })
   const [creditsLoading, setCreditsLoading] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState(typeParam)
+  const [chips, setChips] = useState<FilterChip[]>(initialChips.map(c => ({ ...c, active: c.id === typeParam })))
   const [recs, setRecs] = useState<MediaItem[]>([])
   const { user } = useAuth()
+
+  // Keep activeTab in sync for backward compat with openPerson/openCreator logic
+  const activeTab = chips.find(c => c.active)?.id ?? 'all'
+  const setActiveTab = useCallback((id: string) => {
+    setChips(prev => prev.map(c => ({ ...c, active: c.id === id })))
+  }, [])
 
   useEffect(() => {
     if (!query) return
     setLoading(true)
     const token = localStorage.getItem('novaflix-token') || ''
 
+    // Parallel prefetch of all facets
     Promise.all([
       searchAll(query),
+      searchPerson(query),
+      searchCreators(query),
+      searchCategories(query),
       user
         ? fetch(`${API_BASE}/recommendations/for-you`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
         : Promise.resolve({ data: [] }),
-    ]).then(([searchRes, recRes]) => {
+    ]).then(([searchRes, personRes, creatorRes, categoryRes, recRes]) => {
       if (searchRes.success) setResults(searchRes.data)
+      if (personRes.success) setPeopleResults(personRes.data)
+      if (creatorRes.success) setCreatorResults(creatorRes.creators)
+      if (categoryRes.success) setCategoryResults(categoryRes.categories)
       if (recRes.success) {
         const shuffled = [...(recRes.data || [])].sort(() => Math.random() - 0.5)
         setRecs(shuffled.slice(0, 8))
       }
+
+      // Update chip counts
+      setChips(prev => prev.map(c => {
+        if (c.id === 'all') return { ...c, count: (searchRes.data?.length ?? 0) + (personRes.data?.length ?? 0) + (creatorRes.creators?.length ?? 0) }
+        if (c.id === 'movie') return { ...c, count: searchRes.data?.filter(r => r.type === 'movie' && r.source === 'tmdb').length ?? 0 }
+        if (c.id === 'tv') return { ...c, count: searchRes.data?.filter(r => r.type === 'tv' && r.source === 'tmdb').length ?? 0 }
+        if (c.id === 'people') return { ...c, count: personRes.data?.length ?? 0 }
+        if (c.id === 'creators') return { ...c, count: creatorRes.creators?.length ?? 0 }
+        if (c.id === 'categories') return { ...c, count: categoryRes.categories?.length ?? 0 }
+        if (c.id === 'creator') return { ...c, count: searchRes.data?.filter(r => r.source === 'creator' || r.source === 'archive').length ?? 0 }
+        return c
+      }))
+
       setLoading(false)
-    }).catch(() => setLoading(false))
+    }).catch(() => {
+      setLoading(false)
+      // Still update counts to 0 on error
+      setChips(prev => prev.map(c => ({ ...c, count: 0 })))
+    })
   }, [query, user])
-
-  useEffect(() => {
-    if (activeTab !== 'people' || !query) return
-    setLoading(true)
-    searchPerson(query).then((res) => {
-      if (res.success) setPeopleResults(res.data)
-      setLoading(false)
-    }).catch(() => setLoading(false))
-  }, [activeTab, query])
-
-  useEffect(() => {
-    if (activeTab !== 'creators' || !query) return
-    setLoading(true)
-    searchCreators(query).then((res) => {
-      if (res.success) setCreatorResults(res.creators)
-      setLoading(false)
-    }).catch(() => setLoading(false))
-  }, [activeTab, query])
-
-  useEffect(() => {
-    if (activeTab !== 'categories' || !query) return
-    setLoading(true)
-    searchCategories(query).then((res) => {
-      if (res.success) setCategoryResults(res.categories)
-      setLoading(false)
-    }).catch(() => setLoading(false))
-  }, [activeTab, query])
 
   const openPerson = async (person: Person) => {
     setSelectedPerson({ id: person.id, name: person.name })
@@ -132,7 +142,32 @@ export default function SearchResults() {
           </div>
         </div>
 
-        <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
+        {/* Spotify-style Filter Chips */}
+        <div className="flex flex-wrap gap-2 mb-6" role="tablist" aria-label="Search filters">
+          {chips.map(chip => (
+            <button
+              key={chip.id}
+              onClick={() => setActiveTab(chip.id)}
+              role="tab"
+              aria-selected={chip.active}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap ${
+                chip.active
+                  ? 'bg-primary-container text-on-primary-container shadow-sm'
+                  : 'bg-surface-container-high border border-white/5 text-on-surface-variant hover:border-primary/40 hover:text-on-surface'
+              }`}
+            >
+              <Icon name={chip.icon} className="w-4 h-4" />
+              {chip.label}
+              {chip.count > 0 && (
+                <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-semibold ${
+                  chip.active ? 'bg-on-primary-container/20 text-on-primary-container' : 'bg-white/5 text-on-surface-variant'
+                }`}>
+                  {chip.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
 
         <div className="mt-6">
           {activeTab === 'people' && !selectedPerson ? (
@@ -230,7 +265,7 @@ export default function SearchResults() {
               </div>
             ) : (
               <>
-                <p className="text-on-surface-variant text-sm mb-4">{categoryResults.length} categor{y(categoryResults.length !== 1 ? 'ies' : 'y')}</p>
+                <p className="text-on-surface-variant text-sm mb-4">{categoryResults.length} categor{categoryResults.length !== 1 ? 'ies' : 'y'}</p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 md:gap-6">
                   {categoryResults.map((cat) => (
                     <Link key={cat.id} to={cat.source === 'tmdb' ? `/discover?genre_id=${cat.id}&type=${cat.type}` : `/discover?sort=popular`} className="group text-left">

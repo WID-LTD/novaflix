@@ -2,12 +2,19 @@ import { useEffect, useState } from 'react'
 import { getToken, adminTransactions } from '../lib/auth'
 import PageHeader from '../components/admin/PageHeader'
 import StatusBadge from '../components/admin/StatusBadge'
+import { useAdminEvent, AdminEvents } from '../hooks/useAdminEvents'
 
 const fmtMoney = (v: number) => `$${Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
 export default function AdminTransactions() {
   const [list, setList] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Real-time updates for transactions
+  useAdminEvent('admin:transaction.created', (data) => {
+    console.log('[AdminTransactions] New transaction:', data)
+    setList((prev) => [data.transaction, ...prev])
+  })
 
   useEffect(() => {
     const token = getToken()

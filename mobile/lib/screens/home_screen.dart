@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../core/responsive.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../services/api_service.dart';
@@ -379,11 +380,11 @@ class HomeScreen extends ConsumerWidget {
     List<ContinueWatchingItem> items,
     String userName,
   ) {
-    final isDesktop = MediaQuery.of(context).size.width >= 1024;
-    final hPadding = isDesktop ? 64.0 : 16.0;
+    final width = MediaQuery.of(context).size.width;
+    final hPadding = responsivePadding(width);
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1440),
+        constraints: BoxConstraints(maxWidth: responsiveMaxContentWidth(width)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -442,7 +443,7 @@ class HomeScreen extends ConsumerWidget {
                           return Padding(
                             padding: const EdgeInsets.only(right: 16),
                             child: SizedBox(
-                              width: isDesktop ? 220 : 160,
+                              width: responsiveCardWidth(width),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -546,12 +547,12 @@ class HomeScreen extends ConsumerWidget {
   }
 
   Widget _buildNewsRow(BuildContext context, List<Map<String, dynamic>> articles) {
-    final isDesktop = MediaQuery.of(context).size.width >= 1024;
-    final hPadding = isDesktop ? 64.0 : 16.0;
-    final cardWidth = isDesktop ? 300.0 : 260.0;
+    final width = MediaQuery.of(context).size.width;
+    final hPadding = responsivePadding(width);
+    final cardWidth = responsiveCardWidth(width);
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1440),
+        constraints: BoxConstraints(maxWidth: responsiveMaxContentWidth(width)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

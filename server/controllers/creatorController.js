@@ -166,18 +166,20 @@ export async function getPublicCreators(req, res) {
     const { rows } = await pool.query(
       `SELECT u.id, u.name, u.avatar, u.bio,
               cp.known_for_department,
-              (SELECT COUNT(*) FROM uploads WHERE user_id = u.id) as film_count,
-              (SELECT COALESCE(SUM(views), 0) FROM uploads WHERE user_id = u.id) as total_views,
-              (SELECT COUNT(*) FROM likes WHERE creator_id = u.id) as total_likes,
-              (SELECT COUNT(*) FROM followers WHERE following_id = u.id) as followers_count
+              (SELECT COUNT(*)::int FROM uploads WHERE user_id = u.id AND status = 'active') as film_count,
+              (SELECT COALESCE(SUM(views), 0)::bigint FROM uploads WHERE user_id = u.id AND status = 'active') as total_views,
+              (SELECT COUNT(*)::int FROM likes WHERE creator_id = u.id) as total_likes,
+              (SELECT COUNT(*)::int FROM followers WHERE following_id = u.id) as followers_count
        FROM users u
-       JOIN creator_profiles cp ON cp.user_id = u.id
+       LEFT JOIN creator_profiles cp ON cp.user_id = u.id
        WHERE u.role = 'creator'
-       ORDER BY total_likes DESC`
+       ORDER BY followers_count DESC, u.created_at DESC
+       LIMIT 20`
     )
     res.json({ success: true, creators: rows })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    console.error('[creator] public list failed:', err.message)
+    res.status(500).json({ success: false, error: 'Could not load creators' })
   }
 }
 

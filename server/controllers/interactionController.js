@@ -2,6 +2,11 @@ import { v4 as uuidv4 } from 'uuid'
 import { uploadFile } from '../lib/r2.js'
 import { addLike, removeLike, getContentLikes, hasUserLiked, addComment, getContentComments, getContentCommentCount, deleteComment, getCommentsForCreator, addFollower, removeFollower, isFollowing, getFollowerCount, getFollowingCount, getFollowers, getFollowing, findUserById, checkAndAwardAchievements, addXp, recordFanEngagement, createNotification } from '../db.js'
 import { notifyUser, broadcastFeed } from '../services/realtime.js'
+import { notifyCreator } from '../services/creatorRealtime.js'
+
+function emitCreatorEngagement(creatorId, payload) {
+  notifyCreator(creatorId, 'engagement', payload)
+}
 
 export async function uploadCommentMedia(req, res) {
   try {
@@ -36,6 +41,9 @@ export async function toggleLike(req, res) {
     const count = await getContentLikes(contentId, contentType)
     checkAndAwardAchievements(req.userId).catch(() => {})
     broadcastFeed({ type: 'like', contentId, contentType, count, liked: !liked })
+    if (creatorId) {
+      emitCreatorEngagement(creatorId, { type: 'like', contentId, contentType, count, liked: !liked, at: Date.now() })
+    }
     res.json({ success: true, liked: !liked, count })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -87,6 +95,7 @@ export async function postComment(req, res) {
         actorId: req.userId,
       }).catch(() => null)
       if (notification) notifyUser(creatorId, { type: 'notification', notification })
+      emitCreatorEngagement(creatorId, { type: 'comment', contentId, contentType, at: Date.now() })
     }
     res.json({ success: true, comment })
   } catch (err) {

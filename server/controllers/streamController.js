@@ -6,7 +6,8 @@ import { spawn } from 'child_process'
 import { getStreamUrl } from '../scraper.mjs'
 import { cacheClear, cacheStats } from '../providers/cache.js'
 import { reportFailure, reportSuccess } from '../providers/providerHealth.js'
-import { getActiveSessionCount, getUploadById } from '../db.js'
+import { getActiveSessionCount, getUploadById, listActiveSessions, ensureDownloadDevice } from '../db.js'
+import crypto from 'crypto'
 import { streamFile } from '../lib/r2.js'
 import { PLAN_FEATURES } from './planUtils.js'
 
@@ -438,9 +439,15 @@ export async function source(req, res) {
     try {
       const activeSessions = await getActiveSessionCount(req.userId)
       if (activeSessions >= maxScreens) {
+        // Enriched payload lets clients offer "end another session" (Netflix-style)
+        const active = await listActiveSessions(req.userId)
         return res.status(429).json({
           success: false,
+          code: 'screen_limit_reached',
           error: `Your ${plan} plan allows ${maxScreens} concurrent screen${maxScreens > 1 ? 's' : ''}. You've reached this limit.`,
+          maxScreens,
+          current: activeSessions,
+          activeSessions: active,
         })
       }
     } catch (e) {
@@ -684,6 +691,39 @@ export async function download(req, res) {
 
   if (!DOWNLOAD_PLANS[req.user?.plan]) {
     return res.status(403).json({ error: 'Downloads require a paid plan (Student or higher)' })
+  }
+
+  // Web clients are never allowed to download — they are routed to /download-app.
+  // Downloads exist only in the NovaFlix mobile apps (per-platform policy).
+  if (String(req.query.platform || '').toLowerCase() === 'web') {
+    return res.status(403).json({
+      success: false,
+      code: 'web_download_blocked',
+      error: 'Downloads are available in the NovaFlix mobile apps only.',
+      redirectUrl: '/download-app',
+    })
+  }
+
+  // Per-plan download-device cap (student/basic 1, standard 2, premium 6).
+  // Clients without a deviceId fall back to a UA hash so legacy apps are still counted.
+  try {
+    const plan = req.user?.plan || 'free'
+    const maxDevices = PLAN_FEATURES[plan]?.downloads ?? 0
+    const deviceId = (req.query.deviceId || crypto.createHash('sha256').update(req.headers['user-agent'] || 'unknown-device').digest('hex')).slice(0, 64)
+    const deviceName = String(req.query.deviceName || req.headers['user-agent'] || 'Unknown Device').slice(0, 200)
+    const platform = String(req.query.platform || 'web').slice(0, 50)
+    const deviceResult = await ensureDownloadDevice(req.userId, deviceId, deviceName, platform, maxDevices)
+    if (!deviceResult.ok) {
+      return res.status(409).json({
+        success: false,
+        code: 'download_limit_reached',
+        error: `Your ${plan} plan allows ${maxDevices} download device${maxDevices === 1 ? '' : 's'}. Remove a device in Settings to continue.`,
+        limit: maxDevices,
+        devices: deviceResult.devices,
+      })
+    }
+  } catch (e) {
+    console.warn('[download] device check failed:', e.message)
   }
 
   const safeTitle = title

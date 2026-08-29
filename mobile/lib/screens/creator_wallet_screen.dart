@@ -1,7 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/wallet_provider.dart';
-import '../services/wallet_service.dart';
 import '../widgets/ui/index.dart';
 import '../widgets/layout/index.dart';
 
@@ -149,7 +149,7 @@ class _CreatorWalletScreenState extends ConsumerState<CreatorWalletScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildBalanceCard(walletState.balanceNgn),
+          _buildBalanceCard(state.balanceNgn),
           const SizedBox(height: 16),
           _buildStatsGrid(state),
           const SizedBox(height: 24),
@@ -182,7 +182,7 @@ class _CreatorWalletScreenState extends ConsumerState<CreatorWalletScreen>
             ),
             const SizedBox(height: 8),
             Text(
-              _formatAmount(walletState.balanceNgn.toDouble()),
+              _formatAmount(balance.toDouble()),
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 48,
@@ -218,7 +218,7 @@ class _CreatorWalletScreenState extends ConsumerState<CreatorWalletScreen>
         _buildStatCard('Total Earned (30d)', _formatAmount(recentEarnings.toDouble()), Icons.trending_up, Colors.green),
         _buildStatCard('Withdrawn (30d)', _formatAmount(withdrawn.toDouble()), Icons.arrow_downward, Colors.red),
         _buildStatCard('Total Transactions', state.transactions.length.toString(), Icons.receipt_long, Colors.blue),
-        _buildStatCard('Current Balance', _formatAmount(walletState.balanceNgn.toDouble()), Icons.account_balance_wallet, Theme.of(context).primaryColor),
+        _buildStatCard('Current Balance', _formatAmount(state.balanceNgn.toDouble()), Icons.account_balance_wallet, Theme.of(context).primaryColor),
       ],
     );
   }
@@ -237,7 +237,7 @@ class _CreatorWalletScreenState extends ConsumerState<CreatorWalletScreen>
             Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey), textAlign: TextAlign.center),
           ],
         ),
-      );
+      ),
     );
   }
 
@@ -345,24 +345,25 @@ class _CreatorWalletScreenState extends ConsumerState<CreatorWalletScreen>
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          const Text('Breakdown', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-          ...items.map((e) => Card(
-            child: ListTile(
-              title: Text(e.$1),
-              trailing: Text(
-                _formatAmount(e.$2.toDouble()),
-                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
-              ),
+        ),
+        const SizedBox(height: 16),
+        const Text('Breakdown', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        ...items.map((e) => Card(
+          child: ListTile(
+            title: Text(e.$1),
+            trailing: Text(
+              _formatAmount(e.$2.toDouble()),
+              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
             ),
-          )),
-        ],
-      ),
+          ),
+        )),
+      ],
     );
   }
 
   Widget _buildWithdrawTab() {
+    final walletState = ref.watch(walletProvider);
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -434,7 +435,9 @@ class _CreatorWalletScreenState extends ConsumerState<CreatorWalletScreen>
                           ),
                         ],
                       ),
-                    ],
+                    ),
+                  ],
+                  if (_preview != null) ...[
                     const SizedBox(height: 16),
                     SizedBox(
                       width: double.infinity,
@@ -445,6 +448,7 @@ class _CreatorWalletScreenState extends ConsumerState<CreatorWalletScreen>
                             : const Text('Withdraw Now'),
                       ),
                     ),
+                  ],
                   if (walletState.error != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
@@ -528,39 +532,7 @@ class _CreatorWalletScreenState extends ConsumerState<CreatorWalletScreen>
     return Icons.receipt;
   }
 
-  String _getTypeLabel(String type) {
-    switch (type) {
-      case 'ppm_upload': return 'PPM - Uploads';
-      case 'ppm_scraped': return 'PPM - Scraped';
-      case 'ppm_youtube': return 'PPM - YouTube';
-      case 'ppm_live': return 'PPM - Live→Shorts';
-      case 'ppm_shorts': return 'PPM - Shorts';
-      case 'tip': return 'Tip';
-      case 'gift': return 'Glow Gift';
-      case 'membership': return 'Membership';
-      case 'withdrawal': return 'Withdrawal';
-      case 'refund': return 'Refund';
-      default: return type;
-    }
-  }
-
-  String _formatAmount(double amount) {
-    return '₦${amount.toStringAsFixed(0).replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (match) => '${match[1]},',
-    )}';
-  }
-
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-  }
-
-  IconData _getIconForType(String type) {
-    if (type.startsWith('ppm_')) return Icons.play_circle;
-    if (type == 'tip') return Icons.favorite;
-    if (type == 'gift') return Icons.card_giftcard;
-    if (type == 'membership') return Icons.card_membership;
-    if (type == 'withdrawal') return Icons.account_balance_wallet;
-    return Icons.receipt;
   }
 }

@@ -11,6 +11,7 @@ import '../models/media_item.dart';
 import '../providers/auth_provider.dart';
 import '../providers/watchlist_provider.dart';
 import '../widgets/ui/index.dart';
+import '../core/responsive.dart';
 import '../widgets/features/index.dart';
 
 class CastMember {
@@ -127,13 +128,13 @@ class MovieDetailScreen extends ConsumerWidget {
             return const Center(child: Text('Item not found'));
           }
           final width = MediaQuery.sizeOf(context).width;
-          final heroHeight = width >= 768 ? 751.0 : 618.0;
+          final size = screenSizeFor(width);
+          final heroHeight = screenSizeFor(width) != ScreenSize.mobile ? 751.0 : 618.0;
           final isTV = item.isTV;
           final runtimeStr = item.runtime != null
               ? '${item.runtime! ~/ 60}h ${item.runtime! % 60}m'
               : null;
-          final isDesktop = width >= 1024;
-          final hPadding = isDesktop ? 64.0 : 16.0;
+          final hPadding = responsivePadding(width);
 
           return CustomScrollView(
             slivers: [
@@ -193,7 +194,7 @@ class MovieDetailScreen extends ConsumerWidget {
                       ),
                       Positioned(
                         top: 24,
-                        left: isDesktop ? 32 : 16,
+                        left: size == ScreenSize.desktop ? 32 : 16,
                         child: IconButton(
                           onPressed: () {
                             if (context.canPop()) {
@@ -214,7 +215,7 @@ class MovieDetailScreen extends ConsumerWidget {
                       Positioned(
                         left: hPadding,
                         right: hPadding,
-                        bottom: isDesktop ? 96 : 48,
+                        bottom: size == ScreenSize.desktop ? 96 : 48,
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 896),
                           child: Column(
@@ -257,7 +258,7 @@ class MovieDetailScreen extends ConsumerWidget {
                               const SizedBox(height: 12),
                               Text(
                                 item.title,
-                                style: isDesktop
+                                style: size == ScreenSize.desktop
                                     ? AppTypography.displayLg.copyWith(
                                         color: Colors.white,
                                       )

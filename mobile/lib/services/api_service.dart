@@ -552,6 +552,20 @@ class ApiService {
     data: {if (deviceId != null) 'device_id': deviceId},
   );
 
+  // ---- Download device registry (per-plan caps: student/basic 1, standard 2, premium 6) ----
+  Future<Response> registerDownloadDevice({String? deviceId, String? deviceName, String? platform}) async {
+    final id = deviceId ?? await getDeviceId();
+    return post('/downloads/devices/register', data: {
+      'device_id': id,
+      if (deviceName != null) 'device_name': deviceName,
+      if (platform != null) 'platform': platform,
+    });
+  }
+
+  Future<Response> getDownloadDevices() => get('/downloads/devices');
+  Future<Response> removeDownloadDevice(String deviceId) =>
+      delete('/downloads/devices/$deviceId');
+
   Future<Response> adminGetUsers() => get('/admin/users');
   Future<Response> adminGetStats() => get('/admin/stats');
   Future<Response> adminGetUploads() => get('/admin/uploads');

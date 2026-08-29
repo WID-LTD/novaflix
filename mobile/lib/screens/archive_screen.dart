@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../core/responsive.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
@@ -38,8 +39,8 @@ class ArchiveScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final items = ref.watch(_archiveProvider);
     final user = ref.watch(authProvider).user;
-    final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
-    final hPadding = isDesktop ? 64.0 : 16.0;
+    final width = MediaQuery.sizeOf(context).width;
+    final hPadding = responsivePadding(width);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -129,7 +130,7 @@ class ArchiveScreen extends ConsumerWidget {
         crossAxisCount: cols,
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
-        childAspectRatio: 0.95,
+        childAspectRatio: gridAspectRatio(width, cols, spacing: 16),
       ),
       itemCount: items.length,
       itemBuilder: (_, i) => _ArchiveCard(

@@ -1,4 +1,5 @@
 import { createAppeal, getAppeals, getAppealsByUser, resolveAppeal, findUserById, updateUser } from '../db.js'
+import { broadcastFeed } from '../services/realtime.js'
 
 export async function submitAppeal(req, res) {
   try {
@@ -68,6 +69,7 @@ export async function decideAppeal(req, res) {
       }
     }
 
+    broadcastFeed({ type: 'admin:appeal.decided', appealId: id, status, appealType: appeal.appeal_type, userId: appeal.user_id, timestamp: Date.now() })
     res.json({ success: true, appeal })
   } catch (err) {
     res.status(500).json({ error: err.message })

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { getHooksFeed } from '../lib/api'
-import { uploadShort, getShortComments, postShortComment, getToken } from '../lib/auth'
+import { uploadShort, getShortComments, postShortComment, getToken, getComments, postComment } from '../lib/auth'
 import { WS_ORIGIN } from '../lib/config'
 import Icon from '../components/ui/Icon'
 import Modal from '../components/ui/Modal'
@@ -12,7 +12,7 @@ import type { HookItem, ShortComment } from '../types'
 export default function HooksFeed() {
   const containerRef = useRef<HTMLDivElement>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
-  const { user, isCreator } = useAuth()
+  const { isCreator } = useAuth()
   const [items, setItems] = useState<HookItem[]>([])
   const [activeIndex, setActiveIndex] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -79,6 +79,37 @@ export default function HooksFeed() {
           setItems(prev => prev.map(it => it.shortId === shortId ? { ...it, bookmarksCount: data.bookmarks } : it))
         } else if (data?.type === 'shorts:view') {
           setItems(prev => prev.map(it => it.shortId === shortId ? { ...it, views: data.views } : it))
+        } else if (data?.type === 'like' && data?.contentId) {
+          // Generic (TMDB trailer) like broadcast
+          const cid = String(data.contentId)
+          const ctype = data.contentType === 'tv' ? 'tv' : 'movie'
+          setItems(prev => prev.map(it => (
+            it.type !== 'short' && it.mediaId && String(it.mediaId) === cid && (it.mediaType ?? 'movie') === ctype
+              ? { ...it, likesCount: Number(data.count) || 0 }
+              : it
+          )))
+        } else if (data?.type === 'comment' && data?.contentId && data?.comment) {
+          // Generic (TMDB trailer) comment broadcast
+          const cid = String(data.contentId)
+          const ctype = data.contentType === 'tv' ? 'tv' : 'movie'
+          setItems(prev => prev.map(it => (
+            it.type !== 'short' && it.mediaId && String(it.mediaId) === cid && (it.mediaType ?? 'movie') === ctype
+              ? { ...it, commentsCount: (Number(it.commentsCount) || 0) + 1 }
+              : it
+          )))
+          const activeItem = itemsRef.current[activeIndexRef.current]
+          if (activeItem?.type !== 'short' && activeItem?.mediaId && String(activeItem.mediaId) === cid) {
+            setActiveComments(prev => {
+              if (prev.some(c => c.id === data.comment.id)) return prev
+              return [{
+                id: data.comment.id,
+                userName: data.comment.user_name || 'Anonymous',
+                userAvatar: data.comment.user_avatar || null,
+                text: data.comment.text ?? '',
+                createdAt: data.comment.created_at,
+              }, ...prev]
+            })
+          }
         }
       } catch { /* ignore malformed frames */ }
     }
@@ -132,20 +163,35 @@ export default function HooksFeed() {
     const current = items[activeIndex]
     if (!current) return
     setCommentsOpen(true)
-    if (!current.shortId) {
-      setActiveComments([])
-      return
-    }
     setActiveComments([])
-    const res = await getShortComments(current.shortId)
-    if (res.success && Array.isArray(res.comments)) {
-      setActiveComments(res.comments.map((c: any) => ({
-        id: c.id,
-        userName: c.user_name || 'Anonymous',
-        userAvatar: c.user_avatar || null,
-        text: c.text,
-        createdAt: c.created_at,
-      })))
+    if (current.shortId) {
+      const res = await getShortComments(current.shortId)
+      if (res.success && Array.isArray(res.comments)) {
+        setActiveComments(res.comments.map((c: any) => ({
+          id: c.id,
+          userName: c.user_name || 'Anonymous',
+          userAvatar: c.user_avatar || null,
+          text: c.text,
+          createdAt: c.created_at,
+        })))
+      }
+    } else if (current.mediaId) {
+      const contentType = current.mediaType === 'tv' ? 'tv' : 'movie'
+      const res = await getComments(String(current.mediaId), contentType)
+      if (res.success && Array.isArray(res.comments)) {
+        const mapped = res.comments
+          .filter((c: any) => !c.locked)
+          .map((c: any) => ({
+            id: c.id,
+            userName: c.user_name || 'Anonymous',
+            userAvatar: c.user_avatar || null,
+            text: c.text ?? '',
+            createdAt: c.created_at,
+          }))
+        setActiveComments(mapped)
+        const total = Number(res.total) || mapped.length
+        setItems(prev => prev.map((it, idx) => idx === activeIndex ? { ...it, commentsCount: total } : it))
+      }
     }
   }, [items, activeIndex])
 
@@ -183,11 +229,19 @@ export default function HooksFeed() {
     setUploadFile(null)
   }
 
-  const handleShare = useCallback(async () => {
-    const url = `${window.location.origin}/hooks`
+  const handleShare = useCallback(async (item?: HookItem) => {
+    const target = item || items[activeIndex]
+    let url = `${window.location.origin}/hooks`
+    let title = 'Novaflix Hooks'
+    if (target?.shortId) {
+      url = `${window.location.origin}/hooks?short=${target.shortId}`
+    } else if (target?.mediaId) {
+      url = `${window.location.origin}/${target.mediaType === 'tv' ? 'tv' : 'movie'}/${target.mediaId}`
+      title = target.title
+    }
     if (navigator.share) {
       try {
-        await navigator.share({ title: 'Novaflix Hooks', url })
+        await navigator.share({ title, url })
         return
       } catch {
         /* dismissed */
@@ -198,7 +252,7 @@ export default function HooksFeed() {
     } catch {
       /* noop */
     }
-  }, [])
+  }, [items, activeIndex])
 
   const handleArrow = useCallback((dir: 'up' | 'down') => {
     const container = containerRef.current
@@ -239,6 +293,7 @@ export default function HooksFeed() {
               <HooksCard
                 item={item}
                 active={i === activeIndex}
+                near={Math.abs(i - activeIndex) <= 1}
                 audioTrackName={item.type === 'short' ? `Original Audio · ${item.creatorName || 'Novaflix'}` : undefined}
                 onOpenComments={openComments}
                 onShare={handleShare}
@@ -263,22 +318,13 @@ export default function HooksFeed() {
           onClose={() => setCommentsOpen(false)}
           onSubmit={async (text) => {
             const current = items[activeIndex]
-            const localComment: ShortComment = {
-              id: `local-${Date.now()}`,
-              userName: user?.name || 'You',
-              userAvatar: user?.avatar || null,
-              text,
-              createdAt: new Date().toISOString(),
-            }
-            setActiveComments(prev => [localComment, ...prev])
-            if (current?.shortId) {
-              const res = await postShortComment(current.shortId, text)
-              if (res.success && res.comment) {
-                setActiveComments(prev => prev.map(c => c.id === localComment.id
-                  ? { id: res.comment.id, userName: res.comment.user_name || 'You', userAvatar: res.comment.user_avatar || null, text, createdAt: res.comment.created_at }
-                  : c))
-                setItems(prev => prev.map((it, idx) => idx === activeIndex ? { ...it, commentsCount: (Number(it.commentsCount) || 0) + 1 } : it))
-              }
+            if (!current) return
+            if (current.shortId) {
+              // WS 'shorts:comment' echo (sent to us too) inserts the comment and bumps the count
+              await postShortComment(current.shortId, text)
+            } else if (current.mediaId) {
+              // WS 'comment' echo does the same for trailer cards
+              await postComment(String(current.mediaId), current.mediaType === 'tv' ? 'tv' : 'movie', text)
             }
           }}
         />

@@ -8,7 +8,7 @@ import AdminLayout from './components/layout/AdminLayout'
 import CreatorGuard from './components/layout/CreatorGuard'
 import Skeleton from './components/ui/Skeleton'
 
-const Landing = lazy(() => import('./pages/Landing'))
+const Creators = lazy(() => import('./pages/Creators'))
 const DownloadApp = lazy(() => import('./pages/DownloadApp'))
 const Splash = lazy(() => import('./pages/Splash'))
 const Home = lazy(() => import('./pages/Home'))
@@ -27,7 +27,6 @@ const Register = lazy(() => import('./pages/Register'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 const ProfileGateway = lazy(() => import('./pages/ProfileGateway'))
-const CreatorLogin = lazy(() => import('./pages/CreatorLogin'))
 const CreatorForgotPassword = lazy(() => import('./pages/CreatorForgotPassword'))
 const CreatorResetPassword = lazy(() => import('./pages/CreatorResetPassword'))
 const SuspendedPage = lazy(() => import('./pages/SuspendedPage'))
@@ -39,7 +38,8 @@ const Store = lazy(() => import('./pages/Store'))
 const Learn = lazy(() => import('./pages/Learn'))
 const WatchParty = lazy(() => import('./pages/WatchParty'))
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
-const Community = lazy(() => import('./pages/Community'))
+const Community = lazy(() => import('./pages/Community').then(m => ({ default: m.CommunityRedirect })))
+const CommunityPage = lazy(() => import('./pages/Community'))
 const Downloads = lazy(() => import('./pages/Downloads'))
 const HooksFeed = lazy(() => import('./pages/HooksFeed'))
 const News = lazy(() => import('./pages/News'))
@@ -84,7 +84,9 @@ const DeepDivePage = lazy(() => import('./pages/DeepDivePage'))
 const Notifications = lazy(() => import('./pages/Notifications'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 const Chat = lazy(() => import('./pages/Chat'))
-const Forum = lazy(() => import('./pages/Forum'))
+const Forum = lazy(() => import('./pages/Forum').then(m => ({ default: m.ForumRedirect })))
+const ForumPage = lazy(() => import('./pages/Forum'))
+const HotTakes = lazy(() => import('./pages/HotTakes'))
 const Trivia = lazy(() => import('./pages/Trivia'))
 const SecretRoom = lazy(() => import('./pages/SecretRoom'))
 const PublicProfile = lazy(() => import('./pages/PublicProfile'))
@@ -96,6 +98,13 @@ const ClaimSuccess = lazy(() => import('./pages/ClaimSuccess'))
 const CreatorWallet = lazy(() => import('./pages/CreatorWallet'))
 const CreatorOnboarding = lazy(() => import('./pages/CreatorOnboarding'))
 const CreatorPPMSettings = lazy(() => import('./pages/CreatorPPMSettings'))
+const GoLive = lazy(() => import('./pages/GoLive'))
+const PendingClaim = lazy(() => import('./pages/PendingClaim'))
+
+const AuthViewerSignup = lazy(() => import('./pages/auth/ViewerSignup'))
+const AuthCreatorSignup = lazy(() => import('./pages/auth/CreatorSignup'))
+const AuthLoginPage = lazy(() => import('./pages/auth/LoginPage'))
+const RoleDashboard = lazy(() => import('./components/auth/RoleDashboard'))
 
 function PageLoading() {
   return (
@@ -132,7 +141,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Splash />} />
         <Route path="/splash" element={<Splash />} />
-        <Route path="/landing" element={<Landing />} />
+        <Route path="/creators" element={<Creators />} />
         <Route path="/download-app" element={<DownloadApp />} />
         <Route path="/login" element={<Login />} />
         <Route path="/oauth/callback" element={<OAuthCallback />} />
@@ -140,18 +149,23 @@ export default function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/profiles" element={<ProfileGateway />} />
-<Route path="/creator/login" element={<CreatorLogin />} />
+         <Route path="/creator/signup" element={<AuthCreatorSignup />} />
           <Route path="/creator/forgot-password" element={<CreatorForgotPassword />} />
           <Route path="/creator/reset-password" element={<CreatorResetPassword />} />
           <Route path="/creator/claim/start" element={<ClaimStart />} />
           <Route path="/creator/claim/preview/:tmdbPersonId" element={<ClaimPreview />} />
           <Route path="/creator/claim/verify" element={<ClaimVerify />} />
           <Route path="/creator/claim/status/:claimId" element={<ClaimStatus />} />
-          <Route path="/creator/claim/success" element={<ClaimSuccess />} />
-          <Route path="/suspended" element={<SuspendedPage />} />
+           <Route path="/creator/claim/success" element={<ClaimSuccess />} />
+          <Route path="/creator/pending-claim" element={<AuthGuard><PendingClaim /></AuthGuard>} />
+           <Route path="/suspended" element={<SuspendedPage />} />
+        <Route path="/auth/viewer-signup" element={<AuthViewerSignup />} />
+        <Route path="/auth/creator-signup" element={<AuthCreatorSignup />} />
+        <Route path="/auth/login" element={<AuthLoginPage />} />
+        <Route path="/dashboard" element={<RoleDashboard />} />
         <Route element={<Layout />}>
           <Route path="/home" element={<Home />} />
-          <Route path="/community" element={<AuthGuard><Community /></AuthGuard>} />
+          <Route path="/community" element={<AuthGuard><CommunityPage /></AuthGuard>} />
           <Route path="/community/:id" element={<AuthGuard><Community /></AuthGuard>} />
           <Route path="/community/room/:id" element={<AuthGuard><SecretRoom /></AuthGuard>} />
           <Route path="/downloads" element={<AuthGuard><Downloads /></AuthGuard>} />
@@ -197,6 +211,7 @@ export default function App() {
           <Route path="/creator/wallet" element={<CreatorGuard><CreatorWallet /></CreatorGuard>} />
           <Route path="/creator/onboarding" element={<CreatorGuard><CreatorOnboarding /></CreatorGuard>} />
           <Route path="/creator/ppm" element={<CreatorGuard><CreatorPPMSettings /></CreatorGuard>} />
+          <Route path="/creator/go-live" element={<CreatorGuard><GoLive /></CreatorGuard>} />
           <Route path="/events" element={<LiveEvents />} />
           <Route path="/events/:id" element={<EventDetail />} />
           <Route path="/red-carpet" element={<RedCarpet />} />
@@ -204,8 +219,9 @@ export default function App() {
           <Route path="/archive/:id" element={<AuthGuard><ArchiveDetail /></AuthGuard>} />
           <Route path="/watch-party" element={<AuthGuard requirePremium><WatchParty /></AuthGuard>} />
           <Route path="/chat" element={<AuthGuard><Chat /></AuthGuard>} />
-          <Route path="/forum" element={<AuthGuard><Forum /></AuthGuard>} />
+          <Route path="/forum" element={<AuthGuard><ForumPage /></AuthGuard>} />
           <Route path="/forum/:topicId" element={<AuthGuard><Forum /></AuthGuard>} />
+          <Route path="/hot-takes" element={<AuthGuard><HotTakes /></AuthGuard>} />
           <Route path="/trivia" element={<AuthGuard><Trivia /></AuthGuard>} />
           <Route path="/profile/:id" element={<PublicProfile />} />
           <Route path="/admin/asset-qc" element={<AdminGuard><AdminAssetQC /></AdminGuard>} />

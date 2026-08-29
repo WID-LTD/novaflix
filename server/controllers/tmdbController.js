@@ -28,7 +28,8 @@ export function search(req, res) {
       res.json({ success: true, data: results })
     })
     .catch((err) => {
-      console.error(err.message)
+      // Include code/status — some TMDB transport failures have empty messages.
+      console.error(`[tmdb] search failed: ${err.code || ''} ${err.response?.status || ''} ${err.message}`)
       res.json({ success: false, error: 'Failed to resolve metadata from TMDB' })
     })
 }

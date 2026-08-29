@@ -7,6 +7,7 @@ import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../widgets/ui/index.dart';
+import '../core/responsive.dart';
 import '../widgets/features/index.dart';
 
 final _eventsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
@@ -93,8 +94,9 @@ class _RedCarpetScreenState extends ConsumerState<RedCarpetScreen> {
     final tickets = user != null
         ? ref.watch(_ticketsProvider).valueOrNull ?? []
         : <Map<String, dynamic>>[];
-    final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
-    final hPadding = isDesktop ? 64.0 : 16.0;
+    final width = MediaQuery.sizeOf(context).width;
+    final size = screenSizeFor(width);
+    final hPadding = responsivePadding(width);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -102,7 +104,7 @@ class _RedCarpetScreenState extends ConsumerState<RedCarpetScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _hero(isDesktop),
+            _hero(size),
             Padding(
               padding: EdgeInsets.fromLTRB(hPadding, 24, hPadding, 48),
               child: Center(
@@ -192,7 +194,8 @@ class _RedCarpetScreenState extends ConsumerState<RedCarpetScreen> {
     );
   }
 
-  Widget _hero(bool isDesktop) {
+  Widget _hero(ScreenSize size) {
+    final isDesktop = size == ScreenSize.desktop;
     return Container(
       height: isDesktop ? 440 : 320,
       decoration: const BoxDecoration(
@@ -287,7 +290,7 @@ class _RedCarpetScreenState extends ConsumerState<RedCarpetScreen> {
             crossAxisCount: cols,
             crossAxisSpacing: 16,
             mainAxisSpacing: 16,
-            childAspectRatio: 0.8,
+            childAspectRatio: gridAspectRatio(constraints.maxWidth, cols, spacing: 16),
           ),
           itemCount: items.length,
           itemBuilder: (_, i) => _EventCard(
@@ -312,7 +315,7 @@ class _RedCarpetScreenState extends ConsumerState<RedCarpetScreen> {
             crossAxisCount: cols,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
-            childAspectRatio: 0.75,
+            childAspectRatio: gridAspectRatio(constraints.maxWidth, cols, spacing: 12),
           ),
       itemCount: items.length,
       itemBuilder: (_, i) {

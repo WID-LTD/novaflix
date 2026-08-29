@@ -4,10 +4,43 @@ import { API_BASE } from '../lib/config'
 import PageHeader from '../components/admin/PageHeader'
 import StatusBadge from '../components/admin/StatusBadge'
 import StatCard from '../components/admin/StatCard'
+import { useAdminEvent, AdminEvents } from '../hooks/useAdminEvents'
 
 export default function AdminUsers() {
   const [users, setUsers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Real-time updates for user management
+  useAdminEvent('admin:user.role.changed', (data) => {
+    console.log('[AdminUsers] User role changed:', data)
+    setUsers((prev) => prev.map((u) => (u.id === data.userId ? { ...u, role: data.role } : u)))
+  })
+
+  useAdminEvent('admin:user.banned', (data) => {
+    console.log('[AdminUsers] User banned:', data)
+    setUsers((prev) => prev.map((u) => (u.id === data.userId ? { ...u, role: 'banned' } : u)))
+  })
+
+  useAdminEvent('admin:user.unbanned', (data) => {
+    console.log('[AdminUsers] User unbanned:', data)
+    setUsers((prev) => prev.map((u) => (u.id === data.userId ? { ...u, role: 'user' } : u)))
+  })
+
+  useAdminEvent('admin:user.suspended', (data) => {
+    console.log('[AdminUsers] User suspended:', data)
+  })
+
+  useAdminEvent('admin:user.unsuspended', (data) => {
+    console.log('[AdminUsers] User unsuspended:', data)
+  })
+
+  useAdminEvent('admin:user.verified', (data) => {
+    console.log('[AdminUsers] User verified:', data)
+  })
+
+  useAdminEvent('admin:user.unverified', (data) => {
+    console.log('[AdminUsers] User unverified:', data)
+  })
 
   useEffect(() => {
     const token = getToken()

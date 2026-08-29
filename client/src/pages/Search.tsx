@@ -5,6 +5,7 @@ import { searchMedia, getNowPlaying, getTrendingFeed, getDiscover, searchPerson,
 import type { Person, PersonCredit } from '../lib/api'
 import { useStore } from '../store/useStore'
 import Tabs from '../components/ui/Tabs'
+import FilterChips from '../components/ui/FilterChips'
 import Badge from '../components/ui/Badge'
 import Skeleton from '../components/ui/Skeleton'
 import HoverCard from '../components/features/HoverCard'
@@ -12,12 +13,15 @@ import type { MediaItem } from '../types'
 import Button from '../components/ui/Button'
 import FollowButton from '../components/ui/FollowButton'
 
-const searchTabs = [
+const primaryTabs = [
   { id: 'movie', label: 'Movies' },
   { id: 'tv', label: 'TV Shows' },
-  { id: 'people', label: 'People' },
+]
+
+const filterChips = [
   { id: 'creators', label: 'Creators' },
   { id: 'categories', label: 'Categories' },
+  { id: 'people', label: 'People' },
 ]
 
 interface CategorySection {
@@ -242,14 +246,24 @@ export default function Search() {
   }
 
   const handleTabChange = (id: string) => {
-    setMediaType(id as 'movie' | 'tv' | 'people' | 'creators' | 'categories')
+    if (id === 'movie' || id === 'tv') {
+      setMediaType(id as 'movie' | 'tv')
+      if (query) {
+        setSearchParams({ q: query, type: id })
+      } else {
+        setSearchParams({ type: id })
+      }
+    } else {
+      // For filter chips (creators, categories, people), update mediaType for search
+      setMediaType(id as 'movie' | 'tv' | 'people' | 'creators' | 'categories')
+      if (query) {
+        setSearchParams({ q: query, type: id })
+      } else {
+        setSearchParams({ type: id })
+      }
+    }
     setSelectedPerson(null)
     setSelectedCreator(null)
-    if (query) {
-      setSearchParams({ q: query, type: id })
-    } else {
-      setSearchParams({ type: id })
-    }
   }
 
   const handleRecentClick = (q: string) => {
@@ -317,7 +331,11 @@ export default function Search() {
         </div>
 
         <div className="mb-6">
-          <Tabs tabs={searchTabs} activeTab={mediaType} onChange={handleTabChange} />
+          <Tabs tabs={primaryTabs} activeTab={mediaType} onChange={handleTabChange} />
+        </div>
+
+        <div className="mb-6">
+          <FilterChips chips={filterChips} activeChip={mediaType} onChange={handleTabChange} />
         </div>
 
         {!searched && recentlySearched.length > 0 && (

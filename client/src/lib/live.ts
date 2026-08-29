@@ -25,10 +25,22 @@ function keyOf(type: string, id: string) {
   return `${type}:${id}`
 }
 
+const LIVE_TYPES = new Set(['comment', 'like', 'follow', 'view'])
+
+// Global push types (no contentId/contentType) — delivered to every subscriber.
+const GLOBAL_TYPES = new Set(['coins:update', 'cosmetics:update', 'trivia:leaderboard'])
+
 function dispatch(msg: LiveMessage) {
   lastMessageAt = Date.now()
-  if (!msg.type || msg.contentId === undefined || msg.contentType === undefined) return
-  if (msg.type !== 'comment' && msg.type !== 'like') return
+  if (!msg.type) return
+  if (GLOBAL_TYPES.has(msg.type)) {
+    for (const sub of subs) {
+      try { sub.handler(msg) } catch {}
+    }
+    return
+  }
+  if (msg.contentId === undefined || msg.contentType === undefined) return
+  if (!LIVE_TYPES.has(msg.type)) return
   const key = keyOf(msg.contentType, String(msg.contentId))
   for (const sub of subs) {
     if (keyOf(sub.contentType, sub.contentId) === key) {

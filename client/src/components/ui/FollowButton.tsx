@@ -5,9 +5,10 @@ import { toggleFollow, checkFollow } from '../../lib/auth'
 interface FollowButtonProps {
   creatorId: string
   className?: string
+  onCountChange?: (count: number, following: boolean) => void
 }
 
-export default function FollowButton({ creatorId, className = '' }: FollowButtonProps) {
+export default function FollowButton({ creatorId, className = '', onCountChange }: FollowButtonProps) {
   const { user } = useAuth()
   const [following, setFollowing] = useState(false)
   const [count, setCount] = useState(0)
@@ -30,6 +31,7 @@ export default function FollowButton({ creatorId, className = '' }: FollowButton
     if (res.success) {
       setFollowing(res.following)
       setCount(res.count)
+      onCountChange?.(res.count, res.following)
     }
     setLoading(false)
   }

@@ -1,8 +1,16 @@
 import type { MediaItem, MediaDetails, Episode, StreamSource, ManifestInfo, HookItem } from '../types'
+import { API_BASE } from './config'
 
-const BASE = '/api'
+// Always resolve through config so production builds hit the deployed engine
+// (VITE_API_BASE / Render fallback) instead of a relative path that 404s on
+// static hosts. In dev this resolves to '/api' and goes through the Vite proxy.
+const BASE = API_BASE
 
-async function fetchJson<T>(url: string, params?: Record<string, string>): Promise<T> {
+// Re-exported for convenience: feature modules import the resolved base from
+// here so raw fetch() calls (batch checks, posters, portals) use one source.
+export { API_BASE }
+
+async function fetchJson<T>(url: string, params?: Record<string, string>, externalSignal?: AbortSignal): Promise<T> {
   try {
     const searchParams = new URLSearchParams(params)
     const queryString = searchParams.toString()
@@ -10,6 +18,10 @@ async function fetchJson<T>(url: string, params?: Record<string, string>): Promi
     const token = localStorage.getItem('novaflix-token') || ''
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 20000)
+    if (externalSignal) {
+      if (externalSignal.aborted) controller.abort()
+      else externalSignal.addEventListener('abort', () => controller.abort(), { once: true })
+    }
     const res = await fetch(fullUrl, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       signal: controller.signal,
@@ -17,7 +29,9 @@ async function fetchJson<T>(url: string, params?: Record<string, string>): Promi
     clearTimeout(timer)
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      return { success: false, error: body.error || `Server error (${res.status})` } as T
+      // Merge structured error payloads (code, activeSessions, limit, ...) so
+      // screens can react to things like screen_limit_reached / download_limit_reached.
+      return { ...body, success: false, error: body.error || `Server error (${res.status})` } as T
     }
     return res.json()
   } catch (err) {
@@ -78,8 +92,71 @@ export function getManifestInfo(url: string, id?: string, type?: string, season?
   return fetchJson(`${BASE}/manifest-info`, params)
 }
 
-export function getPublicCreators(): Promise<any> {
-  return fetchJson(`${BASE}/creator/public`)
+export interface PublicCreator {
+  id: string
+  name: string
+  avatar: string | null
+  bio: string | null
+  known_for_department: string | null
+  film_count: number
+  total_views: number
+  total_likes: number
+  followers_count: number
+}
+
+export function getPublicCreators(signal?: AbortSignal): Promise<{ success: boolean; creators?: PublicCreator[]; error?: string }> {
+  return fetchJson(`${BASE}/creator/public`, undefined, signal)
+}
+
+// ===== DISCOVERY ENGINE (Spotify-style) =====
+// Aggregated public creator profile: movies grouped strictly by relationship
+// type plus "Fans Also Like" suggestions from shared genre/mood tags.
+export interface DiscoveryMovieCredit {
+  id: string
+  title: string
+  description: string
+  genre: string | null
+  format: 'SHORT' | 'LONG' | null
+  duration_seconds: number | null
+  tags: string[] | null
+  views: number
+  created_at: string
+  poster_path: string | null
+  character_name?: string | null
+}
+
+export interface DiscoverySimilarCreator {
+  id: string
+  name: string
+  avatar: string | null
+  bio: string | null
+  film_count: number
+  tags: string[]
+  shared_tags: string[]
+}
+
+export interface CreatorDiscoveryProfile {
+  success: boolean
+  error?: string
+  creator: {
+    id: string
+    name: string
+    avatar: string | null
+    bio: string | null
+    known_for_department: string | null
+    followers_count: number
+    film_count: number
+    total_views: number
+    total_likes: number
+  }
+  counts: { directed: number; acted: number }
+  directed: DiscoveryMovieCredit[]
+  acted: DiscoveryMovieCredit[]
+  similarCreators: DiscoverySimilarCreator[]
+}
+
+export function getCreatorDiscovery(id: string): Promise<CreatorDiscoveryProfile> {
+  return fetchJson(`${BASE}/creators/${encodeURIComponent(id)}`)
 }
 
 export function getTrendingFeed(): Promise<{ success: boolean; data: { movies: MediaItem[]; tv: MediaItem[] }; error?: string }> {
@@ -199,6 +276,50 @@ export function incrementSkip(): Promise<any> {
   const token = localStorage.getItem('novaflix-token') || ''
   return fetch(`${BASE}/ads/skip`, {
     method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  }).then(r => r.json())
+}
+
+// ---- Screen sessions (concurrent-screen limit management) ----
+export interface ActiveSession {
+  id: string
+  device_id: string | null
+  ip_address: string | null
+  last_heartbeat: string
+}
+
+export function listActiveSessions(): Promise<{ success: boolean; sessions: ActiveSession[] }> {
+  const token = localStorage.getItem('novaflix-token') || ''
+  return fetch(`${BASE}/sessions/active`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
+}
+
+export function kickSession(deviceId: string): Promise<{ success: boolean }> {
+  const token = localStorage.getItem('novaflix-token') || ''
+  return fetch(`${BASE}/sessions/${encodeURIComponent(deviceId)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  }).then(r => r.json())
+}
+
+// ---- Download devices (mobile-app only; manage from web Settings) ----
+export interface DownloadDevice {
+  id: string
+  device_id: string
+  device_name: string | null
+  platform: string | null
+  registered_at: string
+  last_used_at: string
+}
+
+export function getDownloadDevices(): Promise<{ success: boolean; devices: DownloadDevice[]; limit: number; plan: string }> {
+  const token = localStorage.getItem('novaflix-token') || ''
+  return fetch(`${BASE}/downloads/devices`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
+}
+
+export function removeDownloadDevice(deviceId: string): Promise<{ success: boolean }> {
+  const token = localStorage.getItem('novaflix-token') || ''
+  return fetch(`${BASE}/downloads/devices/${encodeURIComponent(deviceId)}`, {
+    method: 'DELETE',
     headers: { Authorization: `Bearer ${token}` },
   }).then(r => r.json())
 }

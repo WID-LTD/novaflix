@@ -1,7 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/wallet_provider.dart';
-import '../services/wallet_service.dart';
+
 
 class CreatorPPMSettingsScreen extends ConsumerStatefulWidget {
   const CreatorPPMSettingsScreen({super.key});
@@ -71,7 +72,7 @@ class _CreatorPPMSettingsScreenState extends ConsumerState<CreatorPPMSettingsScr
     if (tierParams == null) return null;
     
     final baseRate = double.tryParse(rateStr) ?? 0;
-    final clampedRate = baseRate.clamp(tierParams['min_ppm'].toDouble(), tierParams['max_ppm'].toDouble());
+    final clampedRate = baseRate.clamp(tierParams['min_ppm'].toDouble(), tierParams['max_ppm'].toDouble()).toDouble();
     final multiplier = tierParams['multiplier'] as double;
     
     // For uploads: use base rate directly
@@ -138,15 +139,16 @@ class _CreatorPPMSettingsScreenState extends ConsumerState<CreatorPPMSettingsScr
                     const SizedBox(height: 16),
                     Row(
                       children: [
-                        _TierStatCard('Min PPM', '₦${_tierParams[_tier]!['min_ppm']}', Icons.arrow_downward, Colors.red),
-                        _TierStatCard('Max PPM', '₦${_tierParams[_tier]!['max_ppm']}', Icons.arrow_upward, Colors.green),
-                        _TierStatCard('Multiplier', '${_tierParams[_tier]!['multiplier']}x', Icons.trending_up, Colors.blue),
+                        _TierStatCard(label: 'Min PPM', value: '₦${_tierParams[_tier]!['min_ppm']}', icon: Icons.arrow_downward, color: Colors.red),
+                        _TierStatCard(label: 'Max PPM', value: '₦${_tierParams[_tier]!['max_ppm']}', icon: Icons.arrow_upward, color: Colors.green),
+                        _TierStatCard(label: 'Multiplier', value: '${_tierParams[_tier]!['multiplier']}x', icon: Icons.trending_up, color: Colors.blue),
                       ],
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
+            ),
+            const SizedBox(height: 24),
 
               // Base Rate Setting
               Card(
@@ -170,7 +172,6 @@ class _CreatorPPMSettingsScreenState extends ConsumerState<CreatorPPMSettingsScr
                       const SizedBox(height: 16),
                       TextFormField(
                         initialValue: _baseRate,
-                        keyboardType: TextInputType.numberWithOptions(decimal: true),
                         decoration: InputDecoration(
                           labelText: 'Base Rate (₦/min)',
                           hintText: 'Enter base rate',
@@ -181,7 +182,7 @@ class _CreatorPPMSettingsScreenState extends ConsumerState<CreatorPPMSettingsScr
                         onChanged: (v) => setState(() => _baseRate = v),
                       ),
                       const SizedBox(height: 16),
-                      if (_preview != null) ...[
+                      if (preview != null) ...[
                         const Text('Live Preview', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 12),
                         Row(
@@ -209,7 +210,9 @@ class _CreatorPPMSettingsScreenState extends ConsumerState<CreatorPPMSettingsScr
                           ],
                         ),
                       ],
-                    ),
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(height: 24),
               FilledButton(
@@ -283,12 +286,11 @@ class _CreatorPPMSettingsScreenState extends ConsumerState<CreatorPPMSettingsScr
                     ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
+        ),
+      );
   }
 
   Widget _buildHowItWorksItem(String text) {
@@ -301,7 +303,7 @@ class _CreatorPPMSettingsScreenState extends ConsumerState<CreatorPPMSettingsScr
           const SizedBox(width: 8),
           Expanded(child: Text(text, style: const TextStyle(fontSize: 14))),
         ],
-      );
+      ),
     );
   }
 }
@@ -366,7 +368,7 @@ class _TierStatCard extends StatelessWidget {
             ],
           ),
         ),
-      );
+      ),
     );
   }
 }

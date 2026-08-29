@@ -4,6 +4,7 @@ import { adminMiddleware, requirePermission } from '../middleware/admin.js'
 import * as adminController from '../controllers/adminController.js'
 import { adminSettle } from '../controllers/creatorEarningsController.js'
 import { listAppeals, decideAppeal } from '../controllers/appealController.js'
+import { getCreatorApplications, approveApplication, denyApplication } from '../controllers/creatorApplicationController.js'
 
 const router = Router()
 
@@ -55,5 +56,10 @@ router.post('/appeals/:id', requirePermission('moderation.resolve'), decideAppea
 router.get('/audit-log', requirePermission('logs.view'), adminController.auditLogList)
 router.get('/community', requirePermission('community.view'), adminController.communityList)
 router.get('/creator-studio', requirePermission('creators.view'), adminController.creatorStudio)
+
+// Creator application approval queue
+router.get('/creator-applications', requirePermission('creators.view'), getCreatorApplications)
+router.post('/creator-applications/:id/approve', requirePermission('creators.approve'), approveApplication)
+router.post('/creator-applications/:id/deny', requirePermission('creators.approve'), denyApplication)
 
 export default router

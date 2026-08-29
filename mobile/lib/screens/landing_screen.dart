@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../core/responsive.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../services/api_service.dart';
@@ -52,8 +53,9 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
-    final hPadding = isDesktop ? 64.0 : 16.0;
+    final width = MediaQuery.sizeOf(context).width;
+    final size = screenSizeFor(width);
+    final hPadding = responsivePadding(width);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -62,7 +64,7 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _nav(hPadding),
-            _hero(hPadding, isDesktop),
+            _hero(hPadding, size),
             _features(hPadding),
             _pricing(hPadding),
             _testimonials(hPadding),
@@ -124,9 +126,9 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
     );
   }
 
-  Widget _hero(double hPadding, bool isDesktop) {
+  Widget _hero(double hPadding, ScreenSize size) {
     return Container(
-      padding: EdgeInsets.fromLTRB(hPadding, isDesktop ? 96 : 56, hPadding, isDesktop ? 96 : 56),
+      padding: EdgeInsets.fromLTRB(hPadding, size == ScreenSize.desktop ? 96 : 56, hPadding, size == ScreenSize.desktop ? 96 : 56),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -162,7 +164,7 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
                 ),
                 textAlign: TextAlign.center,
                 style: AppTypography.displayMd.copyWith(
-                  fontSize: isDesktop ? 64 : 36,
+                  fontSize: size == ScreenSize.desktop ? 64 : 36,
                   height: 1.15,
                   fontWeight: FontWeight.w700,
                   color: AppColors.onSurface,
@@ -174,7 +176,7 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
                 textAlign: TextAlign.center,
                 style: AppTypography.bodyLg.copyWith(
                   color: AppColors.onSurfaceVariant,
-                  fontSize: isDesktop ? 20 : 15,
+                  fontSize: size == ScreenSize.desktop ? 20 : 15,
                 ),
               ),
               const SizedBox(height: 40),
@@ -278,7 +280,7 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: gridColumnsForWidth(constraints.maxWidth).clamp(2, 3),
+                    crossAxisCount: gridColumns(constraints.maxWidth).clamp(2, 3),
                     crossAxisSpacing: 16,
                     mainAxisSpacing: 16,
                     childAspectRatio: 1.4,
@@ -382,7 +384,7 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: gridColumnsForWidth(constraints.maxWidth).clamp(1, 3),
+                    crossAxisCount: gridColumns(constraints.maxWidth).clamp(1, 3),
                     crossAxisSpacing: 16,
                     mainAxisSpacing: 16,
                     childAspectRatio: 0.75,
@@ -545,7 +547,7 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: gridColumnsForWidth(constraints.maxWidth).clamp(1, 3),
+                    crossAxisCount: gridColumns(constraints.maxWidth).clamp(1, 3),
                     crossAxisSpacing: 16,
                     mainAxisSpacing: 16,
                     childAspectRatio: 1.4,

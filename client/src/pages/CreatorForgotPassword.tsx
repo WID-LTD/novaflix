@@ -82,7 +82,7 @@ export default function CreatorForgotPassword() {
               <p className="text-sm text-on-surface-variant mb-6">
                 If a creator account exists for <span className="text-primary">{email}</span>, a reset link has been sent. It expires in 30 minutes.
               </p>
-              <Link to="/creator/login" className="text-sm text-primary hover:underline">Back to Creator Sign In</Link>
+              <Link to="/login" className="text-sm text-primary hover:underline">Back to Creator Sign In</Link>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -100,7 +100,7 @@ export default function CreatorForgotPassword() {
           )}
 
           <div className="mt-6 text-center">
-            <Link to="/creator/login" className="text-sm text-on-surface-variant hover:text-primary transition-colors">Back to Creator Sign In</Link>
+            <Link to="/login" className="text-sm text-on-surface-variant hover:text-primary transition-colors">Back to Creator Sign In</Link>
           </div>
         </motion.div>
       </motion.div>

@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Icon from '../components/ui/Icon'
-import { getStreamSource, getManifestInfo, getTVSeason, getDetails } from '../lib/api'
+import { getStreamSource, getManifestInfo, getTVSeason, getDetails, kickSession } from '../lib/api'
+import type { ActiveSession } from '../lib/api'
 import { useStore } from '../store/useStore'
 import { useAuth } from '../lib/AuthContext'
 import { recordWatch, getEggs, collectEgg } from '../lib/auth'
@@ -52,6 +53,9 @@ export default function Watch() {
   const [eggPlacements, setEggPlacements] = useState<EggPlacement[]>([])
   const [collectedEggIds, setCollectedEggIds] = useState<string[]>([])
   const [eggToast, setEggToast] = useState<string | null>(null)
+  // Screen-limit modal (Netflix-style: end another session to watch here)
+  const [screenLimit, setScreenLimit] = useState<{ sessions: ActiveSession[]; maxScreens?: number } | null>(null)
+  const [kickingDevice, setKickingDevice] = useState<string | null>(null)
   const addToContinueWatching = useStore((s) => s.addToContinueWatching)
   const { user, planRank } = useAuth()
   const lastRecordRef = useRef(0)
@@ -86,6 +90,15 @@ export default function Watch() {
 
   useEffect(() => {
     if (!sourceData?.success) return
+
+    // Concurrent-screen limit hit → offer to end another session
+    if ((sourceData as any).code === 'screen_limit_reached') {
+      setScreenLimit({
+        sessions: ((sourceData as any).activeSessions || []) as ActiveSession[],
+        maxScreens: (sourceData as any).maxScreens,
+      })
+      return
+    }
 
     if (sourceData.streamUrl) {
       setCurrentStreamUrl(sourceData.streamUrl)
@@ -203,6 +216,26 @@ export default function Watch() {
       return
     }
     navigate('/download-app')
+  }
+
+  const handleKickAndPlay = async (deviceId: string) => {
+    if (!deviceId) return
+    setKickingDevice(deviceId)
+    try {
+      const res = await kickSession(deviceId)
+      if (res.success) {
+        setScreenLimit(null)
+        await queryClient.invalidateQueries({ queryKey: ['source', id, type, season, episode] })
+        const refetch = await queryClient.fetchQuery({
+          queryKey: ['source', id, type, season, episode],
+          queryFn: () => getStreamSource(id, type, season, episode),
+          staleTime: 0,
+        })
+        if (refetch?.success && refetch.streamUrl) setCurrentStreamUrl(refetch.streamUrl)
+      }
+    } finally {
+      setKickingDevice(null)
+    }
   }
 
   const handleEpisodeSelect = (ep: number) => {
@@ -368,6 +401,52 @@ export default function Watch() {
             setShowBingePass(false)
           }}
         />
+
+        {/* Screen-limit modal: end another session to watch here */}
+        <Modal isOpen={!!screenLimit} onClose={() => setScreenLimit(null)}>
+          <div className="p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-accent/15 flex items-center justify-center">
+                <Icon name="screen_lock_portrait" className="text-accent text-2xl" />
+              </div>
+              <div>
+                <h3 className="text-title-md font-bold text-on-surface">Screen limit reached</h3>
+                {screenLimit?.maxScreens && (
+                  <p className="text-body-sm text-on-surface-variant">Your plan allows {screenLimit.maxScreens} screen{screenLimit.maxScreens > 1 ? 's' : ''} at a time</p>
+                )}
+              </div>
+            </div>
+            <p className="text-body-md text-on-surface-variant mb-4">
+              End a session below to continue watching on this device, or upgrade your plan for more screens.
+            </p>
+            <div className="space-y-2 mb-5">
+              {(screenLimit?.sessions || []).map((s, i) => (
+                <div key={s.id} className="flex items-center justify-between bg-surface-container rounded-xl px-4 py-3 border border-outline/10">
+                  <div className="min-w-0">
+                    <p className="text-body-md text-on-surface truncate max-w-[240px]">
+                      {i === 0 ? 'This account' : (s.device_id || 'Unknown device').slice(0, 60)}
+                    </p>
+                    <p className="text-body-sm text-on-surface-variant">
+                      Active {new Date(s.last_heartbeat).toLocaleTimeString()} · IP {s.ip_address || '—'}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    loading={kickingDevice === s.device_id}
+                    onClick={() => handleKickAndPlay(s.device_id || '')}
+                  >
+                    End session
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="ghost" className="flex-1" onClick={() => setScreenLimit(null)}>Cancel</Button>
+              <Button className="flex-1" onClick={() => navigate('/pricing')}>Upgrade plan</Button>
+            </div>
+          </div>
+        </Modal>
 
         {/* Easter-egg reward toast */}
         {eggToast && (

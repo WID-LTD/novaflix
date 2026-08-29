@@ -19,7 +19,6 @@ interface PlanData {
   id: string
   name: string
   price: string
-  annualPrice?: string
   description: string
   popular: boolean
   features: Feature[]
@@ -43,43 +42,43 @@ const defaultPlans: PlanData[] = [
   {
     id: 'student',
     name: 'Student',
-    price: '₦1,200',
-    annualPrice: '₦12,000/yr',
+    price: '₦800',
     description: 'For learners on a budget',
     popular: false,
     features: [
       { label: '720p HD Quality', included: true },
-      { label: '1 device at a time', included: true },
+      { label: 'All devices supported', included: true },
+      { label: '1 screen at a time', included: true },
       { label: 'Offline downloads (1 device)', included: true },
-      { label: 'Ad-free listening', included: false },
+      { label: 'Ad-supported', included: true },
       { label: '6 skips per hour', included: true },
     ],
   },
   {
     id: 'basic',
     name: 'Basic',
-    price: '₦2,500',
-    annualPrice: '₦25,000/yr',
-    description: 'Solo streaming essentials',
+    price: '₦1,500',
+    description: 'Solo streaming, zero interruptions',
     popular: false,
     features: [
       { label: '720p HD Quality', included: true },
-      { label: '1 device at a time', included: true },
+      { label: 'All devices supported', included: true },
+      { label: '1 screen at a time', included: true },
       { label: 'Offline downloads (1 device)', included: true },
-      { label: 'Ad-free listening', included: false },
+      { label: 'Completely ad-free', included: true },
       { label: '6 skips per hour', included: true },
     ],
   },
   {
     id: 'standard',
     name: 'Standard',
-    price: '₦4,500',
-    annualPrice: '₦45,000/yr',
+    price: '₦2,500',
     description: 'The sweet spot',
     popular: true,
     features: [
       { label: '1080p Full HD', included: true, bold: true },
-      { label: '2 devices simultaneously', included: true },
+      { label: 'All devices supported', included: true },
+      { label: '2 screens simultaneously', included: true },
       { label: 'Offline downloads (2 devices)', included: true },
       { label: 'Completely ad-free', included: true },
       { label: 'Unlimited skips', included: true },
@@ -88,20 +87,59 @@ const defaultPlans: PlanData[] = [
   {
     id: 'premium',
     name: 'Premium',
-    price: '₦8,000',
-    annualPrice: '₦80,000/yr',
+    price: '₦5,500',
     description: 'Cinema grade experience',
     popular: false,
     features: [
-      { label: '4K UHD + HDR10 / Dolby Vision', included: true, bold: true },
-      { label: 'Spatial Audio', included: true },
-      { label: '4 devices simultaneously', included: true },
+      { label: '4K Ultra HD + Dolby Vision & HDR10', included: true, bold: true },
+      { label: 'Spatial Audio support', included: true },
+      { label: 'All devices supported', included: true },
+      { label: '4 screens simultaneously', included: true },
       { label: 'Offline downloads (6 devices)', included: true },
       { label: 'Completely ad-free', included: true },
-      { label: 'Exclusive premier access', included: true },
+      { label: 'Unlimited skips', included: true },
+      { label: 'Premier access: theatrical drops, masterclasses, red carpet lobbies', included: true },
     ],
   },
 ]
+
+// Locked tier matrix copy — used when rendering live DB plans
+const featureSets: Record<string, Feature[]> = {
+  student: [
+    { label: '720p HD Quality', included: true },
+    { label: 'All devices supported', included: true },
+    { label: '1 screen at a time', included: true },
+    { label: 'Offline downloads (1 device)', included: true },
+    { label: 'Ad-supported', included: true },
+    { label: '6 skips per hour', included: true },
+  ],
+  basic: [
+    { label: '720p HD Quality', included: true },
+    { label: 'All devices supported', included: true },
+    { label: '1 screen at a time', included: true },
+    { label: 'Offline downloads (1 device)', included: true },
+    { label: 'Completely ad-free', included: true },
+    { label: '6 skips per hour', included: true },
+  ],
+  standard: [
+    { label: '1080p Full HD', included: true, bold: true },
+    { label: 'All devices supported', included: true },
+    { label: '2 screens simultaneously', included: true },
+    { label: 'Offline downloads (2 devices)', included: true },
+    { label: 'Completely ad-free', included: true },
+    { label: 'Unlimited skips', included: true },
+  ],
+  premium: [
+    { label: '4K Ultra HD + Dolby Vision & HDR10', included: true, bold: true },
+    { label: 'Spatial Audio support', included: true },
+    { label: 'All devices supported', included: true },
+    { label: '4 screens simultaneously', included: true },
+    { label: 'Offline downloads (6 devices)', included: true },
+    { label: 'Completely ad-free', included: true },
+    { label: 'Unlimited skips', included: true },
+    { label: 'Premier access: theatrical drops, masterclasses, red carpet lobbies', included: true },
+  ],
+}
 
 export default function Pricing() {
   const navigate = useNavigate()
@@ -114,7 +152,6 @@ export default function Pricing() {
   const [modalPlan, setModalPlan] = useState<string | null>(null)
   const [modalGateway, setModalGateway] = useState<'paystack' | 'flutterwave'>('flutterwave')
   const [modalLoading, setModalLoading] = useState(false)
-  const [annual, setAnnual] = useState(false)
 
   useEffect(() => {
     fetch(`${API_BASE}/payment/pricing`).then(r => r.json()).then((data: any) => {
@@ -204,11 +241,6 @@ export default function Pricing() {
           {plans.map((plan) => {
             const isSelected = selectedPlan === plan.id
             const isActive = isCurrentPlan(plan.id)
-            const monthlyPrice = plan.price
-            const annualPrice = plan.annualPrice || ''
-            const displayPrice = annual && annualPrice ? annualPrice.replace('/yr', '') : monthlyPrice
-            const displayPeriod = annual ? '/year' : '/month'
-            const savings = annual && annualPrice ? 'Save 20%' : ''
             return (
               <div
                 key={plan.id}
@@ -233,13 +265,9 @@ export default function Pricing() {
                   <h3 className="text-headline-md mb-1">{plan.name}</h3>
                   <p className="font-label-sm text-label-sm text-on-surface-variant">{plan.description}</p>
                   <div className="mt-4">
-                    <span className="text-headline-lg font-bold">{displayPrice}</span>
-                    <span className="text-on-surface-variant text-body-md">{displayPeriod}</span>
-                    {savings && <span className="ml-2 text-sm font-bold text-green-400">{savings}</span>}
+                    <span className="text-headline-lg font-bold">{plan.price}</span>
+                    <span className="text-on-surface-variant text-body-md">/month</span>
                   </div>
-                  {!annual && annualPrice && (
-                    <p className="text-xs text-on-surface-variant/60 mt-1 line-through">{monthlyPrice}/month</p>
-                  )}
                 </div>
 
                 <div className="space-y-3 mb-8 flex-grow">
@@ -266,24 +294,11 @@ export default function Pricing() {
                       : 'border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container'
                   }`}
                 >
-                  {isActive ? 'Current Plan' : `Subscribe — ${displayPrice}`}
+                  {isActive ? 'Current Plan' : `Subscribe — ${plan.price}`}
                 </button>
               </div>
             )
           })}
-        </div>
-        
-        {/* Annual/Monthly Toggle */}
-        <div className="flex items-center justify-center gap-4 mb-12">
-          <span className={`font-label-md ${!annual ? 'text-on-surface' : 'text-on-surface-variant'}`}>Monthly</span>
-          <button
-            onClick={() => setAnnual(!annual)}
-            className={`relative w-14 h-8 rounded-full transition-colors ${annual ? 'bg-primary-container' : 'bg-white/20'}`}
-            aria-label={annual ? 'Switch to monthly billing' : 'Switch to annual billing'}
-          >
-            <span className={`absolute top-1 transition-transform w-6 h-6 rounded-full bg-white shadow-md ${annual ? 'translate-x-7' : 'translate-x-1'}`} />
-          </button>
-          <span className={`font-label-md ${annual ? 'text-on-surface' : 'text-on-surface-variant'}`}>Annual</span>
         </div>
 
         <div className="text-center">

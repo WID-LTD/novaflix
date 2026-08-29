@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../services/api_service.dart';
+import '../core/responsive.dart';
 import '../widgets/ui/index.dart';
 
 const _categories = [
@@ -107,13 +108,14 @@ class NewsScreen extends ConsumerWidget {
     final industry = ref.watch(_industryNewsProvider);
     final activeTab = ref.watch(_categoryIndexProvider);
     final moviePill = ref.watch(_moviePillProvider);
-    final isDesktop = MediaQuery.of(context).size.width >= 1024;
-    final hPadding = isDesktop ? 64.0 : 16.0;
+    final width = MediaQuery.of(context).size.width;
+    final size = screenSizeFor(width);
+    final hPadding = responsivePadding(width);
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(hPadding, isDesktop ? 40 : 24, hPadding, 48),
+        padding: EdgeInsets.fromLTRB(hPadding, size == ScreenSize.desktop ? 40 : 24, hPadding, 48),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1280),
@@ -344,7 +346,7 @@ class NewsScreen extends ConsumerWidget {
     final now = DateTime.now();
     final weekday = DateFormat('EEEE').format(now);
     final date = DateFormat('d MMM, yyyy').format(now);
-    final isDesktop = MediaQuery.of(context).size.width >= 1024;
+    final headerSize = screenSizeFor(MediaQuery.of(context).size.width);
     final searchCtl = TextEditingController();
 
     return Column(
@@ -371,7 +373,7 @@ class NewsScreen extends ConsumerWidget {
               ],
             ),
             const SizedBox(width: 24),
-            if (isDesktop)
+            if (headerSize == ScreenSize.desktop)
               Expanded(
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,

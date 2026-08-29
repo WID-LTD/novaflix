@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from 'react'
 import Icon from '../components/ui/Icon'
 import { useStore } from '../store/useStore'
 import { useAuth } from '../lib/AuthContext'
-import { getMyAchievements, checkAchievements, uploadAvatar, getFollowStats, getFollowers, getFollowing, getGamification, getContinueWatching, getWatchlist } from '../lib/auth'
+import { getMyAchievements, checkAchievements, uploadAvatar, getFollowStats, getFollowers, getFollowing, getGamification, getContinueWatching, getWatchlist, getCosmetics } from '../lib/auth'
 import Button from '../components/ui/Button'
 import PremiumBadge from '../components/ui/PremiumBadge'
 import FollowButton from '../components/ui/FollowButton'
@@ -24,6 +24,7 @@ export default function Profile() {
   const [listLoading, setListLoading] = useState(false)
   const [serverContinueWatching, setServerContinueWatching] = useState<any[]>([])
   const [serverWatchlist, setServerWatchlist] = useState<any[]>([])
+  const [equippedCosmetics, setEquippedCosmetics] = useState<{ avatar_frame?: any; badge?: any; title?: any }>({})
 
   useEffect(() => {
     (async () => {
@@ -46,6 +47,15 @@ export default function Profile() {
     getWatchlist(token).then((res) => {
       if (res.success && Array.isArray(res.watchlist)) {
         setServerWatchlist(res.watchlist)
+      }
+    })
+    getCosmetics().then((res) => {
+      if (res.success && Array.isArray(res.cosmetics)) {
+        const equipped = res.cosmetics.filter((c: any) => c.owned && c.equipped).reduce((acc: any, c: any) => {
+          acc[c.kind] = c
+          return acc
+        }, {})
+        setEquippedCosmetics(equipped)
       }
     })
   }, [user])
@@ -142,6 +152,12 @@ export default function Profile() {
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 mb-6 md:mb-10">
           <button onClick={handleAvatarClick} disabled={uploading} className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden bg-gradient-to-br from-primary-container to-secondary flex items-center justify-center shrink-0 hover:opacity-80 transition-opacity">
+            {/* Avatar Frame */}
+            {equippedCosmetics.avatar_frame && (
+              <div className="absolute -inset-1 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 p-[2px]" aria-hidden="true">
+                <div className="relative w-full h-full rounded-full bg-gradient-to-br from-purple-500/20 to-purple-700/20" />
+              </div>
+            )}
             {user?.avatar ? (
               <img src={user.avatar} alt={user.name || ''} className="w-full h-full object-cover" />
             ) : (
@@ -158,8 +174,18 @@ export default function Profile() {
           </button>
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
           <div className="flex-1 min-w-0">
-            <h1 className="text-headline-lg-mobile md:text-headline-lg truncate">{user?.name || 'Guest'}</h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-headline-lg-mobile md:text-headline-lg truncate">{user?.name || 'Guest'}</h1>
+              {equippedCosmetics.badge && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-300 text-xs font-medium shrink-0">
+                  <Icon name="military_tech" className="w-3 h-3" /> {equippedCosmetics.badge.name}
+                </span>
+              )}
+            </div>
             <p className="text-on-surface-variant/60 text-sm mt-1 truncate">{user?.email || 'Sign in to sync across devices'}</p>
+            {equippedCosmetics.title && (
+              <p className="text-sm text-amber-300 mt-1 font-medium truncate">{equippedCosmetics.title.name}</p>
+            )}
             {isPremium && (
               <div className="mt-2">
                 <PremiumBadge size="sm" />

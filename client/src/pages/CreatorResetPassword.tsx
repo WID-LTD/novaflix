@@ -92,7 +92,7 @@ export default function CreatorResetPassword() {
                 <Icon name="check_circle" size="lg" />
               </div>
               <p className="text-sm text-on-surface-variant mb-6">Your password has been reset successfully.</p>
-              <Link to="/creator/login" className="text-sm text-primary hover:underline">Go to Creator Sign In</Link>
+              <Link to="/login" className="text-sm text-primary hover:underline">Go to Creator Sign In</Link>
             </div>
           ) : (
             <>
@@ -126,7 +126,7 @@ export default function CreatorResetPassword() {
           )}
 
           <div className="mt-6 text-center">
-            <Link to="/creator/login" className="text-sm text-on-surface-variant hover:text-primary transition-colors">Back to Creator Sign In</Link>
+            <Link to="/login" className="text-sm text-on-surface-variant hover:text-primary transition-colors">Back to Creator Sign In</Link>
           </div>
         </motion.div>
       </motion.div>

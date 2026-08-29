@@ -1,14 +1,18 @@
+import 'dart:async';
 import 'dart:ui' show ImageFilter;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../core/responsive.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
+import '../utils/format_time.dart';
 import '../widgets/ui/index.dart';
 import '../widgets/features/index.dart';
+import '../widgets/movie_card.dart';
 
 final _coinsProvider = FutureProvider<int>((ref) async {
   final api = ref.read(apiServiceProvider);
@@ -86,7 +90,57 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
   Map<String, dynamic>? _guessResult;
   bool _guessBusy = false;
 
+  Timer? _countdownTimer;
+  String _countdownText = '';
+
   int _int(dynamic v, [int fallback = 0]) => v is num ? v.toInt() : fallback;
+
+  @override
+  void initState() {
+    super.initState();
+    _startCountdownTimer();
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startCountdownTimer() {
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      final now = DateTime.now().toUtc();
+      final midnight = DateTime(now.year, now.month, now.day + 1, 0, 0, 0, 0, 0);
+      final diff = midnight.difference(now);
+      if (diff.isNegative) {
+        _countdownTimer?.cancel();
+        setState(() => _countdownText = 'New trivia available!');
+        _loadDailyTrivia();
+      } else {
+        final hours = diff.inHours;
+        final minutes = diff.inMinutes % 60;
+        final seconds = diff.inSeconds % 60;
+        setState(() {
+          _countdownText =
+              '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+        });
+      }
+      });
+    }
+
+  Future<void> _loadDailyTrivia() async {
+    ref.invalidate(_dailyTriviaProvider);
+    setState(() {
+      _qIndex = 0;
+      _selected = null;
+      _dailyBusy = false;
+      _correctCount = 0;
+      _coinsEarned = 0;
+      _streak = 0;
+      _dailyDone = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -273,8 +327,48 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
             ),
           );
         }
-        final qi = _qIndex < items.length ? _qIndex : items.length - 1;
-        final q = items[qi];
+        return Column(
+          children: [
+            if (_countdownText.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryContainer.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.primaryContainer),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.schedule,
+                        color: AppColors.primary,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Next trivia in $_countdownText',
+                        style: AppTypography.labelMd.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            _buildDailyQuestions(items),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDailyQuestions(List<Map<String, dynamic>> items) {
+    final qi = _qIndex < items.length ? _qIndex : items.length - 1;
+    final q = items[qi];
         final options =
             (q['options'] as List?)?.map((o) => o.toString()).toList() ??
             <String>[];
@@ -370,14 +464,12 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
                           : () => _pickAnswer(q, i, items.length),
                     );
                   }),
-                ],
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
+                 ],
+               ),
+             ),
+           ],
+         );
+   }
 
   Future<void> _pickAnswer(Map<String, dynamic> q, int idx, int total) async {
     if (_dailyBusy || _selected != null) return;
@@ -761,14 +853,16 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
     ref.invalidate(_coinsProvider);
   }
 
-  Widget _blurredPoster(String? url) {
+Widget _blurredPoster(String? url) {
+    final bool revealed = _guessSelected != null;
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: Stack(
         children: [
           if (url != null)
             ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              imageFilter: ImageFilter.blur(
+                  sigmaX: revealed ? 0 : 12, sigmaY: revealed ? 0 : 12),
               child: CachedNetworkImage(
                 imageUrl: url,
                 height: 240,
@@ -801,9 +895,12 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
               ),
             ),
           Positioned.fill(
-            child: Container(color: AppColors.black.withValues(alpha: 0.4)),
+            child: Container(
+                color: revealed
+                    ? Colors.transparent
+                    : AppColors.black.withValues(alpha: 0.4)),
           ),
-          if (_guessSelected == null && url != null)
+          if (!revealed && url != null)
             Positioned.fill(
               child: Center(
                 child: Container(
@@ -825,9 +922,9 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
                 ),
               ),
             ),
-        ],
-      ),
-    );
+          ],
+        ),
+      );
   }
 
   // ---------- Tab 3: Cosmetics Shop ----------
@@ -868,10 +965,10 @@ class _TriviaScreenState extends ConsumerState<TriviaScreen> {
           builder: (context, constraints) => GridView.builder(
             padding: const EdgeInsets.all(16),
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: gridColumnsForWidth(constraints.maxWidth - 32),
+              crossAxisCount: gridColumns(constraints.maxWidth - 32),
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
-              childAspectRatio: 0.66,
+              childAspectRatio: gridAspectRatio(constraints.maxWidth - 32, gridColumns(constraints.maxWidth - 32)),
             ),
           itemCount: data.items.length,
           itemBuilder: (_, i) {

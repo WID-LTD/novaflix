@@ -11,6 +11,8 @@ import '../theme/app_typography.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/ws_service.dart';
+import '../core/config.dart';
+import '../core/responsive.dart';
 
 class WatchPartyScreen extends ConsumerStatefulWidget {
   const WatchPartyScreen({super.key});
@@ -137,7 +139,7 @@ class _WatchPartyScreenState extends ConsumerState<WatchPartyScreen> {
 
   void _copyLink() {
     if (_roomCode == null) return;
-    final link = 'https://novaflix-ecz9.onrender.com/watch-party?room=$_roomCode';
+    final link = 'http://localhost:3030/watch-party?room=$_roomCode';
     Clipboard.setData(ClipboardData(text: link));
     _toast('Invite link copied!');
   }
@@ -235,8 +237,8 @@ class _WatchPartyScreenState extends ConsumerState<WatchPartyScreen> {
   }
 
   Widget _lobby() {
-    final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
-    final hPadding = isDesktop ? 64.0 : 16.0;
+    final width = MediaQuery.sizeOf(context).width;
+    final hPadding = responsivePadding(width);
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SingleChildScrollView(
@@ -394,7 +396,7 @@ class _WatchPartyScreenState extends ConsumerState<WatchPartyScreen> {
   }
 
   Widget _room() {
-    final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
+    final size = screenSizeFor(MediaQuery.sizeOf(context).width);
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -474,7 +476,7 @@ class _WatchPartyScreenState extends ConsumerState<WatchPartyScreen> {
                 ],
               ),
             )
-          : isDesktop
+          : size == ScreenSize.desktop
               ? _desktopRoom()
               : _mobileRoom(),
     );

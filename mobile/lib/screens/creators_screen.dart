@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../core/responsive.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../services/api_service.dart';
@@ -30,7 +31,7 @@ class CreatorsScreen extends ConsumerWidget {
           builder: (context, constraints) => GridView.builder(
             padding: const EdgeInsets.all(16),
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: gridColumnsForWidth(
+              crossAxisCount: gridColumns(
                 constraints.maxWidth - 32,
               ).clamp(2, 4),
               childAspectRatio: 0.9,

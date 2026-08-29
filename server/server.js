@@ -150,6 +150,24 @@ app.locals.tmdb = axios.create({
   },
 });
 
+// TMDB's edge occasionally drops connections / returns 429 under bursty
+// traffic. Retry idempotent GETs once with a short backoff so a single
+// transient blip never surfaces as "Failed to resolve metadata".
+app.locals.tmdb.interceptors.response.use(undefined, async (error) => {
+  const config = error.config;
+  const status = error.response?.status;
+  const transient =
+    !error.response || // network drop / reset
+    status === 429 ||
+    (status >= 500 && status <= 599);
+  if (config && transient && (config.__tmdbRetries || 0) < 1 && config.method === 'get') {
+    config.__tmdbRetries = (config.__tmdbRetries || 0) + 1;
+    await new Promise((r) => setTimeout(r, 400));
+    return app.locals.tmdb.request(config);
+  }
+  return Promise.reject(error);
+});
+
 app.use('/api', apiRoutes);
 app.use('/api', claimRoutes);
 app.use('/api', beneficiaryRoutes);
@@ -166,12 +184,14 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 const rooms = new Map()
 const presence = new Map()
 import { registerSocket, deregisterSocket } from './services/realtime.js'
+import { registerCreatorSocket, deregisterCreatorSocket } from './services/creatorRealtime.js'
 
 wss.on('connection', (ws, req) => {
   let userId = null
   let currentRoom = null
   let currentPresenceContent = null
   let userPlan = 'free'
+  let isCreator = false
 
   // Authenticate via token in query param
   const url = new URL(req.url, `http://${req.headers.host}`)
@@ -356,6 +376,68 @@ wss.on('connection', (ws, req) => {
           } catch {}
           break
         }
+        case 'community-join': {
+          if (!userId) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Sign in to join community chats' }))
+            return
+          }
+          const communityId = payload?.communityId
+          if (!communityId) {
+            ws.send(JSON.stringify({ type: 'error', message: 'communityId required' }))
+            return
+          }
+          try {
+            const { isCommunityMember, getRoomMessages } = await import('./db.js')
+            const member = await isCommunityMember(communityId, userId)
+            if (!member) {
+              ws.send(JSON.stringify({ type: 'error', code: 'not-member', message: 'Join this community to enter its chat.' }))
+              break
+            }
+            currentRoom = `community:${communityId}`
+            if (!rooms.has(currentRoom)) {
+              rooms.set(currentRoom, { users: new Map(), hostId: null, metadata: null, suggestions: [] })
+            }
+            const roomObj = rooms.get(currentRoom)
+            roomObj.users.set(userId, { ws, name: user?.name || 'Anonymous', id: userId })
+            const joinedUsers = [...roomObj.users.values()].map((u) => ({ id: u.id, name: u.name }))
+            ws.send(JSON.stringify({
+              type: 'community-joined',
+              communityId,
+              users: joinedUsers,
+            }))
+            broadcast(currentRoom, { type: 'user-joined', userId, name: user?.name || 'Anonymous', users: joinedUsers }, userId)
+            try {
+              const history = await getRoomMessages(currentRoom, 50)
+              ws.send(JSON.stringify({ type: 'chat-history', communityId, messages: history.map((m) => ({
+                id: String(m.id),
+                userId: m.user_id,
+                name: m.user_name || 'Anonymous',
+                message: m.message,
+                timestamp: new Date(m.created_at).getTime(),
+              })) }))
+            } catch {}
+          } catch {
+            ws.send(JSON.stringify({ type: 'error', message: 'Could not join community chat' }))
+          }
+          break
+        }
+        case 'community-chat': {
+          if (!currentRoom || !currentRoom.startsWith('community:')) break
+          if (typeof payload?.message !== 'string' || !payload.message.trim()) break
+          const text = payload.message.trim().slice(0, 2000)
+          const cMsg = { type: 'chat', userId, message: text, name: user?.name || 'Anonymous', timestamp: Date.now() }
+          broadcast(currentRoom, cMsg)
+          try {
+            const { saveMessage } = await import('./db.js')
+            saveMessage(currentRoom, userId, cMsg.name, text).catch(() => {})
+          } catch {}
+          break
+        }
+        case 'community-typing': {
+          if (!currentRoom || !currentRoom.startsWith('community:')) break
+          broadcast(currentRoom, { type: 'typing', userId, name: user?.name || 'Anonymous', isTyping: !!payload?.isTyping }, userId)
+          break
+        }
         case 'topic-join': {
           if (!userId) {
             ws.send(JSON.stringify({ type: 'error', message: 'Authentication required for live replies' }))
@@ -424,12 +506,24 @@ wss.on('connection', (ws, req) => {
           }
           break
         }
+        case 'creator-subscribe': {
+          if (userId) {
+            isCreator = true
+            registerCreatorSocket(userId, ws)
+          }
+          break
+        }
+        case 'creator-unsubscribe': {
+          if (userId) deregisterCreatorSocket(userId, ws)
+          break
+        }
       }
     } catch {}
   })
 
   ws.on('close', () => {
     if (userId) deregisterSocket(userId, ws)
+    if (userId && isCreator) deregisterCreatorSocket(userId, ws)
     leaveAllTopicRooms(ws)
     if (currentRoom && rooms.has(currentRoom)) {
       const roomObj = rooms.get(currentRoom)
@@ -439,7 +533,8 @@ wss.on('connection', (ws, req) => {
         roomObj.hostId = firstKey
         broadcast(currentRoom, { type: 'host-changed', hostId: firstKey })
       }
-      broadcast(currentRoom, { type: 'user-left', userId })
+      const remainingUsers = [...roomObj.users.values()].map((u) => ({ id: u.id, name: u.name }))
+      broadcast(currentRoom, { type: 'user-left', userId, users: remainingUsers })
       if (roomObj.users.size === 0) rooms.delete(currentRoom)
     }
     if (currentPresenceContent && presence.has(currentPresenceContent)) {

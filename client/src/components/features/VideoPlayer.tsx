@@ -447,7 +447,8 @@ export default function VideoPlayer({
   const handleSkipForward = async () => {
     const video = videoRef.current
     if (!video) return
-    if (planRank < 2) {
+    // Free, Student and Basic are capped at skipsPerHour; Standard+ unlimited
+    if (planRank < 3) {
       const res = await getSkipLimit()
       if (res.success) {
         setSkipLimit(res)

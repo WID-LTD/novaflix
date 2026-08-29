@@ -3,6 +3,7 @@ import { getToken, adminCatalog, adminUpdateCatalogItem } from '../lib/auth'
 import PageHeader from '../components/admin/PageHeader'
 import StatusBadge from '../components/admin/StatusBadge'
 import Icon from '../components/ui/Icon'
+import { useAdminEvent, AdminEvents } from '../hooks/useAdminEvents'
 
 export default function AdminContent() {
   const [token] = useState(() => getToken() ?? '')
@@ -11,6 +12,20 @@ export default function AdminContent() {
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState<any>({})
   const [msg, setMsg] = useState('')
+
+  // Real-time updates for catalog
+  useAdminEvent('admin:catalog.updated', (data) => {
+    console.log('[AdminContent] Catalog updated:', data)
+    // Update the specific item in the list
+    setItems((prev) => prev.map((i) => 
+      i.id === data.id ? { ...i, ...data.fields } : i
+    ))
+  })
+
+  useAdminEvent('admin:catalog.created', (data) => {
+    console.log('[AdminContent] New content created:', data)
+    // Could refresh or add the new item
+  })
 
   useEffect(() => {
     adminCatalog(token).then((r) => {

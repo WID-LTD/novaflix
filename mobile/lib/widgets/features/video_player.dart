@@ -61,6 +61,9 @@ class VideoPlayer extends ConsumerStatefulWidget {
   final void Function(double duration)? onDuration;
   final double? startPosition;
   final bool isFreeTier;
+
+  /// True when the plan caps skips (free/student/basic = 6/hr; standard+ unlimited).
+  final bool skipsCapped;
   final bool bingePassActive;
   final List<VideoEgg> eggs;
   final List<String> collectedEggIds;
@@ -78,6 +81,7 @@ class VideoPlayer extends ConsumerStatefulWidget {
     this.onDuration,
     this.startPosition,
     this.isFreeTier = true,
+    this.skipsCapped = true,
     this.bingePassActive = false,
     this.eggs = const [],
     this.collectedEggIds = const [],
@@ -564,7 +568,7 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
   }
 
   Future<void> _skipForward() async {
-    if (widget.isFreeTier) {
+    if (widget.skipsCapped) {
       final api = ref.read(apiServiceProvider);
       try {
         final sl = await api.getSkipLimit();
@@ -1081,6 +1085,24 @@ class _VideoPlayerState extends ConsumerState<VideoPlayer> {
                   _iconBtn(_playing ? Icons.pause : Icons.play_arrow, _togglePlay),
                   const SizedBox(width: 4),
                   _iconBtn(Icons.forward_10, _skipForward),
+                  // Visible skip ticker for capped plans (free/student/basic)
+                  if (widget.skipsCapped && _skipMax < 999) ...[
+                    const SizedBox(width: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '${_skipMax - _skipUsed} skips left',
+                        style: TextStyle(
+                          color: (_skipUsed >= _skipMax) ? Colors.redAccent : Colors.white70,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(width: 8),
                   _iconBtn(
                     _muted ? Icons.volume_off : (_volume > 0.5 ? Icons.volume_up : Icons.volume_down),

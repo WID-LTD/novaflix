@@ -50,6 +50,7 @@ class ClaimSuccessScreen extends StatelessWidget {
                     ],
                   ),
                 ),
+              ),
               const SizedBox(height: 32),
               FilledButton.icon(
                 icon: const Icon(Icons.arrow_forward),

@@ -3,11 +3,33 @@ import { getToken, adminAnalytics } from '../lib/auth'
 import PageHeader from '../components/admin/PageHeader'
 import StatCard from '../components/admin/StatCard'
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, BarChart, Bar, Legend, PieChart, Pie, Cell } from 'recharts'
+import { useAdminEvent, AdminEvents } from '../hooks/useAdminEvents'
 
 const COLORS = ['#E50914', '#00B388', '#7C4DFF', '#F5A623', '#4DD0E1']
 
 export default function AdminAnalytics() {
   const [data, setData] = useState<any>(null)
+
+  // Real-time updates for analytics
+  useAdminEvent('admin:user.signup', () => {
+    console.log('[AdminAnalytics] New user signup - analytics may need refresh')
+  })
+
+  useAdminEvent('admin:user.signup', () => {
+    console.log('[AdminAnalytics] New user signup - analytics may need refresh')
+  })
+
+  useAdminEvent('admin:user.role.changed', () => {
+    console.log('[AdminAnalytics] User role changed')
+  })
+
+  useAdminEvent('admin:user.banned', () => {
+    console.log('[AdminAnalytics] User banned')
+  })
+
+  useAdminEvent('admin:user.unbanned', () => {
+    console.log('[AdminAnalytics] User unbanned')
+  })
 
   useEffect(() => {
     const token = getToken()

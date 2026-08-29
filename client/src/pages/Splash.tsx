@@ -1,14 +1,17 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
+import { useAuth } from '../lib/AuthContext'
 
 export default function Splash() {
   const navigate = useNavigate()
+  const { user, loading } = useAuth()
 
   useEffect(() => {
+    if (loading) return
     const timer = setTimeout(() => navigate('/home'), 5000)
     return () => clearTimeout(timer)
-  }, [navigate])
+  }, [navigate, user, loading])
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background flex flex-col items-center justify-center">

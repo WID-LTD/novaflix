@@ -32,7 +32,7 @@ const navItems: NavItem[] = [
 
 const engagementItems: NavItem[] = [
   { to: '/community', icon: 'diversity_3', label: 'Community', auth: true },
-  { to: '/forum', icon: 'forum', label: 'Hot Takes', auth: true },
+  { to: '/hot-takes', icon: 'local_fire_department', label: 'Hot Takes', auth: true },
   { to: '/trivia', icon: 'quiz', label: 'Trivia & Rewards', auth: true },
 ]
 
@@ -67,29 +67,29 @@ export default function Sidebar() {
     <motion.nav
       animate={{ width: collapsed ? 64 : 240 }}
       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-      className="hidden lg:flex fixed left-0 top-0 h-screen bg-surface-container-lowest border-r border-white/5 z-30 flex-col py-4 overflow-visible pt-[112px]"
+      className="hidden lg:flex fixed left-0 top-0 h-screen bg-surface-container-lowest border-r border-white/5 z-30 flex-col py-4 overflow-visible pt-14"
     >
         {collapsed ? (
           <div className="flex flex-col items-center gap-2 px-4 mb-6">
             <button
               onClick={toggleSidebar}
               className="shrink-0 p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-colors"
-              aria-label="Toggle sidebar"
+              aria-label="Expand sidebar"
             >
               <Icon name="menu" />
             </button>
             <span className="text-headline-md font-extrabold text-primary-container tracking-tight">N</span>
           </div>
         ) : (
-          <div className="flex items-center gap-3 px-4 mb-6 h-[80px] shrink-0">
+          <div className="flex items-center gap-3 px-4 mb-6 h-14 shrink-0">
+            <img src="/leter-mark-logo.png" alt="" className="w-auto h-12 object-contain max-h-full" />
             <button
               onClick={toggleSidebar}
-              className="shrink-0 p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-colors"
-              aria-label="Toggle sidebar"
+              className="shrink-0 ml-auto p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-colors"
+              aria-label="Collapse sidebar"
             >
-              <Icon name="menu" />
+              <Icon name="menu_open" />
             </button>
-            <img src="/leter-mark-logo.png" alt="" className="w-auto h-[80px] lg:h-[96px] xl:h-[110px] object-contain max-h-full" />
           </div>
         )}
 

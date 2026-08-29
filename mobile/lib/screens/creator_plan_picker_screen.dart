@@ -9,11 +9,22 @@ import '../widgets/ui/index.dart';
 class CreatorPlanPickerScreen extends ConsumerWidget {
   const CreatorPlanPickerScreen({super.key});
 
+  static String _formatNaira(num v) {
+    final s = v.round().toString();
+    final buf = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      final rem = s.length - i;
+      buf.write(s[i]);
+      if (rem > 1 && rem % 3 == 1) buf.write(',');
+    }
+    return buf.toString();
+  }
+
   static const _plans = [
-    {'name': 'Student', 'price': 4.99, 'desc': '720p · 1 screen · 1 download', 'recommended': false},
-    {'name': 'Basic', 'price': 7.99, 'desc': '720p · 1 screen · 1 download', 'recommended': false},
-    {'name': 'Standard', 'price': 12.99, 'desc': '1080p · 2 screens · 2 downloads · Ad-free', 'recommended': true},
-    {'name': 'Premium', 'price': 17.99, 'desc': '4K · 4 screens · 6 downloads · Spatial Audio', 'recommended': false},
+    {'name': 'Student', 'price': 800, 'desc': '720p · 1 screen · 1 download · Ads', 'recommended': false},
+    {'name': 'Basic', 'price': 1500, 'desc': '720p · 1 screen · 1 download · Ad-free', 'recommended': false},
+    {'name': 'Standard', 'price': 2500, 'desc': '1080p · 2 screens · 2 downloads · Ad-free', 'recommended': true},
+    {'name': 'Premium', 'price': 5500, 'desc': '4K HDR/DV · Spatial Audio · 4 screens · 6 downloads', 'recommended': false},
   ];
 
   @override
@@ -47,7 +58,7 @@ class CreatorPlanPickerScreen extends ConsumerWidget {
                 const SizedBox(height: 12),
                 Text(p['name'] as String, style: AppTypography.headlineMd),
                 const SizedBox(height: 4),
-                Text('\$${(p['price'] as num).toStringAsFixed(2)}/mo', style: AppTypography.headlineSm.copyWith(color: AppColors.primary)),
+                Text('₦${_formatNaira(p['price'] as num)}/mo', style: AppTypography.headlineSm.copyWith(color: AppColors.primary)),
                 const SizedBox(height: 8),
                 Text(p['desc'] as String, style: TextStyle(color: AppColors.onSurfaceVariant, fontSize: 13)),
                 const SizedBox(height: 16),

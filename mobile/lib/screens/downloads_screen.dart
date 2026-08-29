@@ -43,6 +43,8 @@ class DownloadsScreen extends ConsumerWidget {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
                 children: [
+                  if (dlState.limitError != null)
+                    _limitBanner(context, ref, dlState.limitError!),
                   if (isOffline)
                     _offlineBanner(context),
                   const SizedBox(height: 8),
@@ -81,8 +83,32 @@ class DownloadsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _offlineBanner(BuildContext context) {
+  Widget _limitBanner(BuildContext context, WidgetRef ref, String message) {
     return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.error.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.block, color: AppColors.error, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(message, style: const TextStyle(color: Colors.white, fontSize: 13)),
+          ),
+          GestureDetector(
+            onTap: () => ref.read(downloadsProvider.notifier).clearLimitError(),
+            child: const Icon(Icons.close, color: Colors.white70, size: 16),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _offlineBanner(BuildContext context) {    return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerHigh,

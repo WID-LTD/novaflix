@@ -7,7 +7,7 @@ class AppConfig {
 
   static const String _override = String.fromEnvironment('BASE_URL');
 
-  static const String productionBase = 'https://novaflix-ecz9.onrender.com/api';
+  static const String productionBase = 'http://localhost:3030/api';
 
   static String get apiBaseUrl {
     if (_override.isNotEmpty) return _override;

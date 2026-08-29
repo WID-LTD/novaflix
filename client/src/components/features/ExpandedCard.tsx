@@ -121,6 +121,11 @@ export default function ExpandedCard({ details, cardRect, onClose, onMouseEnter,
     }
   }
 
+  const handleMoreInfo = () => {
+    navigate(`/${details.type}/${details.id}`)
+    onClose()
+  }
+
   const handleWatchParty = () => {
     const code = Math.random().toString(36).substring(2, 8).toUpperCase()
     navigate(`/watch-party?room=${code}&id=${details.id}&type=${details.type}`)
@@ -179,7 +184,7 @@ export default function ExpandedCard({ details, cardRect, onClose, onMouseEnter,
             {likeCount > 0 && <span className="text-white text-xs font-medium">{likeCount}</span>}
             <ActionBtn icon="diversity_3" label="Watch Party" onClick={handleWatchParty} />
           </div>
-          <ActionBtn icon="expand_more" label="More info" />
+          <ActionBtn icon="expand_more" label="More info" onClick={handleMoreInfo} />
         </div>
 
         <div className="flex items-center gap-2 text-xs">

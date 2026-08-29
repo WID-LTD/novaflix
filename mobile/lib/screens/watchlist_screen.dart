@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../core/responsive.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../services/api_service.dart';
@@ -50,13 +51,14 @@ class _WatchlistScreenState extends ConsumerState<WatchlistScreen> {
     final watchlist = ref.watch(watchlistProvider);
     final items = ref.watch(_watchlistItemsProvider);
     final total = watchlist.items.length;
-    final isDesktop = MediaQuery.of(context).size.width >= 1024;
-    final hPadding = isDesktop ? 64.0 : 16.0;
+    final width = MediaQuery.of(context).size.width;
+    final size = screenSizeFor(width);
+    final hPadding = responsivePadding(width);
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(hPadding, isDesktop ? 40 : 24, hPadding, 48),
+        padding: EdgeInsets.fromLTRB(hPadding, size == ScreenSize.desktop ? 40 : 24, hPadding, 48),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1280),
@@ -179,8 +181,8 @@ class _WatchlistScreenState extends ConsumerState<WatchlistScreen> {
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: gridColumnsForWidth(constraints.maxWidth),
-                          childAspectRatio: 0.6,
+                          crossAxisCount: gridColumns(constraints.maxWidth),
+                          childAspectRatio: gridAspectRatio(constraints.maxWidth, gridColumns(constraints.maxWidth)),
                           crossAxisSpacing: 20,
                           mainAxisSpacing: 20,
                         ),

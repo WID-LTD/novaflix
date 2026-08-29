@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS users (
   email VARCHAR(255) UNIQUE NOT NULL,
   password VARCHAR(255) NOT NULL,
   name VARCHAR(255) NOT NULL,
-  role VARCHAR(20) DEFAULT 'user' CHECK (role IN ('user', 'creator', 'admin', 'banned')),
+  role VARCHAR(20) DEFAULT 'user' CHECK (role IN ('viewer', 'user', 'creator', 'admin', 'banned')),
   plan VARCHAR(20) DEFAULT 'free' CHECK (plan IN ('free', 'student', 'basic', 'standard', 'premium')),
   avatar TEXT,
   bio TEXT DEFAULT '',
@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
-ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('user', 'creator', 'admin', 'banned'));
+ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('viewer', 'user', 'creator', 'admin', 'banned'));
 
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_plan_check;
 ALTER TABLE users ADD CONSTRAINT users_plan_check CHECK (plan IN ('free', 'student', 'basic', 'standard', 'premium'));
@@ -192,6 +192,13 @@ ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS stripe_account_id VARCHAR(
 ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS tmdb_person_id INT;
 ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS known_for_department VARCHAR(100);
 ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS paystack_recipient_code VARCHAR(255);
+ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS stage_name VARCHAR(255);
+ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS category VARCHAR(100);
+ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS portfolio_url TEXT;
+ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS payout_details JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) DEFAULT 'approved';
+ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP;
+ALTER TABLE creator_profiles ADD COLUMN IF NOT EXISTS approved_by UUID REFERENCES users(id) ON DELETE SET NULL;
 
 CREATE TABLE IF NOT EXISTS likes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -348,6 +355,19 @@ CREATE TABLE IF NOT EXISTS active_sessions (
   started_at TIMESTAMP DEFAULT NOW(),
   last_heartbeat TIMESTAMP DEFAULT NOW()
 );
+
+-- Download device registry (per-plan caps: free 0, student/basic 1, standard 2, premium 6)
+CREATE TABLE IF NOT EXISTS download_devices (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  device_id TEXT NOT NULL,
+  device_name VARCHAR(255),
+  platform VARCHAR(50),
+  registered_at TIMESTAMP DEFAULT NOW(),
+  last_used_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE (user_id, device_id)
+);
+CREATE INDEX IF NOT EXISTS idx_download_devices_user ON download_devices (user_id);
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP;
 
@@ -647,6 +667,12 @@ CREATE TABLE IF NOT EXISTS forum_votes (
   UNIQUE(target_type, target_id, user_id)
 );
 
+-- Hot-takes debate columns for pre-existing installs (fresh creates above stay unchanged).
+ALTER TABLE forum_topics ADD COLUMN IF NOT EXISTS movie_title VARCHAR(255);
+ALTER TABLE forum_topics ADD COLUMN IF NOT EXISTS movie_poster_url TEXT;
+ALTER TABLE forum_topics ADD COLUMN IF NOT EXISTS no_spoilers BOOLEAN DEFAULT TRUE;
+ALTER TABLE forum_replies ADD COLUMN IF NOT EXISTS stance VARCHAR(10) DEFAULT NULL CHECK (stance IN ('agree','disagree'));
+
 -- ============ TRIVIA / GAMIFICATION ============
 CREATE TABLE IF NOT EXISTS trivia_questions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -674,6 +700,16 @@ CREATE TABLE IF NOT EXISTS trivia_attempts (
   points_awarded INT DEFAULT 0,
   answered_at TIMESTAMP DEFAULT NOW()
 );
+-- Unique per user/question/day: backs the ON CONFLICT target in submitDaily
+-- (without this index every POST /api/trivia/submit fails with 42P10).
+CREATE UNIQUE INDEX IF NOT EXISTS ux_trivia_attempts_user_question_day
+  ON trivia_attempts (user_id, question_id, (answered_at::date));
+CREATE UNIQUE INDEX IF NOT EXISTS ux_trivia_questions_date_movie
+  ON trivia_questions (date_key, movie_id);
+CREATE INDEX IF NOT EXISTS idx_trivia_attempts_points
+  ON trivia_attempts (points_awarded DESC);
+CREATE INDEX IF NOT EXISTS idx_trivia_attempts_user_game
+  ON trivia_attempts (user_id, game_type, answered_at);
 
 CREATE TABLE IF NOT EXISTS trivia_streaks (
   user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -690,6 +726,7 @@ CREATE TABLE IF NOT EXISTS cosmetics (
   description TEXT,
   price INT DEFAULT 100,
   icon VARCHAR(255),
+  rarity VARCHAR(20) DEFAULT 'common' CHECK (rarity IN ('common','rare','epic','legendary')),
   active BOOLEAN DEFAULT TRUE
 );
 
@@ -700,6 +737,9 @@ CREATE TABLE IF NOT EXISTS user_cosmetics (
   purchased_at TIMESTAMP DEFAULT NOW(),
   PRIMARY KEY (user_id, cosmetic_id)
 );
+
+-- Rarity tiers for pre-existing installs (fresh creates get it inline above).
+ALTER TABLE cosmetics ADD COLUMN IF NOT EXISTS rarity VARCHAR(20) DEFAULT 'common';
 
 -- ============ EASTER-EGG CONTENT HUNT (DIGITAL KEYS) ============
 CREATE TABLE IF NOT EXISTS digital_keys (
@@ -791,6 +831,9 @@ CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(use
 ALTER TABLE users ADD COLUMN IF NOT EXISTS sub_profiles INTEGER DEFAULT 1;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS verified BOOLEAN DEFAULT FALSE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS banned_at TIMESTAMP;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS creator_approved BOOLEAN DEFAULT FALSE;
+
+CREATE INDEX IF NOT EXISTS idx_creator_profiles_approval ON creator_profiles(approval_status);
 
 ALTER TABLE uploads ADD COLUMN IF NOT EXISTS maturity_rating VARCHAR(20) DEFAULT 'PG';
 ALTER TABLE uploads ADD COLUMN IF NOT EXISTS language VARCHAR(20) DEFAULT 'en';
@@ -959,8 +1002,143 @@ CREATE TABLE IF NOT EXISTS plans (
 );
 
 INSERT INTO plans (slug, name, price, currency, features, sort_order) VALUES
-  ('student', 'Student', 800, 'NGN', '["720p streaming","1 device","Limited downloads","Ad-supported"]', 1),
-  ('basic', 'Basic', 1500, 'NGN', '["720p streaming","1 device","Limited downloads","Ad-free"]', 2),
-  ('standard', 'Standard', 2500, 'NGN', '["1080p streaming","2 devices","Offline downloads","Ad-free","Skip limits"]', 3),
-  ('premium', 'Premium', 5500, 'NGN', '["4K streaming","4 devices","6 download devices","Ad-free","Unlimited skips","Priority support"]', 4)
+  ('student', 'Student', 800, 'NGN', '["720p HD quality","All devices supported","1 screen at a time","Offline downloads (1 device)","Ad-supported","6 skips per hour"]', 1),
+  ('basic', 'Basic', 1500, 'NGN', '["720p HD quality","All devices supported","1 screen at a time","Offline downloads (1 device)","Completely ad-free","6 skips per hour"]', 2),
+  ('standard', 'Standard', 2500, 'NGN', '["1080p Full HD","All devices supported","2 screens simultaneously","Offline downloads (2 devices)","Completely ad-free","Unlimited skips"]', 3),
+  ('premium', 'Premium', 5500, 'NGN', '["4K Ultra HD + Dolby Vision & HDR10","Spatial Audio support","All devices supported","4 screens simultaneously","Offline downloads (6 devices)","Completely ad-free","Unlimited skips","Premier access: indie theatrical drops, ticketed masterclasses, virtual red carpet lobbies"]', 4)
 ON CONFLICT (slug) DO NOTHING;
+
+-- ======================================================================
+-- DISCOVERY ENGINE (Spotify-style search & creator profiles)
+-- Creator <-> Movie many-to-many with explicit per-project role.
+-- ======================================================================
+
+-- Fuzzy matching support. Guarded so boot never fails on hosts where the
+-- extension cannot be created; search then degrades to ILIKE fallbacks.
+DO $$ BEGIN
+  CREATE EXTENSION IF NOT EXISTS pg_trgm;
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'pg_trgm unavailable, discovery search falls back to ILIKE';
+END $$;
+
+-- Movie format type: SHORT = short-form film, LONG = feature-length film.
+ALTER TABLE uploads ADD COLUMN IF NOT EXISTS format VARCHAR(10) DEFAULT 'LONG';
+
+-- Structural genre/mood tags simulating Spotify's attribute vectors,
+-- e.g. ["psychological-thriller","indie","fast-paced"].
+ALTER TABLE uploads ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]'::jsonb;
+
+ALTER TABLE uploads DROP CONSTRAINT IF EXISTS uploads_format_check;
+ALTER TABLE uploads ADD CONSTRAINT uploads_format_check CHECK (format IN ('SHORT', 'LONG'));
+
+-- Backfill format + tags from existing data (runtime under 40 min => SHORT).
+UPDATE uploads SET format = 'SHORT'
+WHERE duration_seconds > 0 AND duration_seconds < 2400 AND format IS DISTINCT FROM 'SHORT';
+
+UPDATE uploads SET tags = to_jsonb(
+  ARRAY[LOWER(REGEXP_REPLACE(COALESCE(genre, ''), '[^a-zA-Z0-9]+', '-', 'g'))]
+)
+WHERE (genre IS NOT NULL AND genre <> '')
+  AND (tags IS NULL OR tags = '[]'::jsonb);
+
+-- Junction table: which creator did WHAT on which movie.
+CREATE TABLE IF NOT EXISTS movie_creators (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  movie_id UUID NOT NULL REFERENCES uploads(id) ON DELETE CASCADE,
+  creator_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role VARCHAR(20) NOT NULL CHECK (role IN ('DIRECTED_BY', 'ACTED_IN')),
+  character_name VARCHAR(255),
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE (movie_id, creator_id, role)
+);
+
+CREATE INDEX IF NOT EXISTS idx_movie_creators_creator ON movie_creators (creator_id);
+CREATE INDEX IF NOT EXISTS idx_movie_creators_movie ON movie_creators (movie_id);
+CREATE INDEX IF NOT EXISTS idx_movie_creators_role ON movie_creators (role);
+
+-- Backfill: every uploader is the primary creator (director) of their uploads.
+INSERT INTO movie_creators (movie_id, creator_id, role)
+SELECT u.id, u.user_id, 'DIRECTED_BY'
+FROM uploads u
+WHERE u.user_id IS NOT NULL
+ON CONFLICT DO NOTHING;
+
+-- Keep the junction in sync for future uploads.
+CREATE OR REPLACE FUNCTION sync_movie_creator_director() RETURNS trigger AS $$
+BEGIN
+  INSERT INTO movie_creators (movie_id, creator_id, role)
+  VALUES (NEW.id, NEW.user_id, 'DIRECTED_BY')
+  ON CONFLICT DO NOTHING;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_uploads_director ON uploads;
+CREATE TRIGGER trg_uploads_director
+AFTER INSERT ON uploads
+FOR EACH ROW EXECUTE FUNCTION sync_movie_creator_director();
+
+-- Trigram indexes for fuzzy search (only when pg_trgm exists). GIN trgm on
+-- names/titles; plain btree/GIN otherwise still keeps lookups fast.
+DO $$ BEGIN
+  CREATE INDEX IF NOT EXISTS idx_uploads_title_trgm ON uploads USING gin (title gin_trgm_ops);
+  CREATE INDEX IF NOT EXISTS idx_users_name_trgm ON users USING gin (name gin_trgm_ops);
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_uploads_status_title ON uploads (status, title);
+CREATE INDEX IF NOT EXISTS idx_uploads_tags ON uploads USING gin (tags);
+
+-- ============================================================================
+-- Creator tools: PPM config, stream keys, and onboarding profile (Phase 1.4/1.5)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS creator_ppm_config (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  creator_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+  movie_vpm NUMERIC(12,5) NOT NULL DEFAULT 2.50,
+  short_vpm NUMERIC(12,5) NOT NULL DEFAULT 1.20,
+  minimum_payout NUMERIC(12,2) NOT NULL DEFAULT 50.00,
+  auto_settle BOOLEAN NOT NULL DEFAULT TRUE,
+  updated_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE (creator_id)
+);
+
+CREATE TABLE IF NOT EXISTS creator_stream_keys (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  creator_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+  stream_key VARCHAR(128) NOT NULL,
+  stream_url VARCHAR(255) NOT NULL DEFAULT '',
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE (creator_id)
+);
+
+CREATE TABLE IF NOT EXISTS creator_streams (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  creator_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+  title VARCHAR(255) NOT NULL DEFAULT '',
+  status VARCHAR(20) NOT NULL DEFAULT 'offline',
+  started_at TIMESTAMP,
+  ended_at TIMESTAMP,
+  viewer_count INTEGER NOT NULL DEFAULT 0,
+  metadata JSONB
+);
+CREATE INDEX IF NOT EXISTS idx_creator_streams_creator ON creator_streams(creator_id, status);
+
+CREATE TABLE IF NOT EXISTS creator_onboarding (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  creator_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+  step INTEGER NOT NULL DEFAULT 1,
+  identity JSONB,
+  links JSONB,
+  monetization JSONB,
+  payout JSONB,
+  completed BOOLEAN NOT NULL DEFAULT FALSE,
+  updated_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE (creator_id)
+);
+
+-- Ensure creator_ppm_config (from migration 001) has all PPM columns (idempotent)
+ALTER TABLE creator_ppm_config ADD COLUMN IF NOT EXISTS movie_vpm NUMERIC(12,5) NOT NULL DEFAULT 2.50;
+ALTER TABLE creator_ppm_config ADD COLUMN IF NOT EXISTS short_vpm NUMERIC(12,5) NOT NULL DEFAULT 1.20;
+ALTER TABLE creator_ppm_config ADD COLUMN IF NOT EXISTS minimum_payout NUMERIC(12,2) NOT NULL DEFAULT 50.00;
+ALTER TABLE creator_ppm_config ADD COLUMN IF NOT EXISTS auto_settle BOOLEAN NOT NULL DEFAULT TRUE;

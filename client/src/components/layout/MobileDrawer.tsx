@@ -34,7 +34,7 @@ const authItems: NavItem[] = [
 
 const engagementItems: NavItem[] = [
   { to: '/community', icon: 'diversity_3', label: 'Community', auth: true },
-  { to: '/forum', icon: 'forum', label: 'Hot Takes', auth: true },
+  { to: '/hot-takes', icon: 'local_fire_department', label: 'Hot Takes', auth: true },
   { to: '/trivia', icon: 'quiz', label: 'Trivia & Rewards', auth: true },
 ]
 
@@ -103,8 +103,8 @@ export default function MobileDrawer() {
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
             className="fixed left-0 top-0 bottom-0 z-50 w-[85vw] max-w-[300px] min-w-[260px] bg-surface-container-lowest border-r border-white/5 flex flex-col lg:hidden"
           >
-            <div className="flex items-center justify-between px-4 h-16 border-b border-white/5 shrink-0">
-              <img src="/leter-mark-logo.png" alt="" className="w-auto h-9" />
+            <div className="flex items-center justify-between px-4 h-14 border-b border-white/5 shrink-0">
+              <img src="/leter-mark-logo.png" alt="" className="w-auto h-12" />
               <button
                 type="button"
                 onClick={(e) => {

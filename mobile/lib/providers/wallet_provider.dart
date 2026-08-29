@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import '../models/api_response.dart';
 import '../services/api_service.dart';
+import '../core/config.dart';
 
 class WalletBalance {
   final int balanceNgn;
@@ -161,6 +163,7 @@ class WithdrawalResult {
   final int gatewayFee;
   final int netToCreator;
   final String? transferRef;
+  final String? error;
 
   WithdrawalResult({
     required this.success,
@@ -169,6 +172,7 @@ class WithdrawalResult {
     required this.gatewayFee,
     required this.netToCreator,
     this.transferRef,
+    this.error,
   });
 
   factory WithdrawalResult.fromJson(Map<String, dynamic> json) {
@@ -179,6 +183,7 @@ class WithdrawalResult {
       gatewayFee: json['gatewayFee'] ?? 0,
       netToCreator: json['netToCreator'] ?? 0,
       transferRef: json['transferRef'],
+      error: json['error']?.toString() ?? json['message']?.toString(),
     );
   }
 }
@@ -189,6 +194,7 @@ class BeneficiaryResult {
   final String? recipientCode;
   final String? beneficiaryId;
   final String? verifiedName;
+  final String? error;
 
   BeneficiaryResult({
     required this.success,
@@ -196,6 +202,7 @@ class BeneficiaryResult {
     this.recipientCode,
     this.beneficiaryId,
     this.verifiedName,
+    this.error,
   });
 
   factory BeneficiaryResult.fromJson(Map<String, dynamic> json) {
@@ -205,6 +212,7 @@ class BeneficiaryResult {
       recipientCode: json['recipientCode'],
       beneficiaryId: json['beneficiaryId'],
       verifiedName: json['verifiedName'],
+      error: json['error']?.toString() ?? json['message']?.toString(),
     );
   }
 }
@@ -230,12 +238,14 @@ class VerificationResult {
   final String? verifiedName;
   final bool match;
   final String? message;
+  final String? error;
 
   VerificationResult({
     required this.success,
     this.verifiedName,
     required this.match,
     this.message,
+    this.error,
   });
 
   factory VerificationResult.fromJson(Map<String, dynamic> json) {
@@ -244,15 +254,16 @@ class VerificationResult {
       verifiedName: json['verifiedName'],
       match: json['match'] ?? false,
       message: json['message'],
+      error: json['error']?.toString(),
     );
   }
 }
 
 class WalletService {
-  static const String baseUrl = 'https://api.nova-flix.com.ng/api';
+  static String get baseUrl => AppConfig.apiBaseUrl;
 
   Future<WalletBalance> getBalance() async {
-    final token = await ApiService.getToken();
+    final token = await ApiService().getToken();
     final res = await http.get(
       Uri.parse('$baseUrl/wallet/balance'),
       headers: {'Authorization': 'Bearer $token'},
@@ -267,7 +278,7 @@ class WalletService {
     int limit = 50,
     int offset = 0,
   }) async {
-    final token = await ApiService.getToken();
+    final token = await ApiService().getToken();
     final params = <String, String>{};
     if (type != null) params['type'] = type;
     if (from != null) params['from'] = from;
@@ -285,7 +296,7 @@ class WalletService {
   }
 
   Future<WalletEarningsSummary> getEarningsSummary() async {
-    final token = await ApiService.getToken();
+    final token = await ApiService().getToken();
     final res = await http.get(
       Uri.parse('$baseUrl/wallet/earnings'),
       headers: {'Authorization': 'Bearer $token'},
@@ -294,7 +305,7 @@ class WalletService {
   }
 
   Future<PPMConfig> getPPMConfig() async {
-    final token = await ApiService.getToken();
+    final token = await ApiService().getToken();
     final res = await http.get(
       Uri.parse('$baseUrl/wallet/ppm/config'),
       headers: {'Authorization': 'Bearer $token'},
@@ -303,7 +314,7 @@ class WalletService {
   }
 
   Future<void> updatePPMConfig(double baseRate) async {
-    final token = await ApiService.getToken();
+    final token = await ApiService().getToken();
     await http.put(
       Uri.parse('$baseUrl/wallet/ppm/config'),
       headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
@@ -312,7 +323,7 @@ class WalletService {
   }
 
   Future<PPMRate> getPPMRate(String contentType) async {
-    final token = await ApiService.getToken();
+    final token = await ApiService().getToken();
     final res = await http.get(
       Uri.parse('$baseUrl/wallet/ppm/rate?contentType=$contentType'),
       headers: {'Authorization': 'Bearer $token'},
@@ -321,7 +332,7 @@ class WalletService {
   }
 
   Future<WithdrawalPreview> previewWithdrawal(double amountNgn, String gateway) async {
-    final token = await ApiService.getToken();
+    final token = await ApiService().getToken();
     final res = await http.get(
       Uri.parse('$baseUrl/wallet/withdraw/preview?amountNgn=$amountNgn&gateway=$gateway'),
       headers: {'Authorization': 'Bearer $token'},
@@ -330,7 +341,7 @@ class WalletService {
   }
 
   Future<WithdrawalResult> withdraw(double amountNgn, String gateway) async {
-    final token = await ApiService.getToken();
+    final token = await ApiService().getToken();
     final res = await http.post(
       Uri.parse('$baseUrl/wallet/withdraw'),
       headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
@@ -345,7 +356,7 @@ class WalletService {
     required String accountNumber,
     required String accountName,
   }) async {
-    final token = await ApiService.getToken();
+    final token = await ApiService().getToken();
     final res = await http.post(
       Uri.parse('$baseUrl/beneficiary'),
       headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
@@ -360,7 +371,7 @@ class WalletService {
   }
 
   Future<Map<String, dynamic>> getBeneficiaries() async {
-    final token = await ApiService.getToken();
+    final token = await ApiService().getToken();
     final res = await http.get(
       Uri.parse('$baseUrl/beneficiary'),
       headers: {'Authorization': 'Bearer $token'},
@@ -380,7 +391,7 @@ class WalletService {
     required String accountNumber,
     required String accountName,
   }) async {
-    final token = await ApiService.getToken();
+    final token = await ApiService().getToken();
     final res = await http.post(
       Uri.parse('$baseUrl/banks/verify'),
       headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
@@ -451,18 +462,15 @@ class WalletNotifier extends StateNotifier<WalletState> {
   Future<void> loadAll() async {
     state = state.copyWith(isLoading: true);
     try {
-      final results = await Future.wait([
-        _service.getBalance(),
-        _service.getWalletTransactions(),
-        _service.getEarningsSummary(),
-        _service.getPPMConfig(),
-      ]);
-      final balance = (await _service.getBalance()).balanceNgn;
+      final balance = await _service.getBalance();
+      final transactions = await _service.getTransactions();
+      final earnings = await _service.getEarningsSummary();
+      final ppmConfig = await _service.getPPMConfig();
       state = state.copyWith(
-        balanceNgn: results[0].balanceNgn,
-        transactions: results[1],
-        earnings: results[2],
-        ppmConfig: results[3],
+        balanceNgn: balance.balanceNgn,
+        transactions: transactions,
+        earnings: earnings,
+        ppmConfig: ppmConfig,
         isLoading: false,
       );
     } catch (e) {

@@ -1,5 +1,20 @@
-import { createContext, useContext, useState, useEffect, type FC, type ReactNode, useCallback } from 'react'
-import { login as apiLogin, register as apiRegister, verifyEmail as apiVerifyEmail, resendVerification as apiResendVerification, loginVerify as apiLoginVerify, getMe, getToken, setToken, removeToken } from './auth'
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type FC, type ReactNode } from 'react'
+import {
+  login as apiLogin,
+  register as apiRegister,
+  verifyEmail as apiVerifyEmail,
+  resendVerification as apiResendVerification,
+  loginVerify as apiLoginVerify,
+  centralizedLogin as apiCentralizedLogin,
+  authLogout as apiAuthLogout,
+  authRefreshToken,
+  getMe,
+  getToken,
+  setToken,
+  removeToken,
+  getSettings
+} from './auth'
+import { setLocale } from '../i18n'
 
 interface User {
   id: string
@@ -34,15 +49,16 @@ export interface PlanFeatures {
   adFree: boolean
   unlimitedSkips: boolean
   spatialAudio: boolean
+  hdrDolby: boolean
   premierAccess: boolean
 }
 
 const PLAN_FEATURES: Record<string, PlanFeatures> = {
-  free: { maxResolution: '480p', maxResolutionNum: 480, concurrentScreens: 1, downloadDevices: 0, adFree: false, unlimitedSkips: false, spatialAudio: false, premierAccess: false },
-  student: { maxResolution: '720p', maxResolutionNum: 720, concurrentScreens: 1, downloadDevices: 1, adFree: false, unlimitedSkips: false, spatialAudio: false, premierAccess: false },
-  basic: { maxResolution: '720p', maxResolutionNum: 720, concurrentScreens: 1, downloadDevices: 1, adFree: false, unlimitedSkips: false, spatialAudio: false, premierAccess: false },
-  standard: { maxResolution: '1080p', maxResolutionNum: 1080, concurrentScreens: 2, downloadDevices: 2, adFree: true, unlimitedSkips: true, spatialAudio: false, premierAccess: false },
-  premium: { maxResolution: '4K', maxResolutionNum: 2160, concurrentScreens: 4, downloadDevices: 6, adFree: true, unlimitedSkips: true, spatialAudio: true, premierAccess: true },
+  free: { maxResolution: '480p', maxResolutionNum: 480, concurrentScreens: 1, downloadDevices: 0, adFree: false, unlimitedSkips: false, spatialAudio: false, hdrDolby: false, premierAccess: false },
+  student: { maxResolution: '720p', maxResolutionNum: 720, concurrentScreens: 1, downloadDevices: 1, adFree: false, unlimitedSkips: false, spatialAudio: false, hdrDolby: false, premierAccess: false },
+  basic: { maxResolution: '720p', maxResolutionNum: 720, concurrentScreens: 1, downloadDevices: 1, adFree: true, unlimitedSkips: false, spatialAudio: false, hdrDolby: false, premierAccess: false },
+  standard: { maxResolution: '1080p', maxResolutionNum: 1080, concurrentScreens: 2, downloadDevices: 2, adFree: true, unlimitedSkips: true, spatialAudio: false, hdrDolby: false, premierAccess: false },
+  premium: { maxResolution: '4K', maxResolutionNum: 2160, concurrentScreens: 4, downloadDevices: 6, adFree: true, unlimitedSkips: true, spatialAudio: true, hdrDolby: true, premierAccess: true },
 }
 
 export function getPlanRank(plan: string): number {
@@ -57,6 +73,8 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   pendingUserId: string | null
+  authLogin: (email: string, password: string) => Promise<{ success: boolean; error?: string; role?: string; emailVerified?: boolean; needsVerification?: boolean; needsLoginVerification?: boolean; reason?: string; userId?: string }>
+  authLogout: () => Promise<void>
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string; needsVerification?: boolean; needsLoginVerification?: boolean; reason?: string; userId?: string }>
   register: (email: string, password: string, name?: string) => Promise<{ success: boolean; error?: string; userId?: string; needsVerification?: boolean }>
   verifyEmail: (code: string) => Promise<{ success: boolean; error?: string }>
@@ -79,6 +97,26 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [pendingUserId, setPendingUserId] = useState<string | null>(null)
+  const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Token refresh every 14 minutes (tokens expire at 15 min)
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const token = getToken()
+      if (!token) return
+      const res = await authRefreshToken()
+      if (res.success && res.token) {
+        setToken(res.token)
+      } else {
+        // Refresh failed — log out
+        removeToken()
+        setUser(null)
+        if (refreshTimerRef.current) clearInterval(refreshTimerRef.current)
+      }
+    }, 14 * 60 * 1000)
+    refreshTimerRef.current = interval
+    return () => clearInterval(interval)
+  }, [])
 
   const loadUser = useCallback(async () => {
     const token = getToken()
@@ -89,6 +127,10 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
     const res = await getMe(token)
     if (res.success && res.user) {
       setUser(res.user)
+      const settingsRes = await getSettings(token)
+      if (settingsRes.success && settingsRes.settings?.locale) {
+        setLocale(settingsRes.settings.locale)
+      }
     } else {
       removeToken()
     }
@@ -97,6 +139,34 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
 
   useEffect(() => { loadUser() }, [loadUser])
 
+  /** Centralized login (new system) */
+  const authLogin = async (email: string, password: string) => {
+    const res = await apiCentralizedLogin(email, password)
+    if (res.success && res.token && res.user) {
+      setToken(res.token)
+      setUser(res.user)
+      return { success: true, role: res.user.role, emailVerified: res.user.email_verified }
+    }
+    if (res.needsLoginVerification && res.userId) {
+      setPendingUserId(res.userId)
+      return { success: false, needsLoginVerification: true, reason: res.reason, userId: res.userId, error: res.error }
+    }
+    if (res.needsVerification && res.userId) {
+      setPendingUserId(res.userId)
+      return { success: false, needsVerification: true, userId: res.userId, error: res.error }
+    }
+    return { success: false, error: res.error || 'Login failed' }
+  }
+
+  /** Logout with server-side token invalidation */
+  const authLogout = async () => {
+    await apiAuthLogout()
+    removeToken()
+    setUser(null)
+    setPendingUserId(null)
+  }
+
+  /** @deprecated Use authLogin instead — kept for old pages */
   const login = async (email: string, password: string) => {
     const res = await apiLogin(email, password)
     if (res.success && res.token && res.user) {
@@ -115,6 +185,7 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
     return { success: false, error: res.error || 'Login failed' }
   }
 
+  /** @deprecated Old pages — new pages should not use register at all */
   const register = async (email: string, password: string, name?: string) => {
     const res = await apiRegister(email, password, name)
     if (res.success && res.userId) {
@@ -170,7 +241,8 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
   return (
     <AuthContext.Provider value={{
       user, loading, pendingUserId,
-      login, register, verifyEmail, verifyLogin, resendVerification, logout, refresh: loadUser,
+      authLogin, authLogout,
+      login, register, verifyEmail, verifyLogin, resendVerification, logout: authLogout, refresh: loadUser,
       isPremium: currentPlan !== 'free',
       isCreator: user?.role === 'creator' || user?.role === 'admin',
       isAdmin: user?.role === 'admin',

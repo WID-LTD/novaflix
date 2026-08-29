@@ -4,6 +4,7 @@ import PageHeader from '../components/admin/PageHeader'
 import StatusBadge from '../components/admin/StatusBadge'
 import StatCard from '../components/admin/StatCard'
 import Icon from '../components/ui/Icon'
+import { useAdminEvent, AdminEvents } from '../hooks/useAdminEvents'
 
 export default function AdminModeration() {
   const [tab, setTab] = useState<'reports' | 'appeals'>('reports')
@@ -11,6 +12,18 @@ export default function AdminModeration() {
   const [appeals, setAppeals] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [notes, setNotes] = useState<Record<string, string>>({})
+
+  // Real-time updates for reports and appeals
+  useAdminEvent(AdminEvents.REPORT_RESOLVED, (data) => {
+    console.log('[AdminModeration] Report resolved:', data)
+    setItems((prev) => prev.filter((i) => i.id !== data.reportId))
+  })
+
+  useAdminEvent(AdminEvents.APPEAL_DECIDED, (data) => {
+    console.log('[AdminModeration] Appeal decided:', data)
+    // Refresh appeals list when an appeal is decided
+    loadAppeals()
+  })
 
   const loadReports = async () => {
     const token = getToken()

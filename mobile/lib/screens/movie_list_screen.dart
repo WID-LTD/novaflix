@@ -4,6 +4,7 @@ import '../models/media_item.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
+import '../core/responsive.dart';
 import '../widgets/features/index.dart';
 import '../widgets/ui/index.dart';
 
@@ -70,7 +71,7 @@ class MovieListScreen extends ConsumerWidget {
                 padding: const EdgeInsets.all(16),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: columns,
-                  childAspectRatio: 0.65,
+                  childAspectRatio: gridAspectRatio(constraints.maxWidth, columns, spacing: 12),
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 12,
                 ),

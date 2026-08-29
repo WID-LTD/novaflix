@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
+import '../core/responsive.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../services/api_service.dart';
@@ -135,7 +136,7 @@ class _CreatorProductsScreenState extends ConsumerState<CreatorProductsScreen> {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: gridColumnsFor(
+                  crossAxisCount: gridColumns(
                     MediaQuery.sizeOf(context).width,
                   ),
                   childAspectRatio: 0.75,

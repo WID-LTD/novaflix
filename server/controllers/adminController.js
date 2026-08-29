@@ -1,6 +1,6 @@
 import { getAllUsers, getPlatformStats, getAllUploads, findUserById, updateUser, getAllNewsletterEmails, getUsersByPlans, getUsersByRoles, createNotificationsBulk } from '../db.js'
 import { sendNewsletterEmail, sendAnnouncementEmail } from '../services/emailService.js'
-import { notifyUser } from '../services/realtime.js'
+import { notifyUser, broadcastFeed } from '../services/realtime.js'
 import { pushToUsers } from '../services/pushService.js'
 import { PERMISSIONS } from '../lib/permissions.js'
 import {
@@ -42,6 +42,7 @@ export async function createRole(req, res) {
     if (!name || !slug) return res.status(400).json({ error: 'name and slug required' })
     const role = await createAdminRole({ name, slug, description: description || '', permissions: permissions || [] })
     await logAdminAudit({ actorId: req.userId, action: 'role.create', entity: 'admin_role', entityId: role.id, meta: { name: role.name, slug: role.slug } })
+    broadcastFeed({ type: 'admin:role.created', role: { id: role.id, name: role.name, slug: role.slug }, timestamp: Date.now() })
     res.json({ success: true, role })
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
@@ -54,6 +55,7 @@ export async function updateRole(req, res) {
     })
     if (!role) return res.status(400).json({ error: 'System roles cannot be edited' })
     await logAdminAudit({ actorId: req.userId, action: 'role.update', entity: 'admin_role', entityId: id, meta: { name: role.name } })
+    broadcastFeed({ type: 'admin:role.updated', role: { id: role.id, name: role.name }, timestamp: Date.now() })
     res.json({ success: true, role })
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
@@ -64,6 +66,7 @@ export async function removeRole(req, res) {
     const removed = await deleteAdminRole(id)
     if (!removed) return res.status(400).json({ error: 'System roles cannot be deleted' })
     await logAdminAudit({ actorId: req.userId, action: 'role.delete', entity: 'admin_role', entityId: id })
+    broadcastFeed({ type: 'admin:role.deleted', roleId: id, timestamp: Date.now() })
     res.json({ success: true, message: 'Role deleted' })
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
@@ -80,6 +83,7 @@ export async function assignRole(req, res) {
       await clearAdminRole(id)
     }
     await logAdminAudit({ actorId: req.userId, action: 'role.assign', entity: 'user', entityId: id, meta: { adminRoleId } })
+    broadcastFeed({ type: 'admin:user.role.assigned', userId: id, adminRoleId, timestamp: Date.now() })
     res.json({ success: true })
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
@@ -121,6 +125,7 @@ export async function updateUserRole(req, res) {
     const updated = await updateUser(req.params.id, { role })
     if (!updated) return res.status(404).json({ error: 'User not found' })
     const safe = { ...updated, password: undefined }
+    broadcastFeed({ type: 'admin:user.role.changed', userId: req.params.id, role, timestamp: Date.now() })
     res.json({ success: true, user: safe })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -134,7 +139,9 @@ export async function banUser(req, res) {
     const reason = (req.body && req.body.reason) || ''
     await updateUser(req.params.id, { role: 'banned', banned_reason: reason, banned_at: new Date().toISOString() })
     await logAdminAudit({ actorId: req.userId, action: 'user.ban', entity: 'user', entityId: req.params.id, meta: { reason } })
-    res.json({ success: true, message: 'User banned', user: { ...(await findUserById(req.params.id)), password: undefined } })
+    const bannedUser = await findUserById(req.params.id)
+    broadcastFeed({ type: 'admin:user.banned', userId: req.params.id, reason, timestamp: Date.now() })
+    res.json({ success: true, message: 'User banned', user: { ...bannedUser, password: undefined } })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -146,7 +153,9 @@ export async function unbanUser(req, res) {
     if (!user) return res.status(404).json({ error: 'User not found' })
     await updateUser(req.params.id, { role: 'user', banned_reason: null, banned_at: null })
     await logAdminAudit({ actorId: req.userId, action: 'user.unban', entity: 'user', entityId: req.params.id })
-    res.json({ success: true, message: 'User unbanned', user: { ...(await findUserById(req.params.id)), password: undefined } })
+    const unbannedUser = await findUserById(req.params.id)
+    broadcastFeed({ type: 'admin:user.unbanned', userId: req.params.id, timestamp: Date.now() })
+    res.json({ success: true, message: 'User unbanned', user: { ...unbannedUser, password: undefined } })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -162,7 +171,9 @@ export async function suspendUser(req, res) {
     }
     await updateUser(req.params.id, { suspended_until: new Date(until).toISOString(), suspension_reason: reason || '' })
     await logAdminAudit({ actorId: req.userId, action: 'user.suspend', entity: 'user', entityId: req.params.id, meta: { until, reason } })
-    res.json({ success: true, message: 'User suspended', user: { ...(await findUserById(req.params.id)), password: undefined } })
+    const suspendedUser = await findUserById(req.params.id)
+    broadcastFeed({ type: 'admin:user.suspended', userId: req.params.id, until, reason, timestamp: Date.now() })
+    res.json({ success: true, message: 'User suspended', user: { ...suspendedUser, password: undefined } })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -174,7 +185,9 @@ export async function unsuspendUser(req, res) {
     if (!user) return res.status(404).json({ error: 'User not found' })
     await updateUser(req.params.id, { suspended_until: null, suspension_reason: null })
     await logAdminAudit({ actorId: req.userId, action: 'user.unsuspend', entity: 'user', entityId: req.params.id })
-    res.json({ success: true, message: 'User unsuspended', user: { ...(await findUserById(req.params.id)), password: undefined } })
+    const unsuspendedUser = await findUserById(req.params.id)
+    broadcastFeed({ type: 'admin:user.unsuspended', userId: req.params.id, timestamp: Date.now() })
+    res.json({ success: true, message: 'User unsuspended', user: { ...unsuspendedUser, password: undefined } })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -186,7 +199,9 @@ export async function verifyUser(req, res) {
     if (!user) return res.status(404).json({ error: 'User not found' })
     await updateUser(req.params.id, { verified: true })
     await logAdminAudit({ actorId: req.userId, action: 'user.verify', entity: 'user', entityId: req.params.id })
-    res.json({ success: true, message: 'User verified', user: { ...(await findUserById(req.params.id)), password: undefined } })
+    const verifiedUser = await findUserById(req.params.id)
+    broadcastFeed({ type: 'admin:user.verified', userId: req.params.id, timestamp: Date.now() })
+    res.json({ success: true, message: 'User verified', user: { ...verifiedUser, password: undefined } })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -198,7 +213,9 @@ export async function unverifyUser(req, res) {
     if (!user) return res.status(404).json({ error: 'User not found' })
     await updateUser(req.params.id, { verified: false })
     await logAdminAudit({ actorId: req.userId, action: 'user.unverify', entity: 'user', entityId: req.params.id })
-    res.json({ success: true, message: 'User unverified', user: { ...(await findUserById(req.params.id)), password: undefined } })
+    const unverifiedUser = await findUserById(req.params.id)
+    broadcastFeed({ type: 'admin:user.unverified', userId: req.params.id, timestamp: Date.now() })
+    res.json({ success: true, message: 'User unverified', user: { ...unverifiedUser, password: undefined } })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -423,6 +440,7 @@ export async function updateCatalogItem(req, res) {
     if (kind === 'upload') updated = await adminUpdateUpload(id, fields)
     else return res.status(400).json({ error: 'Only uploads editable' })
     await logAdminAudit({ actorId: req.userId, action: 'catalog.update', entity: 'upload', entityId: id, meta: fields })
+    broadcastFeed({ type: 'admin:catalog.updated', kind, id, fields, timestamp: Date.now() })
     res.json({ success: true, item: updated })
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
@@ -455,6 +473,7 @@ export async function promoCreate(req, res) {
     const created = await createPromoCode({ code: String(code).toUpperCase(), plan, discountPct, maxUses })
     if (!created) return res.status(409).json({ error: 'Code already exists' })
     await logAdminAudit({ actor: req.userId, action: 'promo.create', entity: 'promo', entityId: created.id })
+    broadcastFeed({ type: 'admin:promo.created', promo: created, timestamp: Date.now() })
     res.json({ success: true, code: created })
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
@@ -468,6 +487,7 @@ export async function bannerCreate(req, res) {
   try {
     const banner = await createBanner(req.body)
     await logAdminAudit({ actor: req.userId, action: 'banner.create' })
+    broadcastFeed({ type: 'admin:banner.created', banner, timestamp: Date.now() })
     res.json({ success: true, banner })
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
@@ -487,6 +507,7 @@ export async function feedSettingsPut(req, res) {
     if (!key) return res.status(400).json({ error: 'key required' })
     await setFeedSettings(key, value || {})
     await logAdminAudit({ actor: req.userId, action: 'feed.settings', entity: 'feed_settings', meta: { key } })
+    broadcastFeed({ type: 'admin:feed.settings.changed', key, value, timestamp: Date.now() })
     res.json({ success: true })
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
@@ -506,6 +527,7 @@ export async function moderationResolve(req, res) {
     const { status } = req.body
     await updateReportStatus(id, status || 'resolved')
     await logAdminAudit({ actor: req.userId, action: 'moderation.resolve', entity: 'report', entityId: id })
+    broadcastFeed({ type: 'admin:report.resolved', reportId: id, status: status || 'resolved', timestamp: Date.now() })
     res.json({ success: true })
   } catch (err) { res.status(500).json({ error: err.message }) }
 }

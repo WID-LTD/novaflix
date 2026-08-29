@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../core/responsive.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
@@ -30,8 +31,8 @@ class _LiveEventsScreenState extends ConsumerState<LiveEventsScreen> {
   @override
   Widget build(BuildContext context) {
     final events = ref.watch(_eventsProvider(_past));
-    final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
-    final hPadding = isDesktop ? 64.0 : 16.0;
+    final width = MediaQuery.sizeOf(context).width;
+    final hPadding = responsivePadding(width);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -154,7 +155,7 @@ class _LiveEventsScreenState extends ConsumerState<LiveEventsScreen> {
             crossAxisCount: cols,
             crossAxisSpacing: 16,
             mainAxisSpacing: 16,
-            childAspectRatio: 0.72,
+            childAspectRatio: gridAspectRatio(constraints.maxWidth, cols, spacing: 16),
           ),
           itemCount: items.length,
           itemBuilder: (_, i) => _EventCard(

@@ -1,28 +1,68 @@
-import { v4 as uuidv4 } from 'uuid'
+import { v4 as uuidv4, validate as uuidValidate } from 'uuid'
+import { createHash, createHmac } from 'crypto'
 import pool from '../config/database.js'
 import { addSubscription, getUserSubscription, updateUser, createTransaction, getTransactionByReference, updateTransactionByReference, getPlanBySlug, listPlans } from '../db.js'
 import { initializePayment, verifyPayment, isConfigured } from '../lib/gateway.js'
 import { signToken } from './authController.js'
 
+function verifyPaystackSignature(rawBody, signature, secret) {
+  if (!secret) return false
+  const expected = createHmac('sha512', secret).update(rawBody).digest('hex')
+  return createHash('sha256').update(signature).digest('hex') === createHash('sha256').update(expected).digest('hex')
+    || signature === expected
+}
+
+function verifyFlutterwaveSignature(rawBody, verifHash, secret) {
+  if (!secret) return false
+  const expected = createHmac('sha256', secret).update(rawBody).digest('hex')
+  return verifHash === expected
+}
+
 async function creditReferralCommission(referredUserId, planSlug) {
+  const client = await pool.connect()
   try {
-    const { rows: refRows } = await pool.query(
-      `SELECT * FROM affiliate_referrals WHERE referred_id = $1 AND status = 'converted' LIMIT 1`,
-      [referredUserId]
+    await client.query('BEGIN')
+    
+    // Atomically find and update the referral record
+    // Only process if status is 'converted' (first paid subscription)
+    const { rows } = await client.query(
+      `UPDATE affiliate_referrals
+       SET commission = ROUND((SELECT price FROM plans WHERE slug = $2)::numeric * 0.10, 2),
+           status = 'paid',
+           plan = $2
+       WHERE id = (
+         SELECT id FROM affiliate_referrals
+         WHERE referred_id = $1 AND status = 'converted'
+         FOR UPDATE
+         LIMIT 1
+       )
+       AND status = 'converted'
+       RETURNING id, referrer_id, commission`,
+      [referredUserId, planSlug || 'basic']
     )
-    if (!refRows[0]) return
-    const planRow = await getPlanBySlug(planSlug || refRows[0].plan || 'basic')
-    const price = Number(planRow?.price || 0)
-    if (!price) return
-    const commission = Math.round(price * 0.10 * 100) / 100
-    await pool.query(`UPDATE affiliate_referrals SET commission = $1, status = 'paid' WHERE id = $2`, [commission, refRows[0].id])
-    // Credit referrer coins (or wallet) — using coins for simplicity
-    await pool.query(`UPDATE users SET coins = COALESCE(coins,0) + $1 WHERE id = $2`, [Math.round(commission), refRows[0].referrer_id])
+    
+    if (rows.length === 0) {
+      await client.query('ROLLBACK')
+      return
+    }
+    
+    const { referrer_id, commission } = rows[0]
+    
+    // Credit referrer coins
+    await client.query(
+      `UPDATE users SET coins = COALESCE(coins,0) + $1 WHERE id = $2`,
+      [Math.round(commission), referrer_id]
+    )
+    
+    await client.query('COMMIT')
+    
+    // Notify referrer in realtime
     try {
       const { notifyUser } = await import('../services/realtime.js')
-      notifyUser(refRows[0].referrer_id, { type: 'referral_paid', commission, referredId: referredUserId, plan: planSlug })
+      notifyUser(referrer_id, { type: 'referral_paid', commission, referredId: referredUserId, plan: planSlug })
     } catch {}
   } catch (e) {
+    try { await client.query('ROLLBACK') } catch {}
     console.error('[referral] commission error', e.message)
   }
 }
@@ -79,33 +119,42 @@ export async function initialize(req, res) {
 
 export async function verify(req, res) {
   try {
-    const { reference, plan } = req.query
+    const { reference } = req.query
     if (!reference) return res.status(400).json({ error: 'Reference required' })
 
     const tx = await getTransactionByReference(reference)
     if (!tx) return res.status(404).json({ error: 'Transaction not found' })
+    if (tx.user_id !== req.userId) return res.status(403).json({ error: 'Unauthorized' })
+
+    // Idempotency: if already verified, return existing subscription
+    if (tx.status === 'success') {
+      const existingSub = await getUserSubscription(req.userId)
+      return res.json({ success: true, subscription: existingSub, alreadyVerified: true })
+    }
+    if (tx.status !== 'pending') {
+      return res.status(400).json({ error: 'Transaction not pending' })
+    }
 
     const gateway = tx.metadata?.gateway || 'paystack'
-
     const result = await verifyPayment({ gateway, reference })
     if (result.success) {
+      const planSlug = tx.plan || 'basic'
       const sub = {
         id: uuidv4(),
         userId: req.userId,
-        plan: plan || 'basic',
+        plan: tx.plan || 'basic',
         active: true,
         startedAt: new Date().toISOString(),
         expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       }
       await addSubscription(sub)
-      await updateUser(req.userId, { plan: plan || 'basic' })
+      await updateUser(req.userId, { plan: tx.plan || 'basic' })
       await updateTransactionByReference(reference, { status: 'success' })
-      await creditReferralCommission(req.userId, plan || 'basic')
+      await creditReferralCommission(req.userId, tx.plan || 'basic')
 
-      const freshPlan = plan || 'basic'
-      const token = signToken({ id: req.userId, email: req.user.email, role: req.user.role || 'user', plan: freshPlan })
+      const token = signToken({ id: req.userId, email: req.user.email, role: req.user.role || 'user', plan: tx.plan || 'basic' })
 
-      res.json({ success: true, subscription: sub, gateway, plan: freshPlan, token })
+      res.json({ success: true, subscription: sub, gateway: tx.metadata?.gateway, plan: tx.plan || 'basic', token })
     } else {
       res.json({ success: false, error: 'Payment not completed', status: result.status })
     }
@@ -116,51 +165,115 @@ export async function verify(req, res) {
 
 export async function webhook(req, res) {
   try {
-    const event = req.body
-    const gateway = event.gateway || 'paystack'
+    const rawBody = req.rawBody || JSON.stringify(req.body)
+    const gateway = req.body?.gateway || 'paystack'
 
-    if (gateway === 'paystack' && event.event === 'charge.success') {
-      const { reference, amount } = event.data
-      const tx = await getTransactionByReference(reference)
-      if (tx && tx.status === 'pending') {
-        const sub = {
-          id: uuidv4(),
-          userId: tx.user_id,
-          plan: tx.plan || 'basic',
-          active: true,
-          startedAt: new Date().toISOString(),
-          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        }
-        await addSubscription(sub)
-        await updateUser(tx.user_id, { plan: tx.plan || 'basic' })
-        await updateTransactionByReference(reference, { status: 'success', amount: amount / 100 })
-        await creditReferralCommission(tx.user_id, tx.plan || 'basic')
+    // Signature verification (enforced when secrets are configured)
+    if (gateway === 'paystack') {
+      const signature = req.headers['x-paystack-signature']
+      if (process.env.PAYSTACK_SECRET_KEY && !verifyPaystackSignature(rawBody, signature, process.env.PAYSTACK_SECRET_KEY)) {
+        console.warn('[webhook] Invalid Paystack signature')
+        return res.status(400).json({ error: 'Invalid signature' })
+      }
+    } else if (gateway === 'flutterwave') {
+      const verifHash = req.headers['verif-hash'] || req.headers['x-flw-verif-hash']
+      const secret = process.env.FLW_SECRET_HASH || process.env.FLW_SECRET_KEY
+      if (secret && !verifyFlutterwaveSignature(rawBody, verifHash, secret)) {
+        console.warn('[webhook] Invalid Flutterwave signature')
+        return res.status(400).json({ error: 'Invalid signature' })
       }
     }
 
-    if (gateway === 'flutterwave' && event.event === 'charge.completed' && event.data.status === 'successful') {
-      const { tx_ref, amount } = event.data
-      const tx = await getTransactionByReference(tx_ref)
-      if (tx && tx.status === 'pending') {
-        const sub = {
-          id: uuidv4(),
-          userId: tx.user_id,
-          plan: tx.plan || 'basic',
-          active: true,
-          startedAt: new Date().toISOString(),
-          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        }
-        await addSubscription(sub)
-        await updateUser(tx.user_id, { plan: tx.plan || 'basic' })
-        await updateTransactionByReference(tx_ref, { status: 'success', amount })
-        await creditReferralCommission(tx.user_id, tx.plan || 'basic')
-      }
+    if (gateway === 'paystack' && req.body?.event === 'charge.success') {
+      const { reference, amount } = req.body.data
+      await handleSuccessfulPayment(reference, amount / 100, req.body.data)
+    }
+
+    if (gateway === 'flutterwave' && req.body?.event === 'charge.completed' && req.body?.data?.status === 'successful') {
+      const { tx_ref, amount } = req.body.data
+      await handleSuccessfulPayment(tx_ref, amount, req.body.data)
     }
 
     res.sendStatus(200)
   } catch (err) {
     console.error('[webhook] Error:', err.message)
     res.sendStatus(200)
+  }
+}
+
+async function handleSuccessfulPayment(reference, amount, eventData) {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+
+    // Atomic claim: only process if transaction is still pending
+    const { rows } = await client.query(
+      `UPDATE transactions 
+       SET status = 'success', amount = $2, metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('gateway_event', $3)
+       WHERE reference = $1 AND status = 'pending'
+       RETURNING id, user_id, plan`,
+      [reference, amount, JSON.stringify(eventData)]
+    )
+
+    if (rows.length === 0) {
+      await client.query('ROLLBACK')
+      return // Already processed
+    }
+
+    const { id: txId, user_id, plan: planSlug } = rows[0]
+    const plan = planSlug || 'basic'
+
+    // Deterministic subscription id from transaction id
+    const subId = txId
+
+    // Upsert subscription (1:1 with transaction)
+    await client.query(
+      `INSERT INTO subscriptions (id, user_id, plan, active, started_at, expires_at)
+       VALUES ($1, $2, $3, true, NOW(), NOW() + INTERVAL '30 days')
+       ON CONFLICT (id) DO UPDATE SET
+         plan = EXCLUDED.plan,
+         active = true,
+         started_at = NOW(),
+         expires_at = NOW() + INTERVAL '30 days'`,
+      [subId, user_id, plan]
+    )
+
+    await client.query(`UPDATE users SET plan = $2 WHERE id = $1`, [user_id, plan])
+
+    // Credit referral commission inside same transaction
+    const refRows = await client.query(
+      `UPDATE affiliate_referrals
+       SET commission = ROUND((SELECT price FROM plans WHERE slug = $2)::numeric * 0.10, 2),
+           status = 'paid',
+           plan = $2
+       WHERE id = (
+         SELECT id FROM affiliate_referrals
+         WHERE referred_id = $1 AND status = 'converted'
+         FOR UPDATE
+         LIMIT 1
+       )
+       AND status = 'converted'
+       RETURNING id, referrer_id, commission`,
+      [user_id, plan]
+    )
+
+    if (refRows.rows.length > 0) {
+      const { referrer_id, commission } = refRows.rows[0]
+      await client.query(`UPDATE users SET coins = COALESCE(coins,0) + $1 WHERE id = $2`, [Math.round(commission), referrer_id])
+      // Notify referrer (non-blocking)
+      try {
+        const { notifyUser } = await import('../services/realtime.js')
+        notifyUser(referrer_id, { type: 'referral_paid', commission, referredId: user_id, plan })
+      } catch {}
+    }
+
+    await client.query('COMMIT')
+  } catch (e) {
+    try { await client.query('ROLLBACK') } catch {}
+    console.error('[webhook] Fulfillment error:', e.message)
+    throw e
+  } finally {
+    client.release()
   }
 }
 

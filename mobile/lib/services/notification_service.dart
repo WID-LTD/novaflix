@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../models/notification.dart';
 import '../services/api_service.dart';
+import '../core/config.dart';
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
@@ -47,7 +49,7 @@ class NotificationService {
   
   static Future<void> _registerToken(String token) async {
     try {
-      final userToken = await ApiService.getToken();
+      final userToken = await ApiService().getToken();
       await http.post(
         Uri.parse('${ApiService.baseUrl}/push/subscribe'),
         headers: {
@@ -144,38 +146,42 @@ class NotificationState {
   final List<AppNotification> notifications;
   final int unreadCount;
   final bool isLoading;
-  
+  final String? error;
+
   const NotificationState({
     this.notifications = const [],
     this.unreadCount = 0,
     this.isLoading = false,
+    this.error,
   });
-  
+
   NotificationState copyWith({
     List<AppNotification>? notifications,
     int? unreadCount,
     bool? isLoading,
+    String? error,
   }) {
     return NotificationState(
       notifications: notifications ?? this.notifications,
       unreadCount: unreadCount ?? this.unreadCount,
       isLoading: isLoading ?? this.isLoading,
+      error: error ?? this.error,
     );
   }
 }
 
 class NotificationNotifier extends StateNotifier<NotificationState> {
-  final String _baseUrl = 'https://api.nova-flix.com.ng/api';
+  final String _baseUrl = AppConfig.apiBaseUrl;
   
   NotificationNotifier() : super(const NotificationState());
   
   Future<void> loadNotifications({int limit = 30, int offset = 0}) async {
     state = state.copyWith(isLoading: true);
     try {
-      final token = await ApiService.getToken();
+      final token = await ApiService().getToken();
       final res = await http.get(
-        Uri.parse('https://api.nova-flix.com.ng/api/notifications?limit=30&offset=0'),
-        headers: {'Authorization': 'Bearer ${await ApiService.getToken()}'},
+        Uri.parse('$_baseUrl/notifications?limit=30&offset=0'),
+        headers: {'Authorization': 'Bearer ${await ApiService().getToken()}'},
       );
       final data = jsonDecode(res.body);
       if (data['success']) {
@@ -191,10 +197,10 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
   
   Future<void> loadUnreadCount() async {
     try {
-      final token = await ApiService.getToken();
+      final token = await ApiService().getToken();
       final res = await http.get(
-        Uri.parse('https://api.nova-flix.com.ng/api/notifications/unread-count'),
-        headers: {'Authorization': 'Bearer ${await ApiService.getToken()}'},
+        Uri.parse('$_baseUrl/notifications/unread-count'),
+        headers: {'Authorization': 'Bearer ${await ApiService().getToken()}'},
       );
       final data = jsonDecode(res.body);
       if (data['success']) {
@@ -207,10 +213,10 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
   
   Future<void> markAsRead(String id) async {
     try {
-      final token = await ApiService.getToken();
+      final token = await ApiService().getToken();
       await http.post(
-        Uri.parse('https://api.nova-flix.com.ng/api/notifications/$id/read'),
-        headers: {'Authorization': 'Bearer ${await ApiService.getToken()}'},
+        Uri.parse('$_baseUrl/notifications/$id/read'),
+        headers: {'Authorization': 'Bearer ${await ApiService().getToken()}'},
       );
       state = state.copyWith(
         notifications: state.notifications.map((n) => n.id == id ? n.copyWith(isRead: true) : n).toList(),
@@ -223,10 +229,10 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
   
   Future<void> markAllAsRead() async {
     try {
-      final token = await ApiService.getToken();
+      final token = await ApiService().getToken();
       await http.post(
-        Uri.parse('https://api.nova-flix.com.ng/api/notifications/read-all'),
-        headers: {'Authorization': 'Bearer ${await ApiService.getToken()}'},
+        Uri.parse('$_baseUrl/notifications/read-all'),
+        headers: {'Authorization': 'Bearer ${await ApiService().getToken()}'},
       );
       state = state.copyWith(
         notifications: state.notifications.map((n) => n.copyWith(isRead: true)).toList(),
@@ -239,7 +245,7 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
 }
 
 final notificationProvider = StateNotifierProvider<NotificationNotifier, NotificationState>((ref) {
-  return NotificationNotifier(ref.read(apiServiceProvider));
+  return NotificationNotifier();
 });
 
 // Background message handler for FCM

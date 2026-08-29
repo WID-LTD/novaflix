@@ -200,6 +200,19 @@ async function handleInquiryApproved(inquiryId, claimId) {
       [userId]
     );
 
+    // Set creator profile approval status to approved
+    await client.query(
+      `UPDATE creator_profiles SET approval_status = 'approved', approved_at = NOW()
+       WHERE tmdb_person_id = $1`,
+      [claim.tmdb_person_id]
+    );
+
+    // Sync creator_approved flag on user
+    await client.query(
+      `UPDATE users SET creator_approved = TRUE WHERE id = $1`,
+      [userId]
+    );
+
     await client.query('COMMIT');
     console.log(`[claim] Auto-approved claim ${claimId} for user ${userId}`);
   } catch (err) {

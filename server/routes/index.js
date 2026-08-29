@@ -12,6 +12,7 @@ import giftRoutes from './giftRoutes.js'
 import tmdbRoutes from './tmdbRoutes.js'
 import streamRoutes from './streamRoutes.js'
 import creatorAuthRoutes from './creatorAuthRoutes.js'
+import creatorApplicationRoutes from './creatorApplicationRoutes.js'
 import adminRoutes from './adminRoutes.js'
 import emailRoutes from './emailRoutes.js'
 import recommendationRoutes from './recommendationRoutes.js'
@@ -35,6 +36,7 @@ import shortsRoutes from './shortsRoutes.js'
 import shareRoutes from './shareRoutes.js'
 import fanRoutes from './fanRoutes.js'
 import forumRoutes from './forumRoutes.js'
+import hotTakesRoutes from './hotTakesRoutes.js'
 import triviaRoutes from './triviaRoutes.js'
 import chatRoutes from './chatRoutes.js'
 import eggRoutes from './eggRoutes.js'
@@ -42,6 +44,8 @@ import statsRoutes from './statsRoutes.js'
 import postRoutes from './postRoutes.js'
 import sitemapRoutes from './sitemapRoutes.js'
 import cronRoutes from './cronRoutes.js'
+import analyticsRoutes from './analyticsRoutes.js'
+import discoveryRoutes from './discoveryRoutes.js'
 
 const router = Router()
 
@@ -51,8 +55,10 @@ router.use('/push', pushRoutes)
 router.use('/reports', reportsRoutes)
 router.use('/appeals', appealRoutes)
 router.use('/creator/auth', creatorAuthRoutes)
+router.use('/creator', creatorApplicationRoutes)
 router.use('/user', userRoutes)
 router.use('/creator', creatorRoutes)
+router.use('/creators', discoveryRoutes)
 router.use('/payment', paymentRoutes)
 router.use('/tips', tipRoutes)
 router.use('/gift', giftRoutes)
@@ -79,6 +85,7 @@ router.use('/shorts', shortsRoutes)
 router.use('/share', shareRoutes)
 router.use('/fan', fanRoutes)
 router.use('/forum', forumRoutes)
+router.use('/hot-takes', hotTakesRoutes)
 router.use('/trivia', triviaRoutes)
 router.use('/chat', chatRoutes)
 router.use('/eggs', eggRoutes)
@@ -86,6 +93,7 @@ router.use('/stats', statsRoutes)
 router.use('/', sitemapRoutes)
 router.use('/cron', cronRoutes)
 router.use('/posts', postRoutes)
+router.use('/creator/analytics', analyticsRoutes)
 router.use('/', tmdbRoutes)
 router.use('/', streamRoutes)
 

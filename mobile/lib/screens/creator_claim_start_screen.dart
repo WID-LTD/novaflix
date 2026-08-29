@@ -1,8 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/wallet_provider.dart';
-import '../services/wallet_service.dart';
+import 'package:http/http.dart' as http;
 import '../services/api_service.dart';
+import '../core/config.dart';
 
 class ClaimStartScreen extends ConsumerStatefulWidget {
   const ClaimStartScreen({super.key});
@@ -23,9 +24,9 @@ class _ClaimStartScreenState extends ConsumerState<ClaimStartScreen> {
     
     setState(() => _searching = true);
     try {
-      final token = await ApiService.getToken();
+      final token = await ApiService().getToken();
       final res = await http.get(
-        Uri.parse('https://api.nova-flix.com.ng/api/search/person?query=${Uri.encodeComponent(query)}'),
+        Uri.parse('${AppConfig.apiBaseUrl}/search/person?query=${Uri.encodeComponent(query)}'),
         headers: {'Authorization': 'Bearer $token'},
       );
       final data = jsonDecode(res.body);
@@ -48,10 +49,10 @@ class _ClaimStartScreenState extends ConsumerState<ClaimStartScreen> {
   Future<void> _startClaim() async {
     if (_selectedPerson == null) return;
     
-    final token = await ApiService.getToken();
+    final token = await ApiService().getToken();
     try {
       final res = await http.post(
-        Uri.parse('https://api.nova-flix.com.ng/api/creator/claim/start'),
+        Uri.parse('${AppConfig.apiBaseUrl}/creator/claim/start'),
         headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
         body: jsonEncode({
           'tmdbPersonId': _selectedPerson!['id'],
@@ -141,8 +142,8 @@ class _ClaimStartScreenState extends ConsumerState<ClaimStartScreen> {
                         trailing: selected ? const Icon(Icons.check_circle, color: Colors.green) : null,
                         onTap: () => _selectPerson(person),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ),
               const SizedBox(height: 16),
@@ -154,7 +155,7 @@ class _ClaimStartScreenState extends ConsumerState<ClaimStartScreen> {
                   style: FilledButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
                 ),
             ],
-          ),
+          ],
         ),
       ),
     );

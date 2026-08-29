@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../core/responsive.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../providers/auth_provider.dart';
 import '../providers/store_provider.dart';
 import '../providers/downloads_provider.dart';
-import '../services/api_service.dart';
+
 import '../widgets/ui/index.dart';
 import '../widgets/features/download_progress_tile.dart';
 
@@ -22,11 +23,14 @@ class ProfileScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Profile')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
             Center(
               child: Column(
                 children: [
@@ -90,7 +94,9 @@ class ProfileScreen extends ConsumerWidget {
                 child: const Text('Sign Out'),
               ),
             ),
-          ],
+              ],
+            ),
+          ),
         ),
       ),
     );

@@ -70,6 +70,9 @@ export async function recordShortView(req, res) {
     const updated = await incrementShortViews(req.params.id)
     if (!updated) return res.status(404).json({ error: 'Short not found' })
     broadcastFeed({ type: 'shorts:view', shortId: req.params.id, views: updated.views })
+    if (updated.user_id) {
+      broadcastFeed({ type: 'view', contentType: 'creator', contentId: updated.user_id })
+    }
     res.json({ success: true, views: updated.views })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -80,6 +83,9 @@ export async function likeShort(req, res) {
   try {
     const result = await toggleShortLike(req.params.id, req.userId)
     broadcastFeed({ type: 'shorts:like', shortId: req.params.id, likes: result.likes })
+    if (result.creator_id) {
+      broadcastFeed({ type: 'like', contentType: 'creator', contentId: result.creator_id, liked: result.liked })
+    }
     res.json({ success: true, ...result })
   } catch (err) {
     res.status(500).json({ error: err.message })

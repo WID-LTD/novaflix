@@ -748,15 +748,15 @@ class _ThreadViewState extends ConsumerState<_ThreadView> {
           if (data is Map && data['type'] == 'topic-reply' && '${data['topicId']}' == '${widget.topicId}') {
             if (mounted) ref.invalidate(_forumTopicProvider(widget.topicId));
           }
-        } catch {}
+        } catch (_) {}
       });
-    } catch {}
+    } catch (_) {}
   }
 
   @override
   void dispose() {
     _wsSub?.cancel();
-    try { _channel?.sink.close(); } catch {}
+    try { _channel?.sink.close(); } catch (_) {}
     super.dispose();
   }
 

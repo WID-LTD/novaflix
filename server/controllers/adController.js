@@ -10,8 +10,8 @@ export async function getNextAd(req, res) {
     const userPlan = req.user?.plan || 'free'
     const planRank = getPlanRank(userPlan)
 
-    // Paid plans get no ads
-    if (planRank >= 3) {
+    // Standard and above get no ads (Basic is also ad-free per tier spec)
+    if (planRank >= 2) {
       return res.json({ success: true, ads: [] })
     }
 

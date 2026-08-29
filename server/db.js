@@ -732,6 +732,63 @@ export async function cleanupStaleSessions() {
   return rows.length
 }
 
+export async function listActiveSessions(userId) {
+  const { rows } = await pool.query(
+    `SELECT id, user_id, device_id, ip_address, last_heartbeat
+     FROM active_sessions
+     WHERE user_id = $1 AND last_heartbeat > NOW() - INTERVAL '2 minutes'
+     ORDER BY last_heartbeat DESC`,
+    [userId]
+  )
+  return rows
+}
+
+// Download device registry (per-plan caps)
+export async function ensureDownloadDevice(userId, deviceId, deviceName, platform, maxDevices) {
+  const { rows: existing } = await pool.query(
+    'SELECT * FROM download_devices WHERE user_id = $1 AND device_id = $2',
+    [userId, deviceId]
+  )
+  if (existing[0]) {
+    await pool.query('UPDATE download_devices SET last_used_at = NOW() WHERE id = $1', [existing[0].id])
+    return { ok: true }
+  }
+  if (!maxDevices || maxDevices <= 0) {
+    return { ok: false, limit: 0, devices: [] }
+  }
+  const { rows } = await pool.query(
+    'SELECT * FROM download_devices WHERE user_id = $1 ORDER BY last_used_at ASC',
+    [userId]
+  )
+  if (rows.length >= maxDevices) {
+    return { ok: false, limit: maxDevices, devices: rows }
+  }
+  const { rows: inserted } = await pool.query(
+    `INSERT INTO download_devices (user_id, device_id, device_name, platform)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (user_id, device_id) DO UPDATE SET last_used_at = NOW()
+     RETURNING *`,
+    [userId, deviceId, deviceName || null, platform || null]
+  )
+  return { ok: true, device: inserted[0] }
+}
+
+export async function getDownloadDevices(userId) {
+  const { rows } = await pool.query(
+    'SELECT * FROM download_devices WHERE user_id = $1 ORDER BY last_used_at DESC',
+    [userId]
+  )
+  return rows
+}
+
+export async function removeDownloadDevice(userId, deviceId) {
+  const { rowCount } = await pool.query(
+    'DELETE FROM download_devices WHERE user_id = $1 AND device_id = $2',
+    [userId, deviceId]
+  )
+  return rowCount > 0
+}
+
 export async function getUserTransactions(userId) {
   const { rows } = await pool.query('SELECT * FROM transactions WHERE user_id = $1 ORDER BY created_at DESC', [userId])
   return rows
@@ -1688,7 +1745,7 @@ export async function getShortById(id) {
 
 export async function incrementShortViews(id) {
   const { rows } = await pool.query(
-    `UPDATE shorts SET views = views + 1 WHERE id = $1 RETURNING views`,
+    `UPDATE shorts SET views = views + 1 WHERE id = $1 RETURNING views, user_id`,
     [id]
   )
   return rows[0] || null
@@ -1707,12 +1764,12 @@ export async function toggleShortLike(shortId, userId) {
   const exists = await hasUserLikedShort(shortId, userId)
   if (exists) {
     await pool.query(`DELETE FROM short_likes WHERE short_id = $1 AND user_id = $2`, [shortId, userId])
-    const { rows } = await pool.query(`UPDATE shorts SET likes = GREATEST(likes - 1, 0) WHERE id = $1 RETURNING likes`, [shortId])
-    return { liked: false, likes: rows[0].likes }
+    const { rows } = await pool.query(`UPDATE shorts SET likes = GREATEST(likes - 1, 0) WHERE id = $1 RETURNING likes, user_id`, [shortId])
+    return { liked: false, likes: rows[0].likes, creator_id: rows[0].user_id }
   }
   await pool.query(`INSERT INTO short_likes (short_id, user_id) VALUES ($1, $2)`, [shortId, userId])
-  const { rows } = await pool.query(`UPDATE shorts SET likes = likes + 1 WHERE id = $1 RETURNING likes`, [shortId])
-  return { liked: true, likes: rows[0].likes }
+  const { rows } = await pool.query(`UPDATE shorts SET likes = likes + 1 WHERE id = $1 RETURNING likes, user_id`, [shortId])
+  return { liked: true, likes: rows[0].likes, creator_id: rows[0].user_id }
 }
 
 export async function hasUserBookmarkedShort(shortId, userId) {
@@ -2094,9 +2151,13 @@ export async function getCoins(userId) {
 }
 
 export async function insertTriviaQuestion(q) {
+  // Idempotent per day+movie: ux_trivia_questions_date_movie backs this
+  // conflict target, so regenerating the same daily set never 500s.
+  // Bank rows (movie_id NULL) are exempt — Postgres treats NULLs as distinct.
   const { rows } = await pool.query(
     `INSERT INTO trivia_questions (game_type, date_key, question, options, answer_index, answer_text, movie_id, movie_title, difficulty, clue, image_url)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     ON CONFLICT (date_key, movie_id) DO NOTHING RETURNING *`,
     [q.game_type || 'trivia', q.date_key, q.question, q.options ? JSON.stringify(q.options) : null, q.answer_index ?? null, q.answer_text || null, q.movie_id || null, q.movie_title || null, q.difficulty || 'easy', q.clue || null, q.image_url || null]
   )
   return rows[0]
@@ -2136,9 +2197,9 @@ export async function updateTriviaStreak(userId, dateKey, correct) {
   let streak = 0
   let best = 0
   if (correct) {
-    const yesterday = new Date()
-    yesterday.setDate(yesterday.getDate() - 1)
-    const yStr = yesterday.toISOString().slice(0, 10)
+    // Pure-UTC "yesterday" — dateKey() values are UTC strings, so the
+    // comparison must not depend on the host's local timezone.
+    const yStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
     if (existing.rows[0] && existing.rows[0].last_date === yStr) {
       streak = existing.rows[0].streak + 1
       best = Math.max(existing.rows[0].best_streak, streak)
@@ -2168,20 +2229,26 @@ export async function getTriviaStreak(userId) {
 export async function getTriviaLeaderboard(limit = 20) {
   const { rows } = await pool.query(
     `SELECT u.id, u.name, u.avatar,
-       SUM(CASE WHEN ta.correct THEN 1 ELSE 0 END)::int as correct,
-       COUNT(*)::int as answered,
-       SUM(ta.points_awarded)::int as points
-     FROM trivia_attempts ta JOIN users u ON u.id = ta.user_id
-     GROUP BY u.id, u.name, u.avatar
-     ORDER BY points DESC
-     LIMIT $1`,
+       SUM(CASE WHEN ta.correct THEN 1 ELSE 0 END)::int as total_correct,
+       COUNT(*)::int as total_answered,
+       SUM(ta.points_awarded)::int as total_points,
+       COALESCE(s.streak, 0) as streak
+    FROM trivia_attempts ta 
+    JOIN users u ON u.id = ta.user_id
+    LEFT JOIN trivia_streaks s ON s.user_id = u.id
+    GROUP BY u.id, u.name, u.avatar, s.streak
+    ORDER BY total_points DESC, total_correct DESC, total_answered ASC
+    LIMIT $1`,
     [limit]
   )
   return rows
 }
 
 export async function getCosmeticsCatalog() {
-  const { rows } = await pool.query(`SELECT * FROM cosmetics WHERE active = TRUE ORDER BY price ASC`)
+  const { rows } = await pool.query(
+    `SELECT * FROM cosmetics WHERE active = TRUE
+     ORDER BY CASE rarity WHEN 'common' THEN 0 WHEN 'rare' THEN 1 WHEN 'epic' THEN 2 ELSE 3 END, price ASC`
+  )
   return rows
 }
 
@@ -2196,32 +2263,115 @@ export async function getUserCosmetics(userId) {
 }
 
 export async function purchaseCosmetic(userId, cosmeticId) {
-  const cosmetic = await pool.query(`SELECT * FROM cosmetics WHERE id = $1 AND active = TRUE`, [cosmeticId])
-  if (!cosmetic.rows[0]) return { error: 'Cosmetic not found' }
-  const owned = await pool.query(`SELECT 1 FROM user_cosmetics WHERE user_id = $1 AND cosmetic_id = $2`, [userId, cosmeticId])
-  if (owned.rows.length) return { error: 'Already owned' }
-  const coins = await getCoins(userId)
-  if (coins < cosmetic.rows[0].price) return { error: 'Not enough coins' }
-  await addCoins(userId, -cosmetic.rows[0].price)
-  await pool.query(
-    `INSERT INTO user_cosmetics (user_id, cosmetic_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-    [userId, cosmeticId]
-  )
-  return { success: true, cosmetic: cosmetic.rows[0] }
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    
+    // Validate UUID format
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cosmeticId)) {
+      await client.query('ROLLBACK')
+      return { error: 'Invalid cosmetic ID format' }
+    }
+    
+    const cosmeticResult = await client.query(`SELECT * FROM cosmetics WHERE id = $1 AND active = TRUE`, [cosmeticId])
+    if (!cosmeticResult.rows[0]) {
+      await client.query('ROLLBACK')
+      return { error: 'Cosmetic not found' }
+    }
+    
+    const owned = await client.query(`SELECT 1 FROM user_cosmetics WHERE user_id = $1 AND cosmetic_id = $2`, [userId, cosmeticId])
+    if (owned.rows.length) {
+      await client.query('ROLLBACK')
+      return { error: 'Already owned' }
+    }
+    
+    const coins = await getCoins(userId)
+    const price = cosmeticResult.rows[0].price
+    if (coins < price) {
+      await client.query('ROLLBACK')
+      return { error: 'Not enough coins' }
+    }
+    
+    await client.query(`UPDATE users SET coins = coins - $1 WHERE id = $2 AND coins >= $1`, [price, userId])
+    
+    await client.query(
+      `INSERT INTO user_cosmetics (user_id, cosmetic_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [userId, cosmeticId]
+    )
+    
+    await client.query('COMMIT')
+    return { success: true, cosmetic: cosmetic.rows[0] }
+  } catch (err) {
+    await client.query('ROLLBACK')
+    return { error: err.message }
+  } finally {
+    client.release()
+  }
 }
 
 export async function equipCosmetic(userId, cosmeticId, equipped) {
-  if (equipped) {
-    await pool.query(`UPDATE user_cosmetics SET equipped = FALSE WHERE user_id = $1`, [userId])
-    await pool.query(
-      `UPDATE user_cosmetics SET equipped = TRUE WHERE user_id = $1 AND cosmetic_id = $2`,
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    
+    // Validate UUID format
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cosmeticId)) {
+      await client.query('ROLLBACK')
+      return { error: 'Invalid cosmetic ID format' }
+    }
+    
+    // Check if user owns this cosmetic
+    const owned = await client.query(
+      `SELECT c.kind FROM user_cosmetics uc JOIN cosmetics c ON c.id = uc.cosmetic_id 
+       WHERE uc.user_id = $1 AND uc.cosmetic_id = $2`,
       [userId, cosmeticId]
     )
-  } else {
-    await pool.query(`UPDATE user_cosmetics SET equipped = FALSE WHERE user_id = $1 AND cosmetic_id = $2`, [userId, cosmeticId])
+    if (!owned.rows.length) {
+      await client.query('ROLLBACK')
+      return { error: 'Cosmetic not owned' }
+    }
+    
+    const kind = owned.rows[0].kind
+    
+    if (equipped) {
+      // Unequip all other cosmetics of the same kind
+      await client.query(
+        `UPDATE user_cosmetics uc 
+         SET equipped = FALSE 
+         FROM cosmetics c 
+         WHERE uc.cosmetic_id = c.id 
+         AND uc.user_id = $1 
+         AND c.kind = $2 
+         AND uc.cosmetic_id != $3`,
+        [userId, kind, cosmeticId]
+      )
+      // Equip the selected cosmetic
+      await client.query(
+        `UPDATE user_cosmetics SET equipped = TRUE 
+         WHERE user_id = $1 AND cosmetic_id = $2`,
+        [userId, cosmeticId]
+      )
+    } else {
+      await client.query(
+        `UPDATE user_cosmetics SET equipped = FALSE 
+         WHERE user_id = $1 AND cosmetic_id = $2`,
+        [userId, cosmeticId]
+      )
+    }
+    
+    const { rows } = await client.query(
+      `SELECT * FROM user_cosmetics WHERE user_id = $1 AND equipped = TRUE`,
+      [userId]
+    )
+    
+    await client.query('COMMIT')
+    return { success: true, equipped: rows[0] || null }
+  } catch (err) {
+    await client.query('ROLLBACK')
+    return { error: err.message }
+  } finally {
+    client.release()
   }
-  const { rows } = await pool.query(`SELECT * FROM user_cosmetics WHERE user_id = $1 AND equipped = TRUE`, [userId])
-  return { success: true, equipped: rows[0] || null }
 }
 
 // ============ EASTER-EGG DIGITAL KEYS ============
@@ -3052,4 +3202,117 @@ export async function resolveAppeal(id, { status, resolutionNote, reviewedBy }) 
     [status, resolutionNote || '', reviewedBy || null, id]
   )
   return rows[0]
+}
+
+// ============ PRODUCTION AUTH: Refresh Tokens ============
+
+export async function createRefreshToken(userId, tokenHash, expiresAt) {
+  const { rows } = await pool.query(
+    `INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
+     VALUES ($1, $2, $3) RETURNING *`,
+    [userId, tokenHash, expiresAt]
+  )
+  return rows[0]
+}
+
+export async function findRefreshToken(tokenHash) {
+  const { rows } = await pool.query(
+    `SELECT * FROM refresh_tokens WHERE token_hash = $1`,
+    [tokenHash]
+  )
+  return rows[0] || null
+}
+
+export async function deleteRefreshToken(tokenHash) {
+  await pool.query(`DELETE FROM refresh_tokens WHERE token_hash = $1`, [tokenHash])
+}
+
+export async function deleteAllRefreshTokens(userId) {
+  await pool.query(`DELETE FROM refresh_tokens WHERE user_id = $1`, [userId])
+}
+
+// ============ PRODUCTION AUTH: Token Blocklist ============
+
+export async function addToBlocklist(tokenHash, expiresAt) {
+  await pool.query(
+    `INSERT INTO token_blocklist (token_hash, expires_at)
+     VALUES ($1, $2)
+     ON CONFLICT (token_hash) DO NOTHING`,
+    [tokenHash, expiresAt]
+  )
+}
+
+export async function isTokenBlocked(tokenHash) {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM token_blocklist WHERE token_hash = $1 LIMIT 1`,
+    [tokenHash]
+  )
+  return rows.length > 0
+}
+
+export async function cleanupExpiredBlocklist() {
+  await pool.query(`DELETE FROM token_blocklist WHERE expires_at < NOW()`)
+}
+
+// ============ PRODUCTION AUTH: Rate Limiting ============
+
+export async function recordRateLimitAttempt(identifier, action) {
+  await pool.query(
+    `INSERT INTO rate_limit_log (identifier, action) VALUES ($1, $2)`,
+    [identifier, action]
+  )
+}
+
+export async function getRateLimitAttempts(identifier, action, windowMs = 900000) {
+  const windowSeconds = Math.floor(windowMs / 1000)
+  const { rows } = await pool.query(
+    `SELECT COUNT(*)::int AS count
+     FROM rate_limit_log
+     WHERE identifier = $1 AND action = $2
+       AND attempted_at > NOW() - INTERVAL '1 second' * $3`,
+    [identifier, action, windowSeconds]
+  )
+  return rows[0]?.count || 0
+}
+
+export async function clearRateLimitAttempts(identifier, action) {
+  await pool.query(
+    `DELETE FROM rate_limit_log WHERE identifier = $1 AND action = $2`,
+    [identifier, action]
+  )
+}
+
+export async function cleanupOldRateLimitLogs() {
+  await pool.query(
+    `DELETE FROM rate_limit_log WHERE attempted_at < NOW() - INTERVAL '1 hour'`
+  )
+}
+
+// ============ PRODUCTION AUTH: Account Lockout ============
+
+export async function incrementFailedLoginAttempts(userId) {
+  const { rows } = await pool.query(
+    `UPDATE users SET failed_login_attempts = failed_login_attempts + 1,
+       locked_until = CASE WHEN failed_login_attempts + 1 >= 5 THEN NOW() + INTERVAL '15 minutes' ELSE locked_until END
+     WHERE id = $1 RETURNING failed_login_attempts, locked_until`,
+    [userId]
+  )
+  return rows[0] || null
+}
+
+export async function resetFailedLoginAttempts(userId) {
+  await pool.query(
+    `UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1`,
+    [userId]
+  )
+}
+
+export async function isAccountLocked(userId) {
+  const { rows } = await pool.query(
+    `SELECT locked_until FROM users WHERE id = $1`,
+    [userId]
+  )
+  const lockedUntil = rows[0]?.locked_until
+  if (!lockedUntil) return false
+  return new Date(lockedUntil) > new Date()
 }

@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { searchMedia } from '../../lib/api'
+import { searchMedia, searchCreators, searchCategories, type Creator, type Category } from '../../lib/api'
 import { useStore } from '../../store/useStore'
 import Icon from './Icon'
+// Spotify-style instant dropdown: floating portal fed by the existing input's
+// onChange value + focus state (never renders its own physical input).
+import SearchDiscoveryPanel from '../features/SearchDiscoveryPanel'
 
 interface SearchLightboxProps {
   open: boolean
@@ -15,8 +18,12 @@ export default function SearchLightbox({ open, onClose, variant = 'fullscreen' }
   const navigate = useNavigate()
   const inputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
-  const [type, setType] = useState<'movie' | 'tv'>('movie')
+  // Instant hybrid dropdown is active once the existing input has a real query.
+  const discoveryActive = variant === 'navbar' && query.trim().length >= 2
+  const [type, setType] = useState<'movie' | 'tv' | 'creators' | 'categories'>('movie')
   const [suggestions, setSuggestions] = useState<any[]>([])
+  const [creatorSuggestions, setCreatorSuggestions] = useState<any[]>([])
+  const [categorySuggestions, setCategorySuggestions] = useState<any[]>([])
   const [selectedIndex, setSelectedIndex] = useState(-1)
   const [loading, setLoading] = useState(false)
   const recentlySearched = useStore((s) => s.recentlySearched)
@@ -32,21 +39,37 @@ export default function SearchLightbox({ open, onClose, variant = 'fullscreen' }
     }
   }, [open])
 
-  const doFetch = useCallback(async (q: string, t: 'movie' | 'tv') => {
-    if (!q.trim()) { setSuggestions([]); return }
+  const doFetch = useCallback(async (q: string, t: 'movie' | 'tv' | 'creators' | 'categories') => {
+    if (!q.trim()) { setSuggestions([]); setCreatorSuggestions([]); setCategorySuggestions([]); return }
     setLoading(true)
-    const res = await searchMedia(q.trim(), t)
-    if (res.success) {
-      setSuggestions(res.data.slice(0, 8))
+    if (t === 'creators') {
+      const res = await searchCreators(q.trim())
+      if (res.success) setCreatorSuggestions(res.creators.slice(0, 8))
+      else setCreatorSuggestions([])
+    } else if (t === 'categories') {
+      const res = await searchCategories(q.trim())
+      if (res.success) setCategorySuggestions(res.categories.slice(0, 8))
+      else setCategorySuggestions([])
+    } else {
+      const res = await searchMedia(q.trim(), t)
+      if (res.success) setSuggestions(res.data.slice(0, 8))
+      else setSuggestions([])
     }
     setLoading(false)
   }, [])
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
+    // While the hybrid discovery portal is active it owns the results UI;
+    // skip the legacy per-type fetch to avoid duplicate requests.
+    if (discoveryActive) {
+      setSuggestions([])
+      setLoading(false)
+      return
+    }
     debounceRef.current = setTimeout(() => doFetch(query, type), 300)
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
-  }, [query, type, doFetch])
+  }, [query, type, doFetch, discoveryActive])
 
   const handleSubmit = () => {
     if (!query.trim()) return
@@ -94,7 +117,7 @@ export default function SearchLightbox({ open, onClose, variant = 'fullscreen' }
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  const handleTypeSelect = (t: 'movie' | 'tv') => {
+  const handleTypeSelect = (t: 'movie' | 'tv' | 'creators' | 'categories') => {
     setType(t)
     if (query.trim()) return
     setMenuOpen(false)
@@ -117,7 +140,7 @@ export default function SearchLightbox({ open, onClose, variant = 'fullscreen' }
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             onFocus={() => { if (query.trim() || recentlySearched.length > 0) setMenuOpen(true) }}
-            placeholder="Search movies, TV shows..."
+            placeholder="Search movies, TV shows, creators, categories..."
             className="w-full bg-white/10 backdrop-blur-xl text-white font-bold text-sm md:text-base rounded-xl py-2 px-4 pr-10 placeholder-gray-500 outline-none shadow-lg border-2 border-red-500 h-10"
           />
           <button
@@ -135,11 +158,23 @@ export default function SearchLightbox({ open, onClose, variant = 'fullscreen' }
             <Icon name="search" size="sm" />
           </button>
 
+          {/* Floating hybrid-results portal anchored beneath this input.
+              Rendered through createPortal by the panel itself; it reads the
+              live onChange value (`query`) and focus state (`menuOpen`). */}
+          <SearchDiscoveryPanel
+            anchorRef={inputRef}
+            query={query}
+            open={open && menuOpen && discoveryActive}
+            onClose={() => setMenuOpen(false)}
+          />
+
           {menuOpen && (
             <div
               ref={menuRef}
               className="absolute top-full left-0 right-0 mt-2 bg-surface-container-high border border-white/10 rounded-xl shadow-2xl z-50 max-h-80 overflow-y-auto min-w-0"
             >
+              {!discoveryActive && (
+                <>
               <div className="flex gap-2 p-3">
                 <button
                   onClick={() => handleTypeSelect('movie')}
@@ -156,6 +191,22 @@ export default function SearchLightbox({ open, onClose, variant = 'fullscreen' }
                   }`}
                 >
                   TV Shows
+                </button>
+                <button
+                  onClick={() => handleTypeSelect('creators')}
+                  className={`flex-1 rounded-lg text-center text-sm font-semibold transition-colors py-2 ${
+                    type === 'creators' ? 'bg-primary-container text-on-primary-container hover:bg-primary' : 'bg-white/10 text-on-surface-variant hover:bg-primary-container/20'
+                  }`}
+                >
+                  Creators
+                </button>
+                <button
+                  onClick={() => handleTypeSelect('categories')}
+                  className={`flex-1 rounded-lg text-center text-sm font-semibold transition-colors py-2 ${
+                    type === 'categories' ? 'bg-primary-container text-on-primary-container hover:bg-primary' : 'bg-white/10 text-on-surface-variant hover:bg-primary-container/20'
+                  }`}
+                >
+                  Categories
                 </button>
               </div>
 
@@ -188,6 +239,8 @@ export default function SearchLightbox({ open, onClose, variant = 'fullscreen' }
                     </button>
                   ))}
                 </div>
+              )}
+                </>
               )}
 
               {!query && recentlySearched.length > 0 && (
@@ -253,7 +306,7 @@ export default function SearchLightbox({ open, onClose, variant = 'fullscreen' }
                 value={query}
                 onChange={e => setQuery(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Search movies, TV shows..."
+placeholder="Search movies, TV shows, creators, categories..."
                 className="w-full bg-white/10 backdrop-blur-xl text-black font-bold text-lg md:text-xl rounded-2xl py-5 px-6 pr-14 placeholder-gray-400 outline-none shadow-2xl border-2 border-red-500"
               />
               <button
@@ -265,7 +318,7 @@ export default function SearchLightbox({ open, onClose, variant = 'fullscreen' }
               </button>
             </div>
 
-            <div className="flex gap-2 mt-4">
+            <div className="flex flex-wrap gap-2 mt-4">
               <button
                 onClick={() => setType('movie')}
                 className={`px-5 py-2 rounded-full text-sm font-semibold transition-colors ${
@@ -281,6 +334,22 @@ export default function SearchLightbox({ open, onClose, variant = 'fullscreen' }
                 }`}
               >
                 TV Shows
+              </button>
+              <button
+                onClick={() => setType('creators')}
+                className={`px-5 py-2 rounded-full text-sm font-semibold transition-colors ${
+                  type === 'creators' ? 'bg-primary-container text-on-primary-container' : 'bg-white/10 text-white hover:bg-white/20'
+                }`}
+              >
+                Creators
+              </button>
+              <button
+                onClick={() => setType('categories')}
+                className={`px-5 py-2 rounded-full text-sm font-semibold transition-colors ${
+                  type === 'categories' ? 'bg-primary-container text-on-primary-container' : 'bg-white/10 text-white hover:bg-white/20'
+                }`}
+              >
+                Categories
               </button>
             </div>
 

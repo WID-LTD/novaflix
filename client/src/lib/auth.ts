@@ -634,12 +634,12 @@ export async function getSecretRoom(token: string, roomId: string): Promise<any>
 }
 
 // Creator auth
-export async function creatorRegister(email: string, password: string, name?: string): Promise<AuthResponse> {
+export async function creatorRegister(email: string, password: string, name?: string, profile?: { bio?: string; category?: string; portfolioUrl?: string }): Promise<AuthResponse> {
   try {
     const res = await fetch(`${BASE}/creator/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, name }),
+      body: JSON.stringify({ email, password, name, ...profile }),
     })
     return res.json()
   } catch {
@@ -701,17 +701,29 @@ export async function creatorResetPassword(token: string, password: string): Pro
   }
 }
 
-// Creator token management
-export function getCreatorToken(): string | null {
-  return localStorage.getItem('novaflix-creator-token')
+// Creator application
+export async function applyAsCreator(data: { handle?: string; bio?: string; category?: string; portfolio_url?: string }): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/creator/apply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify(data),
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
 }
 
-export function setCreatorToken(token: string) {
-  localStorage.setItem('novaflix-creator-token', token)
-}
-
-export function removeCreatorToken() {
-  localStorage.removeItem('novaflix-creator-token')
+export async function getApplicationStatus(): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/creator/apply/status`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
 }
 
 // Newsletter
@@ -765,6 +777,44 @@ export async function adminGetUploads(token: string): Promise<any> {
 export async function adminGetCreators(token: string): Promise<any> {
   try {
     const res = await fetch(`${BASE}/admin/creators`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function adminGetCreatorApplications(token: string, status?: string): Promise<any> {
+  try {
+    const url = status
+      ? `${BASE}/admin/creator-applications?status=${status}`
+      : `${BASE}/admin/creator-applications`
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function adminApproveCreatorApplication(token: string, applicationId: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/creator-applications/${applicationId}/approve`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function adminDenyCreatorApplication(token: string, applicationId: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/admin/creator-applications/${applicationId}/deny`, {
+      method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     })
     return res.json()
@@ -1411,6 +1461,97 @@ export async function getCreatorComments(token: string): Promise<any> {
   } catch { return { success: false, comments: [], error: 'Network error' } }
 }
 
+// Creator analytics
+export async function getCreatorAnalytics(token: string, section: 'overview' | 'audience' | 'content', period: string = '30d'): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/creator/analytics/${section}?period=${encodeURIComponent(period)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+// Creator PPM config
+export async function getCreatorPpmConfig(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/creator/ppm/config`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function saveCreatorPpmConfig(token: string, data: any): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/creator/ppm/config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+// Stream key management
+export async function getStreamKey(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/creator/stream/key`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function regenerateStreamKey(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/creator/stream/key/regenerate`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getStreamStatus(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/creator/stream/status`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, live: false, error: 'Network error' } }
+}
+
+// Creator onboarding
+export async function saveCreatorOnboarding(token: string, data: any): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/creator/onboarding`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function getCreatorOnboarding(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/creator/onboarding`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function deleteCreatorUpload(token: string, id: string): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}/creator/uploads/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
 // Payment
 export async function initializePayment(token: string, plan: string, gateway?: string): Promise<any> {
   try {
@@ -1951,6 +2092,60 @@ export async function voteForumReply(replyId: string, vote: number): Promise<any
   } catch { return { success: false, error: 'Network error' } }
 }
 
+// ---- Hot Takes (debate arena) ----
+
+export async function getHotTakes(sort: 'hot' | 'new' = 'hot', limit = 30, offset = 0): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/hot-takes?sort=${sort}&limit=${limit}&offset=${offset}`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, topics: [], error: 'Network error' } }
+}
+
+export async function getHotTake(id: string): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/hot-takes/${id}`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function createHotTake(movieTitle: string, title: string, noSpoilers: boolean): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/hot-takes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ movieTitle, title, noSpoilers }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function voteHotTake(topicId: string, vote: number): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/hot-takes/${topicId}/vote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ vote }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
+export async function addHotTakeReply(topicId: string, content: string, stance: 'agree' | 'disagree'): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/hot-takes/${topicId}/replies`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ content, stance }),
+    })
+    return res.json()
+  } catch { return { success: false, error: 'Network error' } }
+}
+
 export async function getForumCategories(): Promise<any> {
   try {
     const res = await fetch(`${BASE}/forum/categories`)
@@ -2021,6 +2216,22 @@ export async function getCoinsBalance(): Promise<any> {
     const res = await fetch(`${BASE}/trivia/coins`, { headers: { Authorization: `Bearer ${token}` } })
     return res.json()
   } catch { return { success: false, coins: 0, error: 'Network error' } }
+}
+
+export async function getTriviaStatus(): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/trivia/status`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, completedToday: false, error: 'Network error' } }
+}
+
+export async function getGuessStatus(): Promise<any> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/trivia/guess`, { headers: { Authorization: `Bearer ${token}` } })
+    return res.json()
+  } catch { return { success: false, alreadyPlayed: false, error: 'Network error' } }
 }
 
 export async function getCosmetics(): Promise<any> {
@@ -2291,4 +2502,79 @@ export async function uploadCommentMedia(file: File): Promise<any> {
     })
     return res.json()
   } catch { return { success: false, error: 'Network error' } }
+}
+
+// ============ PRODUCTION AUTH: New API Functions ============
+
+/** @deprecated Use centralizedLogin instead */
+export async function centralizedLogin(email: string, password: string): Promise<AuthResponse> {
+  try {
+    const body = await withLoginMeta({ email, password })
+    const res = await fetch(`${BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function viewerSignup(email: string, password: string, name?: string): Promise<AuthResponse> {
+  try {
+    const res = await fetch(`${BASE}/auth/signup/viewer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, name }),
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function creatorApplySignup(
+  email: string,
+  password: string,
+  platformName: string,
+  socialMediaLinks?: { youtube?: string; instagram?: string; twitter?: string },
+  bio?: string
+): Promise<AuthResponse> {
+  try {
+    const res = await fetch(`${BASE}/auth/signup/creator-apply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, platformName, socialMediaLinks, bio }),
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function authRefreshToken(): Promise<{ success: boolean; token?: string; error?: string }> {
+  try {
+    const res = await fetch(`${BASE}/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export async function authLogout(): Promise<{ success: boolean; error?: string }> {
+  try {
+    const token = getToken()
+    const res = await fetch(`${BASE}/auth/logout`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'include',
+    })
+    return res.json()
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
 }

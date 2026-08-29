@@ -70,6 +70,23 @@ export async function initDatabase() {
     console.error('[db] Schema initialization error:', err.message)
     throw err
   }
+
+  // Run production auth migration (007) if not already applied
+  try {
+    const migrationPath = path.join(__dirname, '..', 'migrations', '007_production_auth.sql')
+    if (fs.existsSync(migrationPath)) {
+      const migration = fs.readFileSync(migrationPath, 'utf-8')
+      await p.query(migration)
+      console.log('[db] Production auth migration applied')
+    }
+  } catch (err) {
+    // Tables/columns already exist — ignore duplicate errors
+    if (err.code === '42710' || err.code === '42P07' || err.code === '42701') {
+      console.log('[db] Production auth migration already applied (skipped)')
+    } else {
+      console.error('[db] Production auth migration error:', err.message)
+    }
+  }
 }
 
 export default new Proxy({}, {

@@ -26,3 +26,15 @@ export function broadcastTopicReply(topicId, reply) {
     }
   }
 }
+
+// Generic event push to everyone watching a debate (vote swings, stats, replies).
+export function broadcastTopicEvent(topicId, payload) {
+  const set = topicRooms.get(topicId)
+  if (!set) return
+  const msg = JSON.stringify({ ...payload, topicId })
+  for (const client of set) {
+    if (client.readyState === 1) {
+      try { client.send(msg) } catch {}
+    }
+  }
+}

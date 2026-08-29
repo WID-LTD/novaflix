@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import Icon from '../components/ui/Icon'
 import Button from '../components/ui/Button'
@@ -6,6 +6,7 @@ import PremiumBadge from '../components/ui/PremiumBadge'
 import { useAuth } from '../lib/AuthContext'
 import { useStore } from '../store/useStore'
 import { updateProfile, changePassword, deleteAccount, getUserStats, getPaymentStatus, getToken, getSettings, updateSettings } from '../lib/auth'
+import { getDownloadDevices, removeDownloadDevice, type DownloadDevice } from '../lib/api'
 import { getLocale, setLocale, type Locale } from '../i18n'
 
 const locales: { code: Locale; label: string }[] = [
@@ -23,7 +24,7 @@ export default function Settings() {
   const updateNotificationSettings = useStore((s) => s.updateNotificationSettings)
 
   const [showLangPicker, setShowLangPicker] = useState(false)
-  const currentLang = getLocale()
+  const [currentLang, setCurrentLang] = useState<Locale>(getLocale())
 
   const [name, setName] = useState(user?.name || '')
   const [bio, setBio] = useState(user?.bio || '')
@@ -45,28 +46,78 @@ export default function Settings() {
   const [stats, setStats] = useState<any>(null)
   const [billing, setBilling] = useState<any>(null)
 
+  // Download devices (registered in the mobile apps; managed here)
+  const [dlDevices, setDlDevices] = useState<DownloadDevice[]>([])
+  const [dlLimit, setDlLimit] = useState(0)
+  const [removingDevice, setRemovingDevice] = useState<string | null>(null)
+
+  // Debounce refs
+  const settingsSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingSettings = useRef<{ playbackSettings?: any; notificationSettings?: any }>({})
+
+  // WS for settings sync
+  const wsRef = useRef<WebSocket | null>(null)
+
   useEffect(() => {
     if (!token) return
     getUserStats(token).then(r => { if (r.success) setStats(r.stats) })
     getPaymentStatus(token).then(r => { if (r.success) setBilling(r) })
+    getDownloadDevices().then(r => {
+      if (r.success) {
+        setDlDevices(r.devices || [])
+        setDlLimit(r.limit ?? 0)
+      }
+    }).catch(() => {})
     getSettings(token).then(r => {
       if (r.success && r.settings) {
         const s = r.settings
         if (s.playbackSettings) updatePlaybackSettings(s.playbackSettings)
         if (s.notificationSettings) updateNotificationSettings(s.notificationSettings)
+        // Hydrate locale from server settings
+        if (s.locale) setCurrentLang(s.locale)
       }
     })
   }, [token])
 
+  // WS for settings sync across devices
+  useEffect(() => {
+    if (!token) return
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = window.location.host
+    const ws = new WebSocket(`${protocol}//${host}/ws?token=${encodeURIComponent(token)}`)
+    ws.onmessage = (ev) => {
+      try {
+        const data = JSON.parse(ev.data)
+        if (data?.type === 'settings:updated' && data.settings) {
+          const s = data.settings
+          if (s.playbackSettings) updatePlaybackSettings(s.playbackSettings)
+          if (s.notificationSettings) updateNotificationSettings(s.notificationSettings)
+          if (s.locale) setCurrentLang(s.locale)
+        }
+      } catch {}
+    }
+    wsRef.current = ws
+    return () => { ws.close() }
+  }, [token])
+
   const hydrated = useRef(false)
+
+  // Debounced settings save
   useEffect(() => {
     if (!hydrated.current) return
     if (!token) return
-    updateSettings(token, {
-      playbackSettings,
-      notificationSettings,
-    })
-  }, [playbackSettings, notificationSettings])
+    const { playbackSettings: p, notificationSettings: n } = pendingSettings.current
+    if (settingsSaveTimer.current) clearTimeout(settingsSaveTimer.current)
+    settingsSaveTimer.current = setTimeout(() => {
+      updateSettings(token, {
+        playbackSettings: p ?? playbackSettings,
+        notificationSettings: n ?? notificationSettings,
+      })
+      pendingSettings.current = {}
+    }, 800)
+    return () => { if (settingsSaveTimer.current) clearTimeout(settingsSaveTimer.current) }
+  }, [playbackSettings, notificationSettings, token])
+
   useEffect(() => { hydrated.current = true }, [])
 
   const handleSaveProfile = async () => {
@@ -177,6 +228,45 @@ export default function Settings() {
             </div>
           </div>
 
+          {/* Download devices — registered in the mobile apps */}
+          {planRank >= 1 && (
+            <div>
+              <h2 className="font-label-md text-label-md mb-3 flex items-center gap-2 text-on-surface-variant uppercase tracking-widest">
+                <Icon name="download" className="text-primary-container" /> Download Devices
+              </h2>
+              <div className="bg-surface-container-high border border-white/5 rounded-xl p-5 space-y-3">
+                <p className="text-body-sm text-on-surface-variant">
+                  Offline downloads live in the NovaFlix mobile apps. Devices register automatically on first download.
+                  <span className="text-on-surface font-medium"> {dlDevices.length} of {dlLimit} used</span> on your {planName} plan.
+                </p>
+                {dlDevices.map((d) => (
+                  <div key={d.id} className="flex items-center justify-between bg-surface-container rounded-xl px-4 py-3 border border-outline/10">
+                    <div className="min-w-0 flex items-center gap-3">
+                      <Icon name={d.platform === 'ios' ? 'phone_iphone' : 'android'} className="text-on-surface-variant" />
+                      <div className="min-w-0">
+                        <p className="text-body-md text-on-surface truncate max-w-[260px]">{d.device_name || d.device_id.slice(0, 24)}</p>
+                        <p className="text-body-sm text-on-surface-variant">Last used {new Date(d.last_used_at).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                    <Button size="sm" variant="secondary"
+                      loading={removingDevice === d.device_id}
+                      onClick={async () => {
+                        setRemovingDevice(d.device_id)
+                        const res = await removeDownloadDevice(d.device_id)
+                        if (res.success) setDlDevices(prev => prev.filter(x => x.device_id !== d.device_id))
+                        setRemovingDevice(null)
+                      }}>
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+                {dlDevices.length === 0 && (
+                  <p className="text-body-sm text-on-surface-variant/60">No devices registered yet. Download a title in the app to register this device.</p>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Security */}
           <div>
             <h2 className="font-label-md text-label-md mb-3 flex items-center gap-2 text-on-surface-variant uppercase tracking-widest">
@@ -222,7 +312,7 @@ export default function Settings() {
               {showLangPicker && (
                 <div className="px-5 py-3 space-y-1">
                   {locales.map(loc => (
-                    <button key={loc.code} onClick={() => { setLocale(loc.code); setShowLangPicker(false); window.location.reload() }} className={`w-full flex items-center justify-between px-4 py-2 rounded-lg text-sm hover:bg-white/5 ${currentLang === loc.code ? 'text-primary' : 'text-on-surface-variant'}`}>
+                    <button key={loc.code} onClick={() => { setLocale(loc.code); setCurrentLang(loc.code); setShowLangPicker(false); if (token) updateSettings(token, { locale: loc.code }) }} className={`w-full flex items-center justify-between px-4 py-2 rounded-lg text-sm hover:bg-white/5 ${currentLang === loc.code ? 'text-primary' : 'text-on-surface-variant'}`}>
                       <span>{loc.label}</span>
                       {currentLang === loc.code && <Icon name="check" className="text-primary" size="sm" />}
                     </button>
@@ -246,7 +336,7 @@ export default function Settings() {
                     <p className="text-on-surface-variant/60 text-sm">{playbackSettings.defaultQuality}</p>
                   </div>
                 </div>
-                <select value={playbackSettings.defaultQuality} onChange={e => updatePlaybackSettings({ defaultQuality: e.target.value as any })} className="bg-surface-container border border-white/10 rounded-lg py-2 px-3 text-on-surface text-sm outline-none">
+                <select value={playbackSettings.defaultQuality} onChange={e => { const v = e.target.value as 'auto' | '720p' | '1080p' | '4k'; updatePlaybackSettings({ defaultQuality: v }); pendingSettings.current.playbackSettings = { ...playbackSettings, defaultQuality: v } }} className="bg-surface-container border border-white/10 rounded-lg py-2 px-3 text-on-surface text-sm outline-none">
                   <option value="auto">Auto</option>
                   <option value="720p">720p</option>
                   <option value="1080p">1080p</option>
@@ -261,7 +351,7 @@ export default function Settings() {
                     <p className="text-on-surface-variant/60 text-sm">Next episode automatically</p>
                   </div>
                 </div>
-                <button onClick={() => updatePlaybackSettings({ autoplay: !playbackSettings.autoplay })} className={`w-12 h-6 rounded-full transition-colors ${playbackSettings.autoplay ? 'bg-primary-container' : 'bg-white/20'}`}>
+                <button onClick={() => { const v = !playbackSettings.autoplay; updatePlaybackSettings({ autoplay: v }); pendingSettings.current.playbackSettings = { ...playbackSettings, autoplay: v } }} className={`w-12 h-6 rounded-full transition-colors ${playbackSettings.autoplay ? 'bg-primary-container' : 'bg-white/20'}`}>
                   <div className={`w-5 h-5 rounded-full bg-white transition-transform ${playbackSettings.autoplay ? 'translate-x-6' : 'translate-x-0.5'}`} />
                 </button>
               </div>
@@ -288,7 +378,7 @@ export default function Settings() {
                       <p className="text-on-surface-variant/60 text-sm">{desc}</p>
                     </div>
                   </div>
-                  <button onClick={() => updateNotificationSettings({ [key]: !notificationSettings[key] })} className={`w-12 h-6 rounded-full transition-colors ${notificationSettings[key] ? 'bg-primary-container' : 'bg-white/20'}`}>
+                  <button onClick={() => { const v = !notificationSettings[key]; updateNotificationSettings({ [key]: v }); pendingSettings.current.notificationSettings = { ...notificationSettings, [key]: v } }} className={`w-12 h-6 rounded-full transition-colors ${notificationSettings[key] ? 'bg-primary-container' : 'bg-white/20'}`}>
                     <div className={`w-5 h-5 rounded-full bg-white transition-transform ${notificationSettings[key] ? 'translate-x-6' : 'translate-x-0.5'}`} />
                   </button>
                 </div>

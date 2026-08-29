@@ -7,6 +7,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_colors.dart';
 import '../services/api_service.dart';
+import '../core/responsive.dart';
 import '../widgets/ui/index.dart';
 
 final _hooksProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
@@ -87,7 +88,7 @@ class _HooksFeedScreenState extends ConsumerState<HooksFeedScreen> {
   Widget build(BuildContext context) {
     final hooks = ref.watch(_hooksProvider);
     final width = MediaQuery.sizeOf(context).width;
-    final isDesktop = width >= 768;
+    final isDesktop = screenSizeFor(width) != ScreenSize.mobile;
 
     return Scaffold(
       backgroundColor: Colors.black,

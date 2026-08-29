@@ -6,6 +6,7 @@ import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../widgets/ui/index.dart';
+import '../core/responsive.dart';
 import '../widgets/features/index.dart';
 
 final _pricingProvider = FutureProvider<Map<String, dynamic>>((ref) async {
@@ -31,8 +32,8 @@ class PricingScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final pricing = ref.watch(_pricingProvider);
     final user = ref.watch(authProvider).user;
-    final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
-    final hPadding = isDesktop ? 64.0 : 16.0;
+    final width = MediaQuery.sizeOf(context).width;
+    final hPadding = responsivePadding(width);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -161,12 +162,9 @@ class PricingScreen extends ConsumerWidget {
     String selectedSlug,
     String? activePlan,
   ) {
-    final isTablet = MediaQuery.sizeOf(context).width >= 600;
-
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isDesktop = constraints.maxWidth >= 1150;
-        final cols = isDesktop ? 4 : (isTablet ? 2 : 1);
+        final cols = gridColumns(constraints.maxWidth);
 
         return GridView.builder(
           shrinkWrap: true,
@@ -175,7 +173,7 @@ class PricingScreen extends ConsumerWidget {
             crossAxisCount: cols,
             crossAxisSpacing: 16,
             mainAxisSpacing: 24,
-            childAspectRatio: isDesktop ? 0.56 : 0.7,
+            childAspectRatio: gridAspectRatio(constraints.maxWidth, cols),
           ),
           itemCount: plans.length,
           itemBuilder: (_, i) {

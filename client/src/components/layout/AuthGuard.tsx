@@ -27,7 +27,7 @@ const AuthGuard: FC<Props> = ({ children, requirePremium, requirePlan, creatorOn
   }
 
   if (creatorOnly && user.role !== 'creator' && user.role !== 'admin') {
-    return <Navigate to="/creator/login" replace />
+    return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />
   }
 
   const currentRank = getPlanRank(user.plan)

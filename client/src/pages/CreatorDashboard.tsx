@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import Icon from '../components/ui/Icon'
 import { getToken, getCreatorDashboard, getCreatorComments, getPayoutHistory, requestWithdraw, createPayoutRecipient, getArtistGraph, getCreatorEarnings, getMyGlowGifts, updateCreatorUpload } from '../lib/auth'
@@ -7,6 +8,7 @@ import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Modal from '../components/ui/Modal'
 import { useToast } from '../components/ui/Toast'
+import { subscribeCreator } from '../lib/creatorLive'
 
 const tabs = ['Overview', 'Content', 'Audience', 'Engagement', 'Payouts', 'Network', 'Analytics']
 
@@ -24,6 +26,7 @@ type DashboardData = {
 }
 
 export default function CreatorDashboard() {
+  const nav = useNavigate()
   const [activeTab, setActiveTab] = useState('Overview')
   const [data, setData] = useState<DashboardData | null>(null)
   const [comments, setComments] = useState<any[]>([])
@@ -32,6 +35,7 @@ export default function CreatorDashboard() {
   const [glowGifts, setGlowGifts] = useState<any>({ items: [], totals: null })
   const [graphData, setGraphData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [livePulse, setLivePulse] = useState<number>(0)
 
   const [bankCode, setBankCode] = useState('')
   const [accountNumber, setAccountNumber] = useState('')
@@ -76,6 +80,11 @@ export default function CreatorDashboard() {
   }
 
   useEffect(() => {
+    loadAll()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const loadAll = async () => {
     const token = getToken()
     if (!token) { setLoading(false); return }
     Promise.all([
@@ -94,6 +103,14 @@ export default function CreatorDashboard() {
       if (gifts.success) setGlowGifts(gifts)
       setLoading(false)
     })
+  }
+
+  useEffect(() => {
+    return subscribeCreator(['engagement', 'earnings', 'content', 'payout'], () => {
+      setLivePulse(Date.now())
+      loadAll()
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleCreateRecipient = async () => {
@@ -482,13 +499,34 @@ export default function CreatorDashboard() {
   return (
     <div className="min-h-screen px-margin-mobile md:px-margin-desktop pt-6 md:pt-10 pb-nav">
       <div className="max-w-6xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <Icon name="bar_chart" className="w-7 h-7 text-primary-container" />
-          <div>
-            <h1 className="text-headline-md font-bold">Creator Dashboard</h1>
-            <p className="text-on-surface-variant/60 text-xs mt-0.5">Your films, audience, and revenue</p>
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+          <div className="flex items-center gap-3">
+            <Icon name="bar_chart" className="w-7 h-7 text-primary-container" />
+            <div>
+              <h1 className="text-headline-md font-bold">Creator Dashboard</h1>
+              <p className="text-on-surface-variant/60 text-xs mt-0.5">Your films, audience, and revenue</p>
+            </div>
           </div>
+          <button onClick={() => nav('/creator/go-live')} className={`flex items-center gap-1.5 px-4 py-2 text-sm rounded-xl font-medium transition-colors ${livePulse ? 'bg-red-500/15 text-red-300' : 'bg-primary-container text-on-primary-container hover:opacity-90'}`}>
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            Go Live
+          </button>
         </div>
+
+        <nav className="flex gap-1 overflow-x-auto mb-4 pb-1">
+          {[
+            { path: '/creator/analytics', label: 'Analytics', icon: 'monitoring' },
+            { path: '/creator/catalog', label: 'Catalog', icon: 'movie' },
+            { path: '/creator/wallet', label: 'Wallet', icon: 'account_balance_wallet' },
+            { path: '/creator/ppm', label: 'PPM', icon: 'tune' },
+            { path: '/creator/onboarding', label: 'Onboarding', icon: 'rocket_launch' },
+            { path: '/creator/go-live', label: 'Go Live', icon: 'podcasts' },
+          ].map(n => (
+            <button key={n.path} onClick={() => nav(n.path)} className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-xl whitespace-nowrap text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-colors">
+              <Icon name={n.icon as any} size="sm" /> {n.label}
+            </button>
+          ))}
+        </nav>
 
         <div className="flex gap-1 overflow-x-auto mb-6 pb-1">
           {tabs.map(tab => (

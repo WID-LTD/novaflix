@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/config.dart';
+import '../../core/responsive.dart';
 import '../../providers/watchlist_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
@@ -16,28 +17,16 @@ export '../movie_card.dart';
 export 'backdrops.dart';
 
 /// Number of poster columns for a given **available content width**.
-///
-/// Prefer this over [gridColumnsFor] inside the desktop shell, where the
-/// actual content width is smaller than the window (sidebar + padding).
-int gridColumnsForWidth(double width) {
-  if (width >= 1400) return 6;
-  if (width >= 1000) return 5;
-  if (width >= 700) return 4;
-  if (width >= 480) return 3;
-  return 2;
-}
+@Deprecated('Use gridColumns from responsive.dart')
+int gridColumnsForWidth(double width) => gridColumns(width);
 
 /// Legacy helper kept for callers that only have the window width.
-///
-/// Estimates the content width by subtracting the desktop shell overhead
-/// (240px sidebar + 1px divider + typical 32px horizontal padding) so grids
-/// no longer over-request columns. Screens with a `LayoutBuilder` should pass
-/// `constraints.maxWidth` to [gridColumnsForWidth] instead.
+@Deprecated('Use gridColumns from responsive.dart with LayoutBuilder')
 int gridColumnsFor(double width) {
   if (width >= 900) {
-    return gridColumnsForWidth(width - 241 - 64);
+    return gridColumns(width - 241 - 64);
   }
-  return gridColumnsForWidth(width - 32);
+  return gridColumns(width - 32);
 }
 
 /// Estimated horizontal content width (minus desktop sidebar + page padding).
@@ -68,9 +57,10 @@ class ContentRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) return const SizedBox.shrink();
-    final isDesktop = MediaQuery.of(context).size.width >= 1024;
-    final hPadding = isDesktop ? 64.0 : 16.0;
-    final cardWidth = isDesktop ? 180.0 : 160.0;
+    final width = MediaQuery.of(context).size.width;
+    final size = screenSizeFor(width);
+    final hPadding = responsivePadding(width);
+    final cardWidth = responsiveCardWidth(width);
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1440),

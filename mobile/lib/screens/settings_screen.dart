@@ -191,9 +191,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 24, 16, 48),
-        children: [
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 24, 16, 48),
+            children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
             child: Row(
@@ -421,6 +424,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const SizedBox(height: 32),
         ],
       ),
+    ),
+    ),
     );
   }
 

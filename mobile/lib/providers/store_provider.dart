@@ -101,9 +101,35 @@ class NotificationSettings {
       );
 }
 
+class WatchlistItem {
+  final int id;
+  final String title;
+  final String? poster;
+  final String type;
+  final String? year;
+  final String? overview;
+
+  WatchlistItem({
+    required this.id, required this.title, this.poster, required this.type,
+    this.year, this.overview,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'id': id, 'title': title, 'poster': poster, 'type': type,
+    'year': year, 'overview': overview,
+  };
+
+  factory WatchlistItem.fromJson(Map<String, dynamic> json) => WatchlistItem(
+    id: json['id'] as int, title: json['title'] as String,
+    poster: json['poster'] as String?, type: json['type'] as String,
+    year: json['year'] as String?, overview: json['overview'] as String?,
+  );
+}
+
 class StoreState {
   final List<ContinueWatchingItem> continueWatching;
   final List<String> recentlySearched;
+  final List<WatchlistItem> watchlist;
   final PlaybackSettings playbackSettings;
   final NotificationSettings notificationSettings;
   final bool sidebarCollapsed;
@@ -111,6 +137,7 @@ class StoreState {
 
   const StoreState({
     this.continueWatching = const [], this.recentlySearched = const [],
+    this.watchlist = const [],
     this.playbackSettings = const PlaybackSettings(),
     this.notificationSettings = const NotificationSettings(),
     this.sidebarCollapsed = false,
@@ -120,6 +147,7 @@ class StoreState {
   Map<String, dynamic> toJson() => {
     'continueWatching': continueWatching.map((e) => e.toJson()).toList(),
     'recentlySearched': recentlySearched,
+    'watchlist': watchlist.map((e) => e.toJson()).toList(),
     'playbackSettings': playbackSettings.toJson(),
     'notificationSettings': notificationSettings.toJson(),
     'sidebarCollapsed': sidebarCollapsed,
@@ -129,6 +157,7 @@ class StoreState {
   factory StoreState.fromJson(Map<String, dynamic> json) => StoreState(
     continueWatching: (json['continueWatching'] as List?)?.map((e) => ContinueWatchingItem.fromJson(e as Map<String, dynamic>)).toList() ?? [],
     recentlySearched: (json['recentlySearched'] as List?)?.cast<String>() ?? [],
+    watchlist: (json['watchlist'] as List?)?.map((e) => WatchlistItem.fromJson(e as Map<String, dynamic>)).toList() ?? [],
     playbackSettings: json['playbackSettings'] != null ? PlaybackSettings.fromJson(json['playbackSettings'] as Map<String, dynamic>) : const PlaybackSettings(),
     notificationSettings: json['notificationSettings'] != null ? NotificationSettings.fromJson(json['notificationSettings'] as Map<String, dynamic>) : const NotificationSettings(),
     sidebarCollapsed: json['sidebarCollapsed'] as bool? ?? false,
@@ -157,6 +186,25 @@ class StoreNotifier extends StateNotifier<StoreState> {
     if (list.length > 20) list.removeLast();
     state = StoreState(continueWatching: list, recentlySearched: state.recentlySearched, playbackSettings: state.playbackSettings, notificationSettings: state.notificationSettings, locale: state.locale);
     _save();
+  }
+
+  void addToWatchlist(WatchlistItem item) {
+    final list = List<WatchlistItem>.from(state.watchlist);
+    list.removeWhere((e) => e.id == item.id);
+    list.insert(0, item);
+    state = StoreState(continueWatching: state.continueWatching, recentlySearched: state.recentlySearched, watchlist: list, playbackSettings: state.playbackSettings, notificationSettings: state.notificationSettings, locale: state.locale);
+    _save();
+  }
+
+  void removeFromWatchlist(int id) {
+    final list = List<WatchlistItem>.from(state.watchlist);
+    list.removeWhere((e) => e.id == id);
+    state = StoreState(continueWatching: state.continueWatching, recentlySearched: state.recentlySearched, watchlist: list, playbackSettings: state.playbackSettings, notificationSettings: state.notificationSettings, locale: state.locale);
+    _save();
+  }
+
+  bool isInWatchlist(int id) {
+    return state.watchlist.any((w) => w.id == id);
   }
 
   void updateProgress(int id, String type, double progress) {

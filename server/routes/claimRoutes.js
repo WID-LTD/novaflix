@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
+import { adminMiddleware, requirePermission } from '../middleware/admin.js';
 import * as claimController from '../controllers/claimController.js';
 
 const router = Router();
@@ -20,9 +21,9 @@ router.post('/claim/persona/webhook',
   claimController.handlePersonaWebhook
 );
 
-// Admin routes
-router.get('/admin/claims', authMiddleware, claimController.adminListClaims);
-router.post('/admin/claims/:claimId/approve', authMiddleware, claimController.adminApproveClaim);
-router.post('/admin/claims/:claimId/deny', authMiddleware, claimController.adminDenyClaim);
+// Admin routes — require auth + admin + permission
+router.get('/admin/claims', authMiddleware, adminMiddleware, requirePermission('creators.view'), claimController.adminListClaims);
+router.post('/admin/claims/:claimId/approve', authMiddleware, adminMiddleware, requirePermission('creators.approve'), claimController.adminApproveClaim);
+router.post('/admin/claims/:claimId/deny', authMiddleware, adminMiddleware, requirePermission('creators.approve'), claimController.adminDenyClaim);
 
 export default router;

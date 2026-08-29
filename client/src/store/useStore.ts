@@ -153,6 +153,8 @@ export const useStore = create<Store>()(
         profiles: state.profiles,
         playbackSettings: state.playbackSettings,
         notificationSettings: state.notificationSettings,
+        // Persist sidebar collapse so the choice survives reloads.
+        sidebarCollapsed: state.sidebarCollapsed,
       }),
     }
   )

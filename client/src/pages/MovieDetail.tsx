@@ -1,7 +1,8 @@
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { getDetails } from '../lib/api'
+import { getDetails, API_BASE } from '../lib/api'
 import { getCredits } from '../lib/api'
 import type { CastMember, CrewMember } from '../lib/api'
 import { getSimilarRecommendations, checkAchievements } from '../lib/auth'
@@ -40,12 +41,17 @@ export default function MovieDetail() {
   const addToWatchlist = useStore((s) => s.addToWatchlist)
   const watchlist = useStore((s) => s.watchlist)
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['details', id, type],
     queryFn: () => getDetails(id!, type),
     enabled: !!id,
+    retry: 1,
   })
 
+  // fetchJson never throws — failures arrive as { success:false, error }.
+  // Capture both shapes so the error UI can explain WHY details are missing
+  // (e.g. TMDB token missing → 'Failed to resolve metadata from TMDB').
+  const detailsError = error?.message || (data && data.success === false ? (data as any).error : null)
   const details = data?.success ? data.data : null
   const inWatchlist = details ? watchlist.some((w) => w.id === details.id) : false
 
@@ -68,10 +74,12 @@ export default function MovieDetail() {
   const tmdbIds = cast.slice(0, 20).map(c => c.id).join(',')
   const { data: batchCheck } = useQuery({
     queryKey: ['creator-batch-check', tmdbIds],
-    queryFn: () => fetch(`/api/tmdb/creator/batch-check?tmdbIds=${tmdbIds}`).then(r => r.json()),
+    queryFn: () => fetch(`${API_BASE}/tmdb/creator/batch-check?tmdbIds=${tmdbIds}`).then(r => r.json()),
     enabled: !!tmdbIds,
   })
   const linkedCastIds = new Set(batchCheck?.linked || [])
+
+  const [showTrailer, setShowTrailer] = useState(false)
 
   const handleWatch = (season?: number, episode?: number) => {
     if (!user) {
@@ -132,10 +140,17 @@ export default function MovieDetail() {
 
   if (error || !details) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-xl text-on-surface-variant mb-4">Failed to load details</p>
-          <Button onClick={() => navigate(-1)}>Go Back</Button>
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="text-center max-w-md">
+          <Icon name="error" className="text-on-surface-variant/30 mx-auto mb-4" />
+          <p className="text-xl text-on-surface mb-2">Failed to load details</p>
+          {detailsError && (
+            <p className="text-sm text-on-surface-variant mb-6 break-words">{detailsError}</p>
+          )}
+          <div className="flex items-center justify-center gap-3">
+            <Button onClick={() => refetch()}>Retry</Button>
+            <Button variant="outline" onClick={() => navigate(-1)}>Go Back</Button>
+          </div>
         </div>
       </div>
     )
@@ -234,52 +249,61 @@ export default function MovieDetail() {
 
       {/* Content Section */}
       <section className="px-margin-mobile md:px-margin-desktop -mt-10 relative z-10 space-y-16 pb-32">
+        {/* Trailer */}
+        {details.trailerKey && (
+          <div className="aspect-video rounded-xl overflow-hidden bg-black relative">
+            <img
+              src={`https://img.youtube.com/vi/${details.trailerKey}/maxresdefault.jpg`}
+              alt={`${details.title} Trailer`}
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+            <button
+              onClick={() => setShowTrailer(true)}
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full bg-primary-container/90 flex items-center justify-center hover:scale-110 transition-transform backdrop-blur-sm"
+              aria-label="Watch trailer"
+            >
+              <Icon name="play_arrow" fill={true} className="text-on-primary-container w-8 h-8 ml-1" />
+            </button>
+          </div>
+        )}
+
+        {/* Cast & Crew */}
+        {(cast.length > 0 || crew.length > 0) && (
+          <div className="bg-surface-container p-8 rounded-xl border border-white/5">
+            <h3 className="text-headline-md mb-4">Cast & Crew</h3>
+            <CastCrew cast={cast} crew={crew} linkedCastIds={linkedCastIds} />
+          </div>
+        )}
+
         {/* Info */}
         <div className="bg-surface-container p-8 rounded-xl border border-white/5 space-y-6">
-          {details.trailerKey && (
-              <div className="aspect-video rounded-xl overflow-hidden mb-6 bg-black relative">
-                <img
-                  src={`https://img.youtube.com/vi/${details.trailerKey}/maxresdefault.jpg`}
-                  alt={`${details.title} Trailer`}
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
-                <button
-                  onClick={() => navigate(`/watch?id=${id}&type=${type}`)}
-                  className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full bg-primary-container/90 flex items-center justify-center hover:scale-110 transition-transform backdrop-blur-sm"
-                  aria-label="Watch trailer"
-                >
-                  <Icon name="play_arrow" fill={true} className="text-on-primary-container w-8 h-8 ml-1" />
-                </button>
+          <h3 className="text-headline-md">Synopsis</h3>
+          <p className="text-body-md text-on-surface-variant leading-relaxed">{details.overview}</p>
+          <div className="pt-4 grid grid-cols-2 sm:grid-cols-4 gap-6">
+            <div>
+              <span className="block text-[10px] uppercase tracking-wider text-on-surface-variant mb-1">Rating</span>
+              <span className="font-label-md text-label-md text-primary">{details.rating.toFixed(1)} / 10</span>
+            </div>
+            <div>
+              <span className="block text-[10px] uppercase tracking-wider text-on-surface-variant mb-1">Year</span>
+              <span className="font-label-md text-label-md text-on-surface">{details.year}</span>
+            </div>
+            <div>
+              <span className="block text-[10px] uppercase tracking-wider text-on-surface-variant mb-1">Genres</span>
+              <span className="font-label-md text-label-md text-on-surface">{details.genres.join(', ')}</span>
+            </div>
+            <div>
+              <span className="block text-[10px] uppercase tracking-wider text-on-surface-variant mb-1">Type</span>
+              <span className="font-label-md text-label-md text-on-surface">{type === 'tv' ? 'TV Series' : 'Movie'}</span>
+            </div>
+            {details.rating >= 8 && (
+              <div className="sm:col-span-4 pt-2">
+                <PremiumBadge size="md" label="Premium Content" />
               </div>
             )}
-            <h3 className="text-headline-md">Synopsis</h3>
-            <p className="text-body-md text-on-surface-variant leading-relaxed">{details.overview}</p>
-            {(cast.length > 0 || crew.length > 0) && <CastCrew cast={cast} crew={crew} linkedCastIds={linkedCastIds} />}
-            <div className="pt-4 grid grid-cols-2 sm:grid-cols-4 gap-6">
-              <div>
-                <span className="block text-[10px] uppercase tracking-wider text-on-surface-variant mb-1">Rating</span>
-                <span className="font-label-md text-label-md text-primary">{details.rating.toFixed(1)} / 10</span>
-              </div>
-              <div>
-                <span className="block text-[10px] uppercase tracking-wider text-on-surface-variant mb-1">Year</span>
-                <span className="font-label-md text-label-md text-on-surface">{details.year}</span>
-              </div>
-              <div>
-                <span className="block text-[10px] uppercase tracking-wider text-on-surface-variant mb-1">Genres</span>
-                <span className="font-label-md text-label-md text-on-surface">{details.genres.join(', ')}</span>
-              </div>
-              <div>
-                <span className="block text-[10px] uppercase tracking-wider text-on-surface-variant mb-1">Type</span>
-                <span className="font-label-md text-label-md text-on-surface">{type === 'tv' ? 'TV Series' : 'Movie'}</span>
-              </div>
-              {details.rating >= 8 && (
-                <div className="sm:col-span-4 pt-2">
-                  <PremiumBadge size="md" label="Premium Content" />
-                </div>
-              )}
-            </div>
           </div>
+        </div>
 
         {/* Creator Card */}
         <div className="grid md:grid-cols-2 gap-4">
@@ -355,7 +379,37 @@ export default function MovieDetail() {
           </div>
         )}
       </section>
-    </div>
+
+        {/* Trailer Modal */}
+        {showTrailer && details.trailerKey && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm"
+            onClick={() => setShowTrailer(false)}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${details.title} Trailer`}
+          >
+            <div className="relative w-full max-w-5xl mx-4 aspect-video" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => setShowTrailer(false)}
+                className="absolute top-4 right-4 z-10 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors text-white"
+                aria-label="Close trailer"
+              >
+                <Icon name="close" className="w-6 h-6" />
+              </button>
+              <iframe
+                src={`https://www.youtube.com/embed/${details.trailerKey}?autoplay=1&rel=0&modestbranding=1`}
+                title={`${details.title} Trailer`}
+                className="w-full h-full rounded-xl"
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+            </div>
+          </div>
+        )}
+
+      </div>
     </>
   )
 }
