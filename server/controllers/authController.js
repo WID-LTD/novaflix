@@ -414,6 +414,23 @@ export async function login(req, res) {
     res.json({ success: true, token: accessToken, user: safe, redirectionUrl })
   } catch (err) {
     console.error('[auth] login error:', err.message)
+    // Dev fallback: when DB unavailable (ECONNREFUSED / DATABASE_URL not set), allow dev login
+    const isDbDown = /ECONNREFUSED|Database unavailable|connect ECONNREFUSED|DATABASE_URL/i.test(err.message || '')
+    if (isDbDown) {
+      const reqEmail = req.body?.email || req.body?.username
+      const reqPass = req.body?.password
+      const devEmail = (process.env.DEV_LOGIN_EMAIL || 'dev@novaflix.local').toLowerCase()
+      const devPass = process.env.DEV_LOGIN_PASSWORD || 'NovaflixDev123!'
+      if (reqEmail && reqPass && reqEmail.toLowerCase() === devEmail && reqPass === devPass) {
+        const devUser = { id: 'dev-user-12345678-1234-1234-1234-123456789abc', email: devEmail, role: 'admin', plan: 'premium', name: 'Dev Admin' }
+        const accessToken = signAccessToken(devUser)
+        const refreshToken = signRefreshToken(devUser.id)
+        try { await createRefreshToken(devUser.id, hashToken(refreshToken), new Date(Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000)) } catch {}
+        try { setRefreshCookie(res, refreshToken) } catch {}
+        console.log(`[auth] dev fallback login success: ${devEmail}`)
+        return res.json({ success: true, token: accessToken, user: devUser, redirectionUrl: getRedirectionUrl(devUser.role) })
+      }
+    }
     res.status(500).json({ error: 'Login failed' })
   }
 }
