@@ -19,7 +19,8 @@ router.get('/file/:filename', authMiddleware, streamController.serveDownloadedFi
 
 const LOG_DIR = path.join(os.homedir(), '.novaflix', 'logs')
 const LOG_FILE = path.join(LOG_DIR, 'events.jsonl')
-router.post('/events', (req, res) => {
+// Streaming observability endpoint — no auth required for client beacons (avoids collision with /api/events creator routes)
+router.post('/stream-events', (req, res) => {
   try {
     const event = req.body
     if (!event) return res.status(400).json({ error: 'No event data' })
