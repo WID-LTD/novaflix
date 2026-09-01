@@ -112,8 +112,11 @@ export default function HeroBanner({ items, loading, autoPlayInterval = 6000 }: 
       onMouseLeave={() => setIsPaused(false)}
     >
       <AnimatePresence mode="wait">
-        <button
+        <div
+          role="button"
+          tabIndex={0}
           onClick={() => navigate(`/${currentItem.type}/${currentItem.id}`)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/${currentItem.type}/${currentItem.id}`) } }}
           className="absolute inset-0 w-full h-full text-left cursor-pointer"
           aria-label={`View ${currentItem.title}`}
         >
@@ -152,8 +155,8 @@ export default function HeroBanner({ items, loading, autoPlayInterval = 6000 }: 
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
                     <button
-                      onClick={() => navigate(`/watch?id=${currentItem.id}&type=${currentItem.type}`)}
-                      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full bg-primary-container/90 flex items-center justify-center hover:scale-110 transition-transform backdrop-blur-sm"
+                      onClick={(e) => { e.stopPropagation(); navigate(`/watch?id=${currentItem.id}&type=${currentItem.type}`) }}
+                      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full bg-primary-container/90 flex items-center justify-center hover:scale-110 transition-transform backdrop-blur-sm pointer-events-auto"
                       aria-label="Watch trailer"
                     >
                       <Icon name="play_arrow" fill={true} className="text-on-primary-container w-8 h-8 ml-1" />
@@ -163,7 +166,7 @@ export default function HeroBanner({ items, loading, autoPlayInterval = 6000 }: 
               </div>
             )}
           </motion.div>
-        </button>
+        </div>
       </AnimatePresence>
 
       <AnimatePresence mode="wait">

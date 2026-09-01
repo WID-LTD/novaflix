@@ -414,21 +414,26 @@ export async function login(req, res) {
     res.json({ success: true, token: accessToken, user: safe, redirectionUrl })
   } catch (err) {
     console.error('[auth] login error:', err.message)
-    // Dev fallback: when DB unavailable (ECONNREFUSED / DATABASE_URL not set), allow dev login
+    // Dev fallback: when DB unavailable (ECONNREFUSED / DATABASE_URL not set), allow any login
+    // so UI testing isn't blocked by missing Postgres. Preserves dev@novaflix.local as admin.
     const isDbDown = /ECONNREFUSED|Database unavailable|connect ECONNREFUSED|DATABASE_URL/i.test(err.message || '')
     if (isDbDown) {
-      const reqEmail = req.body?.email || req.body?.username
-      const reqPass = req.body?.password
+      const reqEmail = (req.body?.email || req.body?.username || '').toLowerCase()
+      const reqPass = req.body?.password || ''
       const devEmail = (process.env.DEV_LOGIN_EMAIL || 'dev@novaflix.local').toLowerCase()
       const devPass = process.env.DEV_LOGIN_PASSWORD || 'NovaflixDev123!'
-      if (reqEmail && reqPass && reqEmail.toLowerCase() === devEmail && reqPass === devPass) {
-        const devUser = { id: 'dev-user-12345678-1234-1234-1234-123456789abc', email: devEmail, role: 'admin', plan: 'premium', name: 'Dev Admin' }
-        const accessToken = signAccessToken(devUser)
-        const refreshToken = signRefreshToken(devUser.id)
-        try { await createRefreshToken(devUser.id, hashToken(refreshToken), new Date(Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000)) } catch {}
+      const isDev = reqEmail === devEmail && reqPass === devPass
+      // In no-DB mode, accept any email with password >=8 chars as viewer, dev creds as admin
+      if (reqEmail && reqPass && reqPass.length >= 8) {
+        const fallbackUser = isDev
+          ? { id: 'dev-user-12345678-1234-1234-1234-123456789abc', email: devEmail, role: 'admin', plan: 'premium', name: 'Dev Admin' }
+          : { id: 'dev-user-' + reqEmail.replace(/[^a-z0-9]/g, '-'), email: reqEmail, role: 'viewer', plan: 'premium', name: reqEmail.split('@')[0] }
+        const accessToken = signAccessToken(fallbackUser)
+        const refreshToken = signRefreshToken(fallbackUser.id)
+        try { await createRefreshToken(fallbackUser.id, hashToken(refreshToken), new Date(Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000)) } catch {}
         try { setRefreshCookie(res, refreshToken) } catch {}
-        console.log(`[auth] dev fallback login success: ${devEmail}`)
-        return res.json({ success: true, token: accessToken, user: devUser, redirectionUrl: getRedirectionUrl(devUser.role) })
+        console.log(`[auth] dev fallback login success: ${reqEmail} (isDev=${isDev})`)
+        return res.json({ success: true, token: accessToken, user: fallbackUser, redirectionUrl: getRedirectionUrl(fallbackUser.role) })
       }
     }
     res.status(500).json({ error: 'Login failed' })
