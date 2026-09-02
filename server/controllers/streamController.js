@@ -10,11 +10,47 @@ import { getActiveSessionCount, getUploadById, listActiveSessions, ensureDownloa
 import crypto from 'crypto'
 import { streamFile } from '../lib/r2.js'
 import { PLAN_FEATURES } from './planUtils.js'
+import os from 'os'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DOWNLOADS_DIR = path.join(__dirname, '..', 'download')
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+
+// Persistent event logger for movie/TV streaming observability (file-based 24/7)
+const LOG_DIR = path.join(os.homedir(), '.novaflix', 'logs')
+const LOG_FILE = path.join(LOG_DIR, 'events.jsonl')
+try { if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true }) } catch {}
+function logToFile(event) {
+  try {
+    event.timestamp = Date.now()
+    event.hostname = os.hostname()
+    event.pid = process.pid
+    const line = JSON.stringify(event) + '\n'
+    fs.appendFileSync(LOG_FILE, line, { flag: 'a' })
+    try {
+      const content = fs.readFileSync(LOG_FILE, 'utf-8')
+      const lines = content.trim().split('\n')
+      if (lines.length > 10000) fs.writeFileSync(LOG_FILE, lines.slice(-10000).join('\n'), 'utf-8')
+    } catch {}
+  } catch (e) { console.debug('log-to-file error:', e.message) }
+}
+
+// Audio probe via ffprobe — verifies first audio segment is decodable (stable movie/TV audio)
+async function probeAudioSegment(streamUrl) {
+  return new Promise((resolve) => {
+    const args = ['-v','error','-select_streams','a:0','-show_entries','stream=codec_name,channels,sample_rate','-show_entries','format=duration','-of','json','-read_intervals','%+0.5','-i', streamUrl]
+    const proc = spawn('ffprobe', args)
+    let stdout='', stderr=''
+    proc.stdout.on('data', (d)=>{ stdout+=d })
+    proc.stderr.on('data', (d)=>{ stderr+=d })
+    proc.on('close', (code)=>{
+      if(code!==0) return resolve({ ok:false, error: stderr.slice(0,200) })
+      try { const data=JSON.parse(stdout); const hasAudio=data.streams && data.streams.length>0; resolve({ ok:hasAudio, audioInfo: hasAudio?data.streams[0]:null }) } catch(e){ resolve({ ok:false, error:'ffprobe parse failed' }) }
+    })
+    setTimeout(()=>{ try{proc.kill('SIGKILL')}catch{}; resolve({ ok:false, error:'ffprobe timeout' }) },10000)
+  })
+}
 
 // LRU segment cache — capped by total BYTES (segments are ~1.5MB each, so a
 // naive 500-entry cap could exceed the 512MB free instance) with a TTL long
@@ -417,6 +453,7 @@ const MOCK_IDS = new Set(['550','860508','969681','299054','533535','603','15733
 export async function source(req, res) {
   const { id, type, season, episode } = req.query
   if (!id) return res.status(400).json({ error: 'TMDB ID is required' })
+  logToFile({ type: 'apiRequest', endpoint: '/api/source', id, tmdbType: type || 'movie', season: season || null, episode: episode || null, title: req.query.title || null, ip: req.ip || 'unknown', userId: req.userId || 'anonymous' })
 
   // === SPOOF MODE FOR TESTING (limited mock catalog when scraper unmaintained) ===
   const useMock = MOCK_IDS.has(String(id)) || String(req.query.mock) === '1'
@@ -511,12 +548,25 @@ export async function source(req, res) {
     let chosenProbe = null
 
     if (chosen) {
+      logToFile({ type: 'verifyStart', streamUrl: chosen.streamUrl.substring(0,200), provider: chosen.provider, check: 'primary' })
       const primaryProbe = await probeStreamUrl(chosen.streamUrl, ffmpegPath)
       probeResults.push({ provider: chosen.provider, host: hostOf(chosen.streamUrl), streamUrl: chosen.streamUrl, ...primaryProbe })
       if (primaryProbe.ok) {
-        reportSuccess(chosen.streamUrl)
-        chosenProbe = primaryProbe
+        // Audio probe — ensure first audio segment decodable (stable TV/movie audio)
+        const audioProbe = await probeAudioSegment(chosen.streamUrl)
+        if (!audioProbe.ok) {
+          logToFile({ type: 'verifyComplete', streamUrl: chosen.streamUrl.substring(0,200), provider: chosen.provider, success: false, error: audioProbe.error })
+          probeResults[probeResults.length-1].reason = 'audio-probe-failed'
+          probeResults[probeResults.length-1].audioError = audioProbe.error
+          if (!['blocked'].includes(primaryProbe.reason)) reportFailure(chosen.streamUrl, 'audio-probe-failed')
+          chosen = null
+        } else {
+          logToFile({ type: 'verifyComplete', streamUrl: chosen.streamUrl.substring(0,200), provider: chosen.provider, success: true, audioCodec: audioProbe.audioInfo?.codec_name })
+          reportSuccess(chosen.streamUrl)
+          chosenProbe = primaryProbe
+        }
       } else {
+        logToFile({ type: 'verifyComplete', streamUrl: chosen.streamUrl.substring(0,200), provider: chosen.provider, success: false, reason: primaryProbe.reason })
         if (!['blocked'].includes(primaryProbe.reason)) reportFailure(chosen.streamUrl, primaryProbe.reason)
         chosen = null
       }
@@ -580,6 +630,7 @@ export async function source(req, res) {
 
       const reasons = probeResults.length > 0 ? probeResults.map((r) => r.reason).join(', ') : 'no stream source'
       console.error(`[api/source] no playable source for id=${id} type=${type || 'movie'} season=${season || '-'} episode=${episode || '-'} reasons=${reasons}`)
+      logToFile({ type: 'streamResolve', provider: result.provider || 'none', success: false, streamUrl: 'none', elapsed: 0, fromCache: result.fromCache || false, error: reasons })
       return res.json({
         success: false,
         error: reasons.includes('ad-only')
@@ -640,9 +691,11 @@ export async function source(req, res) {
     }
 
     console.log(`[api/source] id=${id} type=${type || 'movie'} season=${season || '-'} episode=${episode || '-'} -> provider=${response.provider} mode=hls dur=${response.duration || 'unknown'}s probe=${JSON.stringify(probeResults.map((r) => r.reason))} cookies=${(chosenProbe?.cookies || []).length}`)
+    logToFile({ type: 'streamResolve', provider: response.provider, success: true, streamUrl: chosen.streamUrl.substring(0,200), elapsed: response.elapsed, fromCache: response.fromCache })
     res.json(response)
   } catch (err) {
     console.error(`[api/source] id=${id} type=${type || 'movie'} season=${season || '-'} episode=${episode || '-'}: ${err.message}`)
+    logToFile({ type: 'streamResolve', provider: 'none', success: false, streamUrl: 'none', elapsed: 0, fromCache: false, error: err.message })
     let releaseDate = null
     try {
       const tmdb = req.app.locals.tmdb
@@ -653,6 +706,22 @@ export async function source(req, res) {
     } catch {}
     res.json({ success: false, error: err.message, releaseDate })
   }
+}
+
+// Dedicated stable wrappers for movie/TV — map path-param style to unified source
+export async function movieSource(req, res) {
+  req.query.id = req.params.id || req.query.id
+  req.query.type = 'movie'
+  if (req.query.title) req.query.title = req.query.title
+  if (req.query.year) req.query.year = req.query.year
+  return source(req, res)
+}
+export async function tvSource(req, res) {
+  req.query.id = req.params.id || req.query.id
+  req.query.type = 'tv'
+  req.query.season = req.params.season || req.query.season
+  req.query.episode = req.params.episode || req.query.episode
+  return source(req, res)
 }
 
 const PLAN_MAX_RES = { free: 480, student: 720, basic: 720, standard: 1080, premium: 2160 }
