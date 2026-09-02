@@ -140,7 +140,9 @@ class MovieDetailScreen extends ConsumerWidget {
             slivers: [
               SliverAppBar(
                 expandedHeight: heroHeight,
-                pinned: true,
+                pinned: false,
+                floating: false,
+                snap: false,
                 backgroundColor: AppColors.background,
                 flexibleSpace: FlexibleSpaceBar(
                   background: Stack(
@@ -193,22 +195,27 @@ class MovieDetailScreen extends ConsumerWidget {
                         ),
                       ),
                       Positioned(
-                        top: 24,
+                        top: 0,
                         left: size == ScreenSize.desktop ? 32 : 16,
-                        child: IconButton(
-                          onPressed: () {
-                            if (context.canPop()) {
-                              context.pop();
-                            } else {
-                              context.go('/home');
-                            }
-                          },
-                          icon: const Icon(
-                            Icons.arrow_back,
-                            color: Colors.white,
-                          ),
-                          style: IconButton.styleFrom(
-                            backgroundColor: Colors.black.withValues(alpha: 0.4),
+                        child: SafeArea(
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: IconButton(
+                              onPressed: () {
+                                if (context.canPop()) {
+                                  context.pop();
+                                } else {
+                                  context.go('/home');
+                                }
+                              },
+                              icon: const Icon(
+                                Icons.arrow_back,
+                                color: Colors.white,
+                              ),
+                              style: IconButton.styleFrom(
+                                backgroundColor: Colors.black.withValues(alpha: 0.4),
+                              ),
+                            ),
                           ),
                         ),
                       ),

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { verifyPayment, setToken } from '../lib/auth'
 import { useAuth } from '../lib/AuthContext'
@@ -11,8 +11,10 @@ export default function PaymentSuccess() {
   const { user, refresh } = useAuth()
   const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying')
   const [error, setError] = useState('')
+  const verifiedRef = useRef(false)
 
   useEffect(() => {
+    if (verifiedRef.current) return
     const reference = searchParams.get('reference')
     const plan = searchParams.get('plan') || 'basic'
     if (!reference) {
@@ -20,7 +22,7 @@ export default function PaymentSuccess() {
       setError('No payment reference found')
       return
     }
-
+    verifiedRef.current = true
     const token = localStorage.getItem('novaflix-token') || ''
     verifyPayment(token, reference, plan).then((res) => {
       if (res.success) {
@@ -31,6 +33,9 @@ export default function PaymentSuccess() {
         setStatus('error')
         setError(res.error || 'Payment verification failed')
       }
+    }).catch((e: any) => {
+      setStatus('error')
+      setError(e?.message || 'Payment verification failed')
     })
   }, [searchParams, refresh])
 

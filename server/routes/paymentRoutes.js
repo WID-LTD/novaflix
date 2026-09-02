@@ -8,8 +8,10 @@ const router = Router()
 router.get('/pricing', paymentController.listPricing)
 router.post('/initialize', authMiddleware, paymentController.initialize)
 router.get('/verify', authMiddleware, paymentController.verify)
-// Raw body parser for webhook signature verification
-router.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }), paymentController.webhook)
+// Webhook uses rawBody captured via express.json verify (server.js) for timingSafeEqual verification
+router.post('/webhook', paymentController.webhook)
+router.get('/webhook-info', paymentController.webhookInfo)
+router.get('/webhook/info', paymentController.webhookInfo)
 router.get('/status', authMiddleware, paymentController.status)
 router.get('/gateway-info', authMiddleware, paymentController.gatewayInfo)
 

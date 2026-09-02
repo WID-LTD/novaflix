@@ -125,13 +125,21 @@ class _WatchScreenState extends ConsumerState<WatchScreen> {
 
   @override
   void dispose() {
-    _recordFinalPosition();
+    try {
+      _recordFinalPosition();
+    } catch (_) {}
     _exitFullscreen();
     super.dispose();
   }
 
   void _recordFinalPosition() {
     if (!mounted) return;
+    AuthStatus authStatus;
+    try {
+      authStatus = ref.read(authProvider).status;
+    } catch (_) {
+      return;
+    }
     final auth = ref.read(authProvider);
     final detail = ref.read(_watchDetailsProvider(widget.movieId ?? 0)).valueOrNull;
     final minutes = (_lastPosition / 60).round();

@@ -243,7 +243,7 @@ class _TopBar extends StatelessWidget {
     final isDesktopScreen = screenSizeFor(width) == ScreenSize.desktop;
 
     return Container(
-      height: 56,
+      height: 96,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: const BoxDecoration(
         color: Color(0x99131313),
@@ -252,17 +252,48 @@ class _TopBar extends StatelessWidget {
       child: Row(
         children: [
           if (!isDesktopScreen)
-            IconButton(
-              icon: const Icon(Icons.menu),
-              onPressed: onMenuPressed ?? () => Scaffold.of(context).openDrawer(),
+            Builder(
+              builder: (ctx) {
+                final canPop = GoRouterState.of(ctx).matchedLocation != '/home' &&
+                    GoRouterState.of(ctx).matchedLocation != '/' &&
+                    Navigator.of(ctx).canPop();
+                // Also show back if not on top-level routes
+                final loc = GoRouterState.of(ctx).matchedLocation ?? '';
+                final isTopLevel = loc == '/home' ||
+                    loc == '/' ||
+                    loc == '/search' ||
+                    loc == '/discover' ||
+                    loc == '/profile' ||
+                    loc == '/login' ||
+                    loc == '/register';
+                final showBack = !isTopLevel && (canPop || loc.startsWith('/movie/') || loc.startsWith('/tv/') || loc.startsWith('/category/') || loc.startsWith('/search-results') || loc.startsWith('/list/') || loc.startsWith('/event/') || loc.startsWith('/store') || loc.startsWith('/learn') || loc.startsWith('/news') || loc.startsWith('/community') || loc.startsWith('/forum') || loc.startsWith('/trivia') || loc.startsWith('/downloads') || loc.startsWith('/watchlist') || loc.startsWith('/notifications') || loc.startsWith('/settings') || loc.startsWith('/pricing'));
+                if (showBack) {
+                  return IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () {
+                      if (ctx.canPop()) {
+                        ctx.pop();
+                      } else {
+                        ctx.go('/home');
+                      }
+                    },
+                  );
+                }
+                return IconButton(
+                  icon: const Icon(Icons.menu),
+                  onPressed: onMenuPressed ?? () => Scaffold.of(ctx).openDrawer(),
+                );
+              },
             ),
           GestureDetector(
             onTap: () => context.go('/home'),
             child: SizedBox(
-              height: 48,
+              width: 300,
+              height: 96,
               child: Image.asset(
                 'assets/brand/leter-mark-logo.png',
                 fit: BoxFit.contain,
+                alignment: Alignment.centerLeft,
               ),
             ),
           ),
@@ -518,7 +549,7 @@ class _MobileDrawer extends StatelessWidget {
                     child: GestureDetector(
                       onTap: () => handleNav('/home'),
                       child: SizedBox(
-                        height: 48,
+                        height: 96,
                         child: Image.asset(
                           'assets/brand/leter-mark-logo.png',
                           fit: BoxFit.contain,
