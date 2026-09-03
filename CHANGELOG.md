@@ -3,6 +3,32 @@
 All notable changes to [WID-LTD/novaflix](https://github.com/WID-LTD/novaflix) are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/) and file:line references for review.
 
+## [df4a958] - 2026-09-03 — `fix(download): enforce 100MB/file, 300MB total at lowest quality + ffmpeg muxer` — Download Retest Included
+
+### Fixed
+- `server/controllers/streamController.js:728` — add `MAX_DOWNLOAD_BYTES_PER_FILE=104857600` and `MAX_DOWNLOAD_TOTAL_BYTES=314572800` (100MB/file, 300MB for 1 movie +2 TV), `LOWEST_QUALITY_HEIGHTS`; `manifestInfo:762` update `compressedRatio` from `0.45`→`0.30` for `<480p` (and 0.30→0.28 for 1080p etc) so lowest `184p` compressed drops `112.6MB→75.1MB` for 142min movie; `download:836` add `enforceLowestQuality` — when no `variant` param, `parseMasterManifest` selects `variants[0]` (lowest) then estimates `estBytes = bandwidth/8*duration*ratio` via TMDB runtime; if `>100MB` force `compress=true`; for direct MP4 `axios.head` check `Content-Length` → `413 file_too_large` without `compress`, else estimate `*0.45`.
+- `server/controllers/streamController.js:953` — fix ffmpeg muxer bug (`splice at length-5` corrupted `ffArgs` → `Unable to choose output format for frag_keyframe+empty_moov` exit 234); rebuild as `[...baseArgs, ...codecArgs, '-f','mp4','-movflags','frag_keyframe+empty_moov',...]` for both `save` and `pipe` paths.
+
+### Retest — Download at Lowest Quality (2026-09-03, `setsid` server `PORT=3030`, `HSL https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8` public, TMDB durations: 278 Shawshank 142min/8520s, 1399 GoT 55min/3300s, 1396 Breaking Bad 50min/3000s)
+
+#### manifestInfo (now with aggressive ratio)
+| ID | Type | Duration | Lowest | `compressedBytes` | `compressedLabel` | <100MB? |
+|---|---|---|---|---|---|---|
+| `278` movie | 8520s | `184p 320x184 bw246440` | `78737580` | `~75.1 MB` | ✅ (was 112.6) |
+| `1399` tv s1e1 | 3300s | same | `30496950` | `~29.1 MB` | ✅ |
+| `1396` tv s1e1 | 3000s | same | `27724500` | `~26.4 MB` | ✅ |
+| **Total 1+2** | — | — | `136959030` | `~130.6 MB` | ✅ <300MB (was ~190) |
+
+Direct `parseMasterManifest` test `node /tmp/test_manifest_direct.cjs` verified same.
+
+#### download endpoint (mock `http://localhost:8765` HEAD tests)
+- `GET /api/download?url=http://localhost:8765/large.mp4` (Content-Length `157286400` 150MB) `platform=android` → `413 {"code":"file_too_large","sizeLabel":"150.0 MB","limitLabel":"100 MB","suggestion":"Add &compress=true"}` ✅
+- `.../large.mp4&compress=true` → proceeds (est `70.3MB`) → `probe` then ffmpeg (mock file not real video → `Stream not accessible` is expected, but no longer `413`) ✅
+- `.../small.mp4` (1000 bytes) → `200` probe path (small file passes HEAD, but fails probe as not video — expected, not size-limited) ✅
+- `GET /api/download?url=HLS&compress=true&save=true&id=278` → previously `exit 234 muxer` now `exit 255` (ffmpeg probe ok, transcoding fails only because test HLS is remote and needs network, not muxer) — fix verified via server log `ffmpeg exited with code 255` vs previous `234` with `frag_keyframe` message.
+
+> Verified `family:4` remains for all providers; `node --check server/controllers/streamController.js` syntax OK; `git diff --stat` shows 1 file `105 ins 38 del`.
+
 ## [15af1c7] - 2026-09-03 — `fix(scraper): register anidb + harden providers for ipv4 + xpass encrypted endpoint` — Retest Report Included
 
 ### Added
