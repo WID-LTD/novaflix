@@ -3,6 +3,66 @@
 All notable changes to [WID-LTD/novaflix](https://github.com/WID-LTD/novaflix) are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/) and file:line references for review.
 
+## [15af1c7] - 2026-09-03 — `fix(scraper): register anidb + harden providers for ipv4 + xpass encrypted endpoint` — Retest Report Included
+
+### Added
+- `server/scraper.mjs:2,7` — register `anidb-provider` (previously implemented `server/providers/anidb-provider.js:134` but never imported) so anime TV (e.g. `GET /api/source?type=tv&season=1&episode=1` with `anidb.app` title match) now participates in `ProviderEngine` priority queue (priority 5, alongside `vidsrc-pm:5` — engine stable-sorts by priority, then first-winner).
+
+### Fixed
+- `server/providers/anidb-provider.js:12,38,57,68,89` — add `family:4` to all `axios` calls (`tmdbApi`, `searchId`, `episodes`, `languageEmbedUrl`, `extractMaster`) to fix `ENETUNREACH` / `EAI_AGAIN` on ipv6-only nodes (verified `curl -4` vs `node axios` without family failed for `play.xpass.top`).
+- `server/providers/nextgen-provider.js:14` — add `family:4`, `validateStatus:true`, explicit `404 → "nextgen: API 404 — provider may be deprecated"` (verified `curl https://nextgencloudfabric.com/embed/source-api.php?tmdb=278` now returns `{"error":"API returned status 404"}` for all tested IDs 278/550/299534 — endpoint dead 2026-09-03).
+- `server/providers/vidsrcpm-provider.js:14` — same `family:4` + `404` handling (`vidsrc.pm` also `404` for all IDs).
+- `server/providers/vidsrc-provider.js:8` — reorder `DOMAINS` to prioritize `vidsrc.me`/`vidsrc.su` (only hosts that resolve 2026-09-03; `vidsrc.to/.fyi/.cc/.xyz/.vc/.ink` → `EAI_AGAIN`/`ENOTFOUND`); `verify.js:18,57,71` — add `family:4` to `verifyHlsUrl`/`checkFirstSegment`/`quickHead`.
+- `server/providers/vidsrc-provider.js:57,72` — add `family:4` + `validateStatus` + `HTTP !=200 → throw` for `tryDomain` fetches.
+- `server/providers/xpass-provider.js:65,89,137,152,165,193,220,251,295` — major: `family:4` throughout, `extractDataUrl()` + `collectEncryptedSources()` for new xpass encrypted `/data/movie|tv?token=...` endpoint. `collectSources` now merges `encryptedSources` (base64 decode attempt + raw url regex + JSON fallback) before legacy `playlist.json` path. Verified with `axios family:4`: `GET /e/movie/278` → `dataUrl /data/movie/278?token=...` → `GET /data/...` 200 `text/plain` len 3888 but payload is custom-encrypted (not plain base64 — `Buffer base64 → utf8` yields binary `F…ekG` garbage, zero urls extracted). `mainmini.js:12176` is obfuscated (webpack + `a0_0x` base64+decodeURIComponent wrapper) — full decryption needs VM eval of `a0_0x502b()` shuffled strings, not feasible in quick patch; stub now logs `encrypted sources: 0` and falls back to legacy path (which yields 0 sources, hence `xpass: no verified stream`).
+
+### Retest — Movie/TV Endpoints + Scraper Ability (2026-09-03, local server `PORT=3030`, DB unreachable, TMDB token valid)
+
+#### Environment
+- `server/.env` `DATABASE_URL=postgresql://novaflix:novaflix@localhost:5432/novaflix` → `ECONNREFUSED` (no DB) → auth fail-open active (`server/middleware/auth.js:25` + `server/controllers/authController.js:418` dev fallback).
+- `JWT_SECRET` len 52, `ffmpeg` `/usr/bin/ffmpeg`, `ENABLE_PROXY=true`, `VAPID` misconfigured (log: `Vapid public key should be 65 bytes` — non-blocking).
+- `GH pushed_at` before push `2026-09-03T01:26:36Z` (`8803989`), after `2026-09-03T04:34:21Z` (`15af1c7`), `origin` sole remote `WID-LTD/novaflix`.
+
+#### Endpoint Results (curl with `dev@novaflix.local` JWT premium, `makeToken()` via `jsonwebtoken:10.0.1`)
+| Endpoint | Auth | Status | Body `success` | Detail |
+|---|---|---|---|---|
+| `GET /api/health` | none | 200 | `status:ok uptime≈2.0` | ✅ |
+| `GET /api/source?id=278&type=movie` | none | 401 | `Unauthorized` | ✅ validates `authMiddleware` |
+| `GET /api/source?id=278&type=movie` | dev JWT | 200 | `false` error `No provider returned a stream` `attempted:0 totalProviders:5` | ✅ graceful no-stream (nextgen 404 + xpass 0 sources + vidsrc 0) |
+| `GET /api/movie/278/source` | dev JWT | 200 | `false` same | ✅ dedicated wrapper `movieSource:683` |
+| `GET /api/tv/1399/source?season=1&episode=1` | dev JWT | 200 | `false` | ✅ tv dedicated `tvSource:690` |
+| `GET /api/source?id=1399&type=tv&season=1&episode=1` | dev JWT | 200 | `false` | ✅ tv unified |
+| `POST /api/stream-events` `{type:test}` | none | 200 | `status:ok received:test` | ✅ beacon no-auth `streamRoutes.js:23` |
+| `GET /api/manifest-info` | none | 400 | `URL is required` | ✅ |
+| `GET /api/proxy/example.com/test.m3u8` | dev | 502 | `Proxy failed` + ffmpeg fallback attempted | ✅ `streamController.js:1144` |
+| `GET /api/search?query=inception` | none | 200 | `success:true data[0].id 27205` | ✅ `tmdbRoutes.js:15` hybridSearch |
+| `GET /api/trending` | none | 200 | `success:true` | ✅ |
+| `GET /api/details?id=278&type=movie` | none | 200 | `The Shawshank Redemption runtime 142` | ✅ |
+
+Server logs show `ProviderEngine` correctly cycles: `anidb ❌ (0ms for non-anime) → nextgen 404 → xpass no verified stream → vidsrc-pm 404 → vidsrc-multi no stream found` then returns `success:false` without crashing; `streamController.js:603` probe step skipped correctly when no chosen stream.
+
+#### Scraper Direct Ability (`node /tmp/novaflix_scraper_test.mjs` without server, `family:4`)
+| Provider | Input | Result | Notes |
+|---|---|---|---|
+| `nextgen` | 278 movie | ❌ `404` (1626ms) | API dead, now handled |
+| `xpass` | 278 movie | ❌ `no verified stream` (1085ms) | Page 200 but encrypted `dataUrl` yields 0 extractable urls |
+| `vidsrc-multi` | 278 | ❌ `no stream found` (7256ms, 11 domains) | Only `vidsrc.me` 200 len 54107 but contains `sbx.js` sandbox wrapper, zero `m3u8` in html; others `EAI_AGAIN` |
+| `vidsrc-pm` | 278 | ❌ `404` (2706ms) | Deprecated |
+| `anidb` | 1399 tv s1e1 | ❌ `no stream` (4438ms) | `anidb.app/browse?q=Game of Thrones` → no anime match (expected, GoT not anime) |
+| `anidb` | 66732 tv s1e1 | ❌ `no stream` (875ms) | Stranger Things not anime |
+| `engine` | 278/550/299534/27205 movie + 1399/1396 tv | ❌ `No provider returned a stream` (1300-2848ms) | Aggregated, all providers attempted, `attempted 0-1` due to blacklist |
+
+`scraper.mjs` now registers `anidb` — registration check now `YES`. `xpass` page fetch now succeeds with `family:4` (prior `ENETUNREACH` without).
+
+#### Known Limitations / Next Steps
+- **xpass decryption** still required: `GET /data/movie/278?token=...` returns AES-like base64url blob (3888 chars) that `mainmini.js` decrypts client-side via obfuscated `a0_0x` routine; naive `base64→utf8` yields binary. Need to deobfuscate `mainmini.js` (unpack `a0_0x502b()` string array, extract `CryptoJS.AES.decrypt` key from `positionKey="2_278_0_0"` etc) or replace with headless browser in `xpass-provider.js:collectEncryptedSources`.
+- **nextgen/vidsrcpm 404**: both `source-api.php` endpoints dead; consider replacing with `vidking`, `vidjoy`, `embed.su` or `vidsrc.icu` alternatives.
+- **vidsrc.me**: embed page is now SPA with `assets/index-*.js` that loads iframe dynamically; `axios` static fetch yields no `m3u8`/`iframe` — needs `puppeteer` or `jsdom` eval, or fallback to `vidsrc.su` which returns 200 but minimal html.
+- `providerHealth.js` blacklists (`BLOCKED Map`) persist 120s after failures — during retest caused `all domains blacklisted` on second run; clear with `node -e "import('./server/providers/providerHealth.js').then(m=>console.log(m.blockedSnapshot()))"` or restart server.
+- Recommend adding `family:4` globally via `axios.defaults.family=4` or `httpAgent` with `family:4` in `server/server.js` to avoid per-call repetition.
+
+> Pushed `15af1c7` at `2026-09-03T04:34:21Z` to `origin/main` (sole remote). Rebased over `8803989` (PR #3 `Enhance navigation…Google OAuth` from `successchukwu` at `2026-09-03T01:26:36Z`). Verified `git rev-parse HEAD == git ls-remote origin main`.
+
 ## [430851a] - 2026-09-02
 
 ### Fixed
