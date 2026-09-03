@@ -7,9 +7,11 @@ import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../services/api_service.dart';
+import '../services/download_service.dart';
 import '../models/media_item.dart';
 import '../providers/auth_provider.dart';
 import '../providers/watchlist_provider.dart';
+import '../providers/downloads_provider.dart';
 import '../widgets/ui/index.dart';
 import '../core/responsive.dart';
 import '../widgets/features/index.dart';
@@ -364,7 +366,7 @@ class MovieDetailScreen extends ConsumerWidget {
                                     label: 'Download',
                                     icon: Icons.download,
                                     filled: false,
-                                    onTap: () => context.go('/downloads'),
+                                    onTap: () => _handleDownload(context, ref, item, isTV),
                                   ),
                                   Container(
                                     width: 56,
@@ -482,6 +484,162 @@ class MovieDetailScreen extends ConsumerWidget {
     final uri = Uri.parse('https://www.youtube.com/watch?v=$key');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _handleDownload(
+    BuildContext context,
+    WidgetRef ref,
+    MediaItem item,
+    bool isTV,
+  ) async {
+    final auth = ref.read(authProvider);
+    if (auth.status != AuthStatus.authenticated) {
+      if (context.mounted) context.go('/login?redirect=/movie/${item.id}');
+      return;
+    }
+    // Check plan allows downloads (mobile planFeatures uses downloadDevices)
+    final downloadDevices = auth.user?.planFeatures['downloadDevices'] as int? ?? 0;
+    final hasPremium = auth.user?.plan != 'free' && downloadDevices > 0;
+    if (downloadDevices == 0) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Downloads require Student plan or higher. Upgrade to download.')),
+        );
+      }
+      return;
+    }
+
+    // Show size estimate bottom sheet
+    final dlService = ref.read(downloadServiceProvider);
+    DownloadSizeEstimate? estimate;
+    try {
+      estimate = await dlService.getSizeEstimate(
+        id: item.id,
+        type: isTV ? 'tv' : 'movie',
+        season: isTV ? 1 : null,
+        episode: isTV ? 1 : null,
+      );
+    } catch (_) {}
+
+    if (!context.mounted) return;
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: AppColors.surfaceContainerHigh,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.download, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Text('Download at lowest quality', style: AppTypography.bodyLg.copyWith(fontWeight: FontWeight.w700)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              estimate != null
+                  ? 'Lowest quality (184p) • ${estimate.label} • ${estimate.resolution}\nEnforced 100MB/file, 300MB total (1 movie + 2 episodes).'
+                  : 'Lowest quality (184p) • Optimized to ~75MB/movie, ~30MB/episode • 100MB/file limit.',
+              style: const TextStyle(color: AppColors.onSurfaceVariant, fontSize: 13),
+            ),
+            if (estimate != null && !estimate.withinLimit)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Warning: estimated ${estimate.label} exceeds 100MB even at lowest quality. Will use extra compression.',
+                  style: const TextStyle(color: Colors.orangeAccent, fontSize: 12),
+                ),
+              ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Download'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Downloads are encrypted (.nfv) and playable offline. Device limit per plan applies.',
+              style: TextStyle(color: Colors.white38, fontSize: 11),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true) return;
+
+    // For TV, fetch season 1 episodes to download 2 episodes as demo; for movie, single
+    List<Map<String, dynamic>>? episodes;
+    if (isTV) {
+      try {
+        final api = ref.read(apiServiceProvider);
+        final res = await api.getTVSeason(item.id, 1);
+        final data = res.data['data'] as Map<String, dynamic>? ?? res.data as Map<String, dynamic>;
+        final eps = (data['episodes'] as List? ?? []) as List;
+        // Take first 2 episodes to meet spec 2 TV shows
+        episodes = eps.take(2).map((e) => {
+              'season': 1,
+              'episode': e['episode_number'] ?? e['episode'] ?? 1,
+              'name': e['name'] ?? 'Episode ${e['episode_number']}',
+            }).toList();
+        if (episodes.isEmpty) {
+          episodes = [
+            {'season': 1, 'episode': 1, 'name': 'Episode 1'},
+            {'season': 1, 'episode': 2, 'name': 'Episode 2'},
+          ];
+        }
+      } catch (_) {
+        episodes = [
+          {'season': 1, 'episode': 1, 'name': 'Episode 1'},
+          {'season': 1, 'episode': 2, 'name': 'Episode 2'},
+        ];
+      }
+    }
+
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Starting download: ${item.title} at lowest quality...')),
+    );
+
+    try {
+      await ref.read(downloadsProvider.notifier).startDownload(
+            contentId: item.id,
+            type: isTV ? 'tv' : 'movie',
+            title: item.title,
+            poster: item.posterUrl,
+            backdrop: item.backdropUrl,
+            episodes: episodes,
+          );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${item.title} downloaded. Check Downloads.')),
+        );
+        context.push('/downloads');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        final msg = e.toString().replaceAll('Exception: ', '');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg), backgroundColor: AppColors.error),
+        );
+      }
     }
   }
 

@@ -530,6 +530,74 @@ class ApiService {
     });
   }
 
+  // --- Download system: server-enforced 100MB/file, 300MB total, lowest quality ---
+  // These wrap GET /api/manifest-info and GET /api/download which already enforce
+  // size via HEAD check + HLS lowest variant (184p) + compress (aggressive 0.30 ratio → 75MB for 142min movie).
+  Future<Response> getDownloadManifest({
+    required String url,
+    int? id,
+    String? type,
+    int? season,
+    int? episode,
+    String? plan,
+  }) => getManifestInfo(url, id: id, type: type, season: season, episode: episode, plan: plan);
+
+  /// Stream via server download endpoint (applies 100MB limit, lowest quality, device cap).
+  /// Throws DioException with 413 file_too_large or 429/409 etc for UI to handle.
+  Future<Stream<Uint8List>> streamDownload({
+    required String url,
+    String? title,
+    String? variant,
+    bool compress = true,
+    String? platform,
+    String? deviceName,
+    int? id,
+    String? type,
+    int? season,
+    int? episode,
+  }) async {
+    final token = await _storage.read(key: _tokenKey);
+    final cToken = await _storage.read(key: _creatorTokenKey);
+    final headers = <String, dynamic>{
+      if (token != null) 'Authorization': 'Bearer $token',
+      if (cToken != null) 'Authorization': 'Bearer $cToken',
+    };
+    final deviceId = await getDeviceId();
+    final plat = platform ?? (await _inferPlatform());
+    final resp = await _dio.get<ResponseBody>(
+      '/download',
+      queryParameters: {
+        'url': url,
+        if (title != null) 'title': title,
+        if (variant != null) 'variant': variant,
+        'compress': compress.toString(),
+        'platform': plat,
+        'deviceId': deviceId,
+        if (deviceName != null) 'deviceName': deviceName,
+        'save': 'false',
+        if (id != null) 'id': id.toString(),
+        if (type != null) 'type': type,
+        if (season != null) 'season': season.toString(),
+        if (episode != null) 'episode': episode.toString(),
+      },
+      options: Options(
+        responseType: ResponseType.stream,
+        headers: headers,
+        followRedirects: true,
+        receiveTimeout: const Duration(minutes: 10),
+        sendTimeout: const Duration(seconds: 30),
+      ),
+    );
+    final stream = resp.data?.stream;
+    if (stream == null) return const Stream.empty();
+    return stream.map((chunk) => chunk is Uint8List ? chunk : Uint8List.fromList(chunk));
+  }
+
+  Future<String> _inferPlatform() async {
+    // Fallback when not explicitly android/ios — use deviceId hash path
+    return 'android';
+  }
+
   Future<Response> subscribeNewsletter(String email) =>
       post('/newsletter/subscribe', data: {'email': email});
 

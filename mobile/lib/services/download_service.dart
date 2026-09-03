@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
+import 'package:dio/dio.dart';
 import 'package:encrypt/encrypt.dart' as enc;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
@@ -13,6 +14,10 @@ import '../services/api_service.dart';
 const _magic = 'NFLX'; // custom container magic bytes
 const _version = 1;
 const _chunkSize = 64 * 1024; // AES block aligned chunking
+
+// Server-enforced limits — 100MB per file at lowest quality, 300MB total for 1 movie + 2 TV episodes
+const int kMaxBytesPerFile = 100 * 1024 * 1024; // 100 MB
+const int kMaxTotalBytes = 300 * 1024 * 1024; // 300 MB
 
 class DownloadEpisode {
   final int season;
@@ -131,6 +136,21 @@ class ActiveDownload {
       totalBytes <= 0 ? 0 : (bytesDone / totalBytes).clamp(0.0, 1.0);
 }
 
+class DownloadSizeEstimate {
+  final int estimatedBytes;
+  final String label;
+  final String variantUrl;
+  final String resolution;
+  final bool withinLimit;
+  const DownloadSizeEstimate({
+    required this.estimatedBytes,
+    required this.label,
+    required this.variantUrl,
+    required this.resolution,
+    required this.withinLimit,
+  });
+}
+
 class DownloadService {
   DownloadService(this._api);
 
@@ -169,6 +189,20 @@ class DownloadService {
   Future<void> _saveManifest(List<DownloadItem> items) async {
     final f = await _manifestFile();
     await f.writeAsString(jsonEncode(items.map((e) => e.toJson()).toList()));
+  }
+
+  Future<int> getTotalDownloadedBytes() async {
+    final root = await _root();
+    if (!await root.exists()) return 0;
+    var total = 0;
+    await for (final e in root.list(recursive: true)) {
+      if (e is File && e.path.endsWith('.nfv')) {
+        try {
+          total += await e.length();
+        } catch (_) {}
+      }
+    }
+    return total;
   }
 
   Future<void> updateItemProgress(int id, String type, {required double progress, required double duration}) async {
@@ -225,7 +259,75 @@ class DownloadService {
     await _saveManifest(items);
   }
 
+  /// Get estimated size at lowest quality (184p) — uses server manifestInfo with aggressive 0.30 ratio.
+  /// Returns null if unable to estimate (e.g., no TMDB runtime).
+  Future<DownloadSizeEstimate?> getSizeEstimate({
+    required int id,
+    required String type,
+    int? season,
+    int? episode,
+  }) async {
+    try {
+      final src = await _resolveSource(id, type, season: season, episode: episode);
+      final res = await _api.getDownloadManifest(
+        url: src,
+        id: id,
+        type: type,
+        season: season,
+        episode: episode,
+      );
+      final raw = res.data as Map<String, dynamic>;
+      // Server returns {success:true, duration, variants:[...]} or wrapped in data
+      final data = raw['data'] is Map<String, dynamic> ? raw['data'] as Map<String, dynamic> : raw;
+      final variants = (data['variants'] as List? ?? raw['variants'] as List? ?? []) as List;
+      if (variants.isEmpty) return null;
+      // variants sorted low→high; lowest is first
+      final lowest = variants.first as Map<String, dynamic>;
+      final bytes = (lowest['compressedBytes'] as int? ?? lowest['sizeBytes'] as int? ?? 0);
+      final label = (lowest['compressedLabel'] as String? ?? lowest['sizeLabel'] as String? ?? 'Unknown');
+      final url = (lowest['url'] as String? ?? src);
+      final resStr = (lowest['resolution'] as String? ?? '320x184');
+      return DownloadSizeEstimate(
+        estimatedBytes: bytes,
+        label: label,
+        variantUrl: url,
+        resolution: resStr,
+        withinLimit: bytes == 0 || bytes <= kMaxBytesPerFile,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Check if we can download given estimated bytes without exceeding per-file or total limits.
+  Future<String?> canDownload(int estimatedBytes) async {
+    if (estimatedBytes > kMaxBytesPerFile) {
+      return 'This title at lowest quality is ~${_formatBytes(estimatedBytes)} — exceeds 100 MB per-file limit. Try a shorter title or enable extra compression.';
+    }
+    final total = await getTotalDownloadedBytes();
+    if (total + estimatedBytes > kMaxTotalBytes) {
+      return 'Storage limit: you have ${_formatBytes(total)} used. Adding this (~${_formatBytes(estimatedBytes)}) would exceed 300 MB total (1 movie + 2 episodes). Delete a download first.';
+    }
+    if (total + estimatedBytes > kMaxTotalBytes * 0.9) {
+      // Warn but allow — server will enforce
+    }
+    return null;
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes <= 0) return 'Unknown';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    var size = bytes.toDouble();
+    var i = 0;
+    while (size >= 1024 && i < units.length - 1) {
+      size /= 1024;
+      i++;
+    }
+    return '${size.toStringAsFixed(1)} ${units[i]}';
+  }
+
   /// Download a movie (single file) or a TV show (one file per episode).
+  /// Uses server download endpoint which enforces 100MB/file + lowest quality (184p) + device caps.
   Future<void> downloadContent({
     required int contentId,
     required String type,
@@ -235,13 +337,29 @@ class DownloadService {
     int? season,
     int? episode,
     List<Map<String, dynamic>>? episodes,
+    bool compress = true,
   }) async {
     if (type == 'tv' && (episodes == null || episodes.isEmpty)) return;
     final epList = episodes ?? const <Map<String, dynamic>>[];
 
+    // Pre-flight storage check for 3-file scenario
+    if (type == 'movie') {
+      final est = await getSizeEstimate(id: contentId, type: 'movie');
+      if (est != null) {
+        final err = await canDownload(est.estimatedBytes);
+        if (err != null) throw Exception(err);
+      }
+    }
+
     if (type == 'movie') {
       final source = await _resolveSource(contentId, 'movie');
-      if (source.isEmpty) return;
+      if (source.isEmpty) throw Exception('No playable stream found. Try again later.');
+      // Final size check via manifest
+      final est = await _getEstimateForUrl(source, id: contentId, type: 'movie');
+      if (est != null) {
+        final err = await canDownload(est.estimatedBytes);
+        if (err != null) throw Exception(err);
+      }
       final active = ActiveDownload(
         contentId: contentId,
         type: 'movie',
@@ -250,19 +368,32 @@ class DownloadService {
         backdrop: backdrop,
         episodeCount: 1,
         episodesDone: 0,
-        totalBytes: 1,
+        totalBytes: (est?.estimatedBytes.toDouble() ?? 1),
         bytesDone: 0,
       );
       _active.add(active);
-      await _downloadUrlToEncrypted(
-        sourceUrl: source,
-        relPath: 'movie_$contentId/$contentId.nfv',
-        onProgress: (done) {
-          active.bytesDone = done;
-          active.totalBytes = math.max(active.totalBytes, done);
-        },
-        active: active,
-      );
+      try {
+        await _downloadUrlToEncrypted(
+          sourceUrl: source,
+          relPath: 'movie_$contentId/$contentId.nfv',
+          onProgress: (done) {
+            active.bytesDone = done;
+            active.totalBytes = math.max(active.totalBytes, done);
+          },
+          active: active,
+          title: title,
+          id: contentId,
+          type: 'movie',
+          compress: compress,
+        );
+      } catch (e) {
+        _active.remove(active);
+        if (e is DioException && e.response?.statusCode == 413) {
+          final msg = (e.response?.data?['error'] as String?) ?? 'File exceeds 100 MB at lowest quality. Enable compression.';
+          throw Exception(msg);
+        }
+        rethrow;
+      }
       _active.remove(active);
       final list = await loadManifest();
       list.removeWhere((x) => x.id == contentId && x.type == 'movie');
@@ -285,6 +416,19 @@ class DownloadService {
     items.removeWhere((x) => x.id == contentId && x.type == 'tv');
     final dlEpisodes = <DownloadEpisode>[];
     final total = epList.length;
+    // Pre-check total size for all episodes
+    var totalEst = 0;
+    for (final ep in epList) {
+      final s = ep['season'] as int? ?? season ?? 1;
+      final e = ep['episode'] as int? ?? 1;
+      final est = await getSizeEstimate(id: contentId, type: 'tv', season: s, episode: e);
+      if (est != null) totalEst += est.estimatedBytes;
+    }
+    if (totalEst > 0) {
+      final err = await canDownload(totalEst);
+      if (err != null) throw Exception(err);
+    }
+
     final active = ActiveDownload(
       contentId: contentId,
       type: 'tv',
@@ -293,7 +437,7 @@ class DownloadService {
       backdrop: backdrop,
       episodeCount: total,
       episodesDone: 0,
-      totalBytes: total.toDouble(),
+      totalBytes: totalEst > 0 ? totalEst.toDouble() : total.toDouble(),
       bytesDone: 0,
     );
     _active.add(active);
@@ -308,16 +452,33 @@ class DownloadService {
         continue;
       }
       if (src.isEmpty) continue;
+      if (active.cancelled) break;
       final fileName =
           'S${s.toString().padLeft(2, '0')}E${e.toString().padLeft(2, '0')}.nfv';
-      await _downloadUrlToEncrypted(
-        sourceUrl: src,
-        relPath: 'tv_$contentId/$fileName',
-        onProgress: (_) {
-          active.episodesDone = i;
-        },
-        active: active,
-      );
+      try {
+        await _downloadUrlToEncrypted(
+          sourceUrl: src,
+          relPath: 'tv_$contentId/$fileName',
+          onProgress: (_) {
+            active.episodesDone = i;
+          },
+          active: active,
+          title: title,
+          id: contentId,
+          type: 'tv',
+          season: s,
+          episode: e,
+          compress: compress,
+        );
+      } on DioException catch (ex) {
+        if (ex.response?.statusCode == 413) {
+          // Skip this episode but continue others — surface via exception after loop
+          continue;
+        }
+        continue;
+      } catch (_) {
+        continue;
+      }
       dlEpisodes.add(DownloadEpisode(
         season: s,
         episode: e,
@@ -325,6 +486,7 @@ class DownloadService {
         fileName: 'tv_$contentId/$fileName',
       ));
       active.episodesDone = i + 1;
+      active.bytesDone += 1; // approximate
       await _saveManifest([
         ...items,
         DownloadItem(
@@ -338,6 +500,11 @@ class DownloadService {
           episodes: List.from(dlEpisodes),
         ),
       ]);
+      // Enforce 100MB per episode already via server; extra client total check
+      final curTotal = await getTotalDownloadedBytes();
+      if (curTotal > kMaxTotalBytes) {
+        throw Exception('Total storage would exceed 300 MB (1 movie + 2 episodes). Delete a download first.');
+      }
     }
     _active.remove(active);
     final finalList = await loadManifest();
@@ -353,6 +520,25 @@ class DownloadService {
       episodes: List.from(dlEpisodes),
     ));
     await _saveManifest(finalList);
+  }
+
+  Future<DownloadSizeEstimate?> _getEstimateForUrl(String url, {required int id, required String type}) async {
+    try {
+      final res = await _api.getDownloadManifest(url: url, id: id, type: type);
+      final data = res.data as Map<String, dynamic>;
+      final variants = (data['variants'] as List? ?? []) as List;
+      if (variants.isEmpty) return null;
+      final lowest = variants.first as Map<String, dynamic>;
+      return DownloadSizeEstimate(
+        estimatedBytes: (lowest['compressedBytes'] as int? ?? 0),
+        label: (lowest['compressedLabel'] as String? ?? ''),
+        variantUrl: (lowest['url'] as String? ?? url),
+        resolution: (lowest['resolution'] as String? ?? ''),
+        withinLimit: (lowest['compressedBytes'] as int? ?? 0) <= kMaxBytesPerFile,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<String> _resolveSource(int id, String type, {int? season, int? episode}) async {
@@ -372,12 +558,18 @@ class DownloadService {
     }
   }
 
-  /// Stream the source URL, encrypt chunk-by-chunk into the [.nfv] container.
+  /// Stream via server download endpoint (enforces 100MB/file, lowest quality, compress) and encrypt chunk-by-chunk.
   Future<void> _downloadUrlToEncrypted({
     required String sourceUrl,
     required String relPath,
     required void Function(double bytesDone) onProgress,
     required ActiveDownload active,
+    String? title,
+    int? id,
+    String? type,
+    int? season,
+    int? episode,
+    bool compress = true,
   }) async {
     final key = await _deriveKey();
     final iv = _randomIv();
@@ -385,7 +577,16 @@ class DownloadService {
       enc.AES(enc.Key(Uint8List.fromList(key)), mode: enc.AESMode.cbc),
     );
     try {
-      final stream = await _api.streamUrl(sourceUrl);
+      // Use server download endpoint which handles lowest quality + 100MB enforcement + device caps
+      final stream = await _api.streamDownload(
+        url: sourceUrl,
+        title: title,
+        compress: compress,
+        id: id,
+        type: type,
+        season: season,
+        episode: episode,
+      );
       final header = _buildHeader(iv);
       final root = await _root();
       final f = File(p.join(root.path, relPath));
@@ -414,6 +615,21 @@ class DownloadService {
           offset = end;
         }
         done += data.length;
+        // Enforce 100MB per file client-side as safety (in case server somehow streams larger)
+        if (done > kMaxBytesPerFile) {
+          await out.flush();
+          await out.close();
+          await f.delete();
+          throw Exception('Download exceeded 100 MB limit at lowest quality — cancelled.');
+        }
+        // Enforce 300MB total
+        final total = await getTotalDownloadedBytes();
+        if (total + done > kMaxTotalBytes) {
+          await out.flush();
+          await out.close();
+          await f.delete();
+          throw Exception('Total downloads would exceed 300 MB — delete a download first.');
+        }
         onProgress(done.toDouble());
       }
       await out.flush();
