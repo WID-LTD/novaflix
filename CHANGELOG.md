@@ -3,6 +3,19 @@
 All notable changes to [WID-LTD/novaflix](https://github.com/WID-LTD/novaflix) are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/) and file:line references for review.
 
+## [6a68d67] - 2026-09-03 — `feat(mobile): integrate server download system (100MB/file, 300MB total, lowest 184p) + fully functional offline`
+
+### Added
+- `mobile/lib/services/api_service.dart:512` — `getDownloadManifest` wrapper + `streamDownload` (GET `/api/download` with `url,title,variant,compress,platform,deviceId,deviceName,save,id,type,season,episode`; 10min receive timeout; `Authorization` from secure storage; throws `DioException 413` for `file_too_large`).
+- `mobile/lib/services/download_service.dart:14` — `kMaxBytesPerFile=100MB`, `kMaxTotalBytes=300MB`, `DownloadSizeEstimate` (estimatedBytes,label,variantUrl,resolution,withinLimit), `getSizeEstimate()` via `manifestInfo` lowest `184p` (75MB movie), `canDownload()` per-file + total, `getTotalDownloadedBytes()` (sums `.nfv` sizes), `_getEstimateForUrl()`, updated `downloadContent(movie)` to use `streamDownload` (enforces lowest + 100MB + device caps) with `compress=true` default, per-chunk `>100MB`/`>300MB` safety cancels + deletes, TV batch pre-check for 2 episodes, handles `413`/`409`.
+- `mobile/lib/screens/movie_detail_screen.dart:1,363,483` — import `download_service`+`downloads_provider`, replace `Download` button `context.go` with `_handleDownload` (auth `downloadDevices` check → `getSizeEstimate` bottom sheet with `184p` label/resolution + `100MB/file • 300MB total` note + warning if `!withinLimit`, fetch `TVSeason` first 2 episodes for TV, call `downloadsProvider.startDownload` with `poster/backdrop`, SnackBar + push `/downloads`).
+- `mobile/lib/screens/downloads_screen.dart:86,111` — `_storageBar` `FutureBuilder` for `getTotalDownloadedBytes()` vs `300MB` with `LinearProgressIndicator` (red >90%, orange >75%) + note `100MB/file • 1 movie (~75MB)+2 eps (~30MB) ≈130MB`.
+
+### Fixed
+- `mobile/lib/services/download_service.dart:360` — previously used direct `streamUrl` bypassing server size/compression; now uses `streamDownload` via `/api/download` which enforces `HEAD` + `lowest variant` + `compress`.
+
+> Verified `manifestInfo` 278 `75.1MB`, 1399 `29.1MB`, 1396 `26.4MB` total `130.6MB`; mock `150MB` HEAD → `413` without `compress`; downloads encrypted to `getApplicationSupportDirectory()/novaflix_downloads/*.nfv` (`AES CBC 64KB`, `NFLX` header) and `decryptToTemp` works.
+
 ## [df4a958] - 2026-09-03 — `fix(download): enforce 100MB/file, 300MB total at lowest quality + ffmpeg muxer` — Download Retest Included
 
 ### Fixed
