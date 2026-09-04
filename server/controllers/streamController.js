@@ -275,9 +275,10 @@ function ffmpegProbePlayable(streamUrl, headers, ffmpegPath) {
     const hdrStr = Object.entries(headers || {})
       .map(([k, v]) => `${k}: ${v}\r\n`)
       .join('')
+    const isHls = streamUrl.includes('.m3u8')
     const args = [
       '-headers', hdrStr,
-      '-allowed_extensions', 'ALL',
+      ...(isHls ? ['-allowed_extensions', 'ALL'] : []),
       '-t', '2',
       '-i', streamUrl,
       '-f', 'null',
@@ -923,9 +924,10 @@ export async function download(req, res) {
     const dlReferer = cdnHost.includes('remoteconsultinggroup') ? 'https://nextgencloudfabric.com/' : cdnHost.includes('tik.1x2') || cdnHost.includes('tiktokcdn') ? 'https://tik.1x2.space/' : 'https://nextgencloudfabric.com/'
     const dlHeaders = `User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36\r\nReferer: ${dlReferer}\r\nOrigin: ${dlReferer.replace(/\/$/, '')}\r\n`
 
+    const isHlsProbe = cdnUrl.includes('.m3u8')
     const probeArgs = [
       '-headers', dlHeaders,
-      '-allowed_extensions', 'ALL',
+      ...(isHlsProbe ? ['-allowed_extensions', 'ALL'] : []),
       '-t', '1',
       '-i', cdnUrl,
       '-f', 'null',
@@ -951,9 +953,11 @@ export async function download(req, res) {
       const outputPath = path.join(DOWNLOADS_DIR, outputFilename)
 
       // Build ffmpeg args correctly — insert codec options before muxer flags
+      // Only use allowed_extensions for HLS (m3u8), not for direct MP4
+      const isHls = cdnUrl.includes('.m3u8')
       const baseArgs = [
         '-headers', dlHeaders,
-        '-allowed_extensions', 'ALL',
+        ...(isHls ? ['-allowed_extensions', 'ALL'] : []),
         '-i', cdnUrl,
       ]
       const codecArgs = compress === 'true'
@@ -1003,7 +1007,7 @@ export async function download(req, res) {
 
       const baseArgs2 = [
         '-headers', dlHeaders,
-        '-allowed_extensions', 'ALL',
+        ...(isHls ? ['-allowed_extensions', 'ALL'] : []),
         '-i', cdnUrl,
       ]
       const codecArgs2 = compress === 'true'
