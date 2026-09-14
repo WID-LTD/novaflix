@@ -9,6 +9,7 @@ import '../screens/subscription_activated_screen.dart';
 import '../theme/app_colors.dart';
 import '../widgets/subscription/securing_dialog.dart';
 import '../services/api_service.dart';
+import '../core/config.dart';
 
 /// Robust in-app checkout using **flutterwave_standard** Charge API.
 /// - Enforces card tokenization for Spotify-style monthly billing via paymentOptions
@@ -40,23 +41,21 @@ Future<void> executeInAppSubscription(
     final txRef = 'NOVAFLEX_${selectedPlan.slug}_${DateTime.now().millisecondsSinceEpoch}';
     final email = user.email.trim();
     final name = user.username.trim().isNotEmpty ? user.username.trim() : 'NovaFlix User';
-    const phoneFallback = '08000000000';
+    final phoneFallback = user.phone?.isNotEmpty == true ? user.phone! : '08000000000';
 
     final customer = Customer(email: email, name: name, phoneNumber: phoneFallback);
 
-    const publicKey = String.fromEnvironment('FLUTTERWAVE_PUBLIC_KEY',
-        defaultValue: 'FLWPUBK_TEST-e7ef088503fad91d261956291e4a351a-X');
+    final publicKey = AppConfig.flutterwavePublicKey;
 
     final flutterwave = Flutterwave(
-      publicKey: const String.fromEnvironment('FLUTTERWAVE_PUBLIC_KEY',
-          defaultValue: 'FLWPUBK_TEST-e7ef088503fad91d261956291e4a351a-X'),
+      publicKey: publicKey,
       txRef: txRef,
       amount: selectedPlan.priceNgn.toString(),
-      customer: Customer(email: email, name: name, phoneNumber: phoneFallback),
+      customer: customer,
       paymentOptions: 'card',
       customization: Customization(title: 'NovaFlix — ${selectedPlan.name}'),
       redirectUrl: 'https://novaflix.app/payment-success',
-      isTestMode: true,
+      isTestMode: !AppConfig.isProduction,
       currency: 'NGN',
       paymentPlanId: selectedPlan.id,
     );

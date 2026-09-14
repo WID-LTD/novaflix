@@ -87,10 +87,18 @@ export default function SocialLoginButtons({
 }) {
   const [providers, setProviders] = useState<any[]>([])
 
+  // exclude is often an inline literal (new array identity per render) — serialize it
+  // to a stable key so the providers fetch doesn't run on every render.
+  const excludeKey = exclude.join(',')
+
   useEffect(() => {
-    const ex = new Set(exclude)
-    getSocialProviders().then((p) => setProviders(p.filter((x) => x.configured && !ex.has(x.id))))
-  }, [exclude])
+    const ex = new Set(excludeKey ? excludeKey.split(',') : [])
+    let cancelled = false
+    getSocialProviders().then((p) => {
+      if (!cancelled) setProviders(p.filter((x) => x.configured && !ex.has(x.id)))
+    })
+    return () => { cancelled = true }
+  }, [excludeKey])
 
   const handle = (provider: string) => {
     if (onStart) {

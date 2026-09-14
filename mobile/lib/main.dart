@@ -1,7 +1,8 @@
-import 'dart:io' show Platform;
+import 'dart:io' show Platform, File;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -16,6 +17,12 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Load .env file from the executable's directory
+  final executableDir = File(Platform.resolvedExecutable).parent;
+  final envFile = File('${executableDir.path}/.env');
+  await dotenv.load(fileName: envFile.path);
+  
   MediaKit.ensureInitialized();
 
   final isLinuxDesktop = Platform.isLinux && !kIsWeb;

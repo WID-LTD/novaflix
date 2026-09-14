@@ -7,6 +7,7 @@ class User {
   final String role;
   final String? plan;
   final String? token;
+  final String? phone;
 
   User({
     required this.id,
@@ -17,6 +18,7 @@ class User {
     required this.role,
     this.plan,
     this.token,
+    this.phone,
   });
 
   factory User.fromJson(Map<String, dynamic> json, {String? token}) {
@@ -29,6 +31,7 @@ class User {
       role: json['role'] as String? ?? 'user',
       plan: json['plan'] as String? ?? 'free',
       token: token ?? json['token'] as String?,
+      phone: json['phone'] as String?,
     );
   }
 
@@ -40,6 +43,7 @@ class User {
     'bio': bio,
     'role': role,
     'plan': plan,
+    'phone': phone,
   };
 
   bool get isCreator => role == 'creator';

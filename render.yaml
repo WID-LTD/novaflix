@@ -30,6 +30,8 @@ services:
         sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
+      - key: SOCIAL_OAUTH_REDIRECT_BASE
+        value: https://novaflix-ecz9.onrender.com
       - key: APP_URL
         value: https://novaflix-web.vercel.app
       - key: PAYSTACK_CALLBACK_URL
