@@ -109,6 +109,7 @@ export default {
         'pricing-popular-hover': '0 25px 55px rgba(0,0,0,0.5), 0 0 35px rgba(255,7,24,0.14)',
       },
       backgroundImage: {
+        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
         'pricing-card': 'linear-gradient(145deg, #252525, #1c1c1c)',
         'pricing-card-popular': 'linear-gradient(145deg, #2a2a2a, #202020)',
         'pricing-body': 'radial-gradient(circle at 50% 0%, rgba(255,7,24,0.10), transparent 35%)',

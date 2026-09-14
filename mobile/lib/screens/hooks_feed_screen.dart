@@ -1,12 +1,15 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 import '../theme/app_colors.dart';
 import '../services/api_service.dart';
+import '../services/ws_service.dart';
 import '../core/responsive.dart';
 import '../widgets/ui/index.dart';
 import '../providers/auth_provider.dart';
@@ -31,6 +34,12 @@ class _HooksFeedScreenState extends ConsumerState<HooksFeedScreen> {
   Timer? _refreshTimer;
   List<Map<String, dynamic>>? _liveItems;
 
+  WebSocketChannel? _ws;
+  StreamSubscription? _wsSub;
+  Timer? _wsReconnectTimer;
+  int _wsAttempts = 0;
+  final _liveShortCtrl = StreamController<Map<String, dynamic>>.broadcast();
+
   static const _countKeys = [
     'likes',
     'likesCount',
@@ -48,13 +57,136 @@ class _HooksFeedScreenState extends ConsumerState<HooksFeedScreen> {
     _refreshTimer = Timer.periodic(const Duration(seconds: 45), (_) {
       if (mounted) _refreshCounts();
     });
+    _connectWs();
   }
 
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _wsSub?.cancel();
+    _wsReconnectTimer?.cancel();
+    try {
+      _ws?.sink.close();
+    } catch (_) {}
+    _liveShortCtrl.close();
     _pageController.dispose();
     super.dispose();
+  }
+
+  Future<void> _connectWs() async {
+    _wsReconnectTimer?.cancel();
+    try {
+      final ch = await WsService.connect('/ws');
+      if (!mounted) {
+        try {
+          ch.sink.close();
+        } catch (_) {}
+        return;
+      }
+      _ws = ch;
+      _wsAttempts = 0;
+      _wsSub?.cancel();
+      _wsSub = ch.stream.listen((raw) {
+        try {
+          final data = jsonDecode(raw is String ? raw : raw.toString());
+          if (data is! Map) return;
+          final type = data['type']?.toString();
+
+          if (type == 'shorts:comment') {
+            final commentRaw = data['comment'];
+            final comment = commentRaw is Map
+                ? Map<String, dynamic>.from(commentRaw)
+                : <String, dynamic>{};
+            final shortId = data['shortId']?.toString() ??
+                comment['short_id']?.toString();
+            if (shortId == null || !mounted) return;
+            setState(() {
+              _liveItems = _liveItems == null
+                  ? null
+                  : _liveItems!
+                      .map(_bumpCommentCount(shortId))
+                      .toList();
+            });
+            _liveShortCtrl.add({'shortId': shortId, 'comment': comment});
+            return;
+          }
+
+          final shortId = data['shortId']?.toString();
+          if (shortId == null || !mounted) return;
+          if (type == 'shorts:like') {
+            final likes = data['likes'];
+            setState(() {
+              _liveItems = _syncCount(shortId, 'likes', likes);
+              if (likes != null) {
+                _liveItems = _syncCount(shortId, 'likesCount', likes);
+              }
+            });
+          } else if (type == 'shorts:bookmark') {
+            final bookmarks = data['bookmarks'];
+            setState(() {
+              _liveItems = _syncCount(shortId, 'bookmarks', bookmarks);
+              if (bookmarks != null) {
+                _liveItems = _syncCount(shortId, 'bookmarksCount', bookmarks);
+              }
+            });
+          } else if (type == 'shorts:view') {
+            final views = data['views'];
+            setState(() {
+              _liveItems = _syncCount(shortId, 'views', views);
+            });
+          } else if (type == 'shorts:share') {
+            final shares = data['shares'];
+            setState(() {
+              _liveItems = _syncCount(shortId, 'shares', shares);
+            });
+          }
+        } catch (_) {}
+      }, onDone: _scheduleReconnect, onError: (_) => _scheduleReconnect());
+    } catch (_) {
+      _scheduleReconnect();
+    }
+  }
+
+  Map<String, dynamic> Function(Map<String, dynamic>) _bumpCommentCount(
+      String shortId) {
+    return (item) {
+      final id = item['shortId']?.toString();
+      if (id != shortId) return item;
+      final next = Map<String, dynamic>.from(item);
+      if (next['comments'] is num) {
+        next['comments'] = (next['comments'] as num) + 1;
+      }
+      if (next['commentsCount'] is num) {
+        next['commentsCount'] = (next['commentsCount'] as num) + 1;
+      }
+      return next;
+    };
+  }
+
+  List<Map<String, dynamic>>? _syncCount(
+      String shortId, String key, dynamic value) {
+    final items = _liveItems;
+    if (items == null || value == null) return items;
+    return items.map((item) {
+      final id = item['shortId']?.toString();
+      if (id != shortId) return item;
+      return {...item, key: value};
+    }).toList();
+  }
+
+  void _scheduleReconnect() {
+    if (!mounted) return;
+    _wsSub?.cancel();
+    _wsSub = null;
+    try {
+      _ws?.sink.close();
+    } catch (_) {}
+    _ws = null;
+    if (_wsAttempts > 10) return;
+    final delayMs = (1000 * (1 << _wsAttempts)).clamp(1000, 10000);
+    _wsAttempts++;
+    _wsReconnectTimer =
+        Timer(Duration(milliseconds: delayMs), () => _connectWs());
   }
 
   Future<void> _refreshCounts() async {
@@ -166,6 +298,7 @@ class _HooksFeedScreenState extends ConsumerState<HooksFeedScreen> {
             itemBuilder: (_, i) => _HookCard(
               hook: items[i],
               active: i == _activeIndex,
+              liveShortCtrl: _liveShortCtrl,
             ),
           ),
           Positioned(
@@ -286,8 +419,9 @@ class _HooksFeedScreenState extends ConsumerState<HooksFeedScreen> {
 class _HookCard extends ConsumerStatefulWidget {
   final Map<String, dynamic> hook;
   final bool active;
+  final StreamController<Map<String, dynamic>> liveShortCtrl;
 
-  const _HookCard({required this.hook, required this.active});
+  const _HookCard({required this.hook, required this.active, required this.liveShortCtrl});
 
   @override
   ConsumerState<_HookCard> createState() => _HookCardState();
@@ -305,7 +439,7 @@ class _HookCardState extends ConsumerState<_HookCard> {
   late bool _liked;
   late bool _bookmarked;
 
-  int get _shortId => _num(widget.hook['shortId']);
+  String get _shortId => widget.hook['shortId']?.toString() ?? '';
 
   String get _type => widget.hook['type']?.toString() ?? '';
   bool get _isShort => _type == 'short';
@@ -378,7 +512,7 @@ class _HookCardState extends ConsumerState<_HookCard> {
 
   Future<void> _recordView() async {
     final id = _shortId;
-    if (id <= 0) return;
+    if (id.isEmpty) return;
     try {
       await ref.read(apiServiceProvider).recordShortView(id);
     } catch (_) {}
@@ -386,7 +520,7 @@ class _HookCardState extends ConsumerState<_HookCard> {
 
   Future<void> _toggleLike() async {
     final id = _shortId;
-    if (id <= 0) return;
+    if (id.isEmpty) return;
     setState(() {
       _liked = !_liked;
       _likes += _liked ? 1 : -1;
@@ -405,7 +539,7 @@ class _HookCardState extends ConsumerState<_HookCard> {
 
   Future<void> _toggleBookmark() async {
     final id = _shortId;
-    if (id <= 0) return;
+    if (id.isEmpty) return;
     setState(() {
       _bookmarked = !_bookmarked;
       _bookmarks += _bookmarked ? 1 : -1;
@@ -425,7 +559,7 @@ class _HookCardState extends ConsumerState<_HookCard> {
   Future<void> _share() async {
     final id = _shortId;
     setState(() => _shares++);
-    if (id <= 0) return;
+    if (id.isEmpty) return;
     try {
       await ref.read(apiServiceProvider).shareShort(id);
     } catch (_) {}
@@ -433,11 +567,15 @@ class _HookCardState extends ConsumerState<_HookCard> {
 
   void _openComments() {
     final id = _shortId;
+    if (id.isEmpty) return;
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.surfaceContainerHigh,
       isScrollControlled: true,
-      builder: (_) => _CommentsSheet(shortId: id),
+      builder: (_) => _CommentsSheet(
+        shortId: id,
+        liveStream: widget.liveShortCtrl.stream,
+      ),
     );
   }
 
@@ -647,8 +785,9 @@ class _HookCardState extends ConsumerState<_HookCard> {
 }
 
 class _CommentsSheet extends ConsumerStatefulWidget {
-  final int shortId;
-  const _CommentsSheet({required this.shortId});
+  final String shortId;
+  final Stream<Map<String, dynamic>>? liveStream;
+  const _CommentsSheet({required this.shortId, this.liveStream});
 
   @override
   ConsumerState<_CommentsSheet> createState() => _CommentsSheetState();
@@ -659,15 +798,35 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
   List<Map<String, dynamic>> _comments = [];
   bool _loading = true;
   String? _error;
+  StreamSubscription? _liveSub;
 
   @override
   void initState() {
     super.initState();
     _load();
+    final stream = widget.liveStream;
+    if (stream != null) {
+      _liveSub = stream.listen((e) {
+        final shortId = e['shortId']?.toString();
+        if (shortId != widget.shortId) return;
+        final comment = e['comment'];
+        if (comment is! Map || comment.isEmpty) return;
+        if (!mounted) return;
+        final c = Map<String, dynamic>.from(comment);
+        final id = c['id']?.toString();
+        setState(() {
+          if (id != null && _comments.any((x) => x['id']?.toString() == id)) {
+            return;
+          }
+          _comments.insert(0, c);
+        });
+      });
+    }
   }
 
   @override
   void dispose() {
+    _liveSub?.cancel();
     _textCtl.dispose();
     super.dispose();
   }
@@ -713,6 +872,23 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
     } catch (_) {
       _load();
     }
+  }
+
+  Widget? _avatar(Map<String, dynamic> c) {
+    final url =
+        c['user_avatar']?.toString() ?? c['userAvatar']?.toString() ?? '';
+    if (url.isEmpty) return null;
+    const fallback = _CircleIcon(icon: Icons.person, size: 40);
+    return ClipOval(
+      child: CachedNetworkImage(
+        imageUrl: url,
+        width: 40,
+        height: 40,
+        fit: BoxFit.cover,
+        placeholder: (_, _) => fallback,
+        errorWidget: (_, _, _) => fallback,
+      ),
+    );
   }
 
   @override
@@ -769,7 +945,8 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
                               itemBuilder: (_, i) {
                                 final c = _comments[i];
                                 return ListTile(
-                                  leading: const _CircleIcon(icon: Icons.person, size: 40),
+                                  leading: _avatar(c) ??
+                                      const _CircleIcon(icon: Icons.person, size: 40),
                                   title: Text(
                                     c['user_name']?.toString() ??
                                         c['creatorName']?.toString() ??

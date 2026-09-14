@@ -40,6 +40,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS twitter_id VARCHAR(255) UNIQUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS youtube_id VARCHAR(255) UNIQUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS twitch_id VARCHAR(255) UNIQUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_id VARCHAR(255) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS apple_id VARCHAR(255) UNIQUE;
 
 CREATE TABLE IF NOT EXISTS creator_profiles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -142,6 +143,48 @@ CREATE TABLE IF NOT EXISTS short_comments (
   text TEXT NOT NULL,
   created_at TIMESTAMP DEFAULT NOW()
 );
+
+ALTER TABLE shorts ADD COLUMN IF NOT EXISTS video_key TEXT DEFAULT '';
+ALTER TABLE shorts ADD COLUMN IF NOT EXISTS thumbnail_key TEXT DEFAULT '';
+
+-- Per-user view dedupe (signed-in viewers count once per short)
+CREATE TABLE IF NOT EXISTS short_views (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  short_id UUID NOT NULL REFERENCES shorts(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  viewer_ip VARCHAR(45) DEFAULT '',
+  created_at TIMESTAMP DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_short_views_user ON short_views (short_id, user_id) WHERE user_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_short_views_created ON short_views (created_at DESC);
+
+-- Share dedupe (a user's share counts once per short)
+CREATE TABLE IF NOT EXISTS short_shares (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  short_id UUID NOT NULL REFERENCES shorts(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE (short_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_shorts_user ON shorts (user_id);
+CREATE INDEX IF NOT EXISTS idx_shorts_feed ON shorts (created_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_short_comments_short ON short_comments (short_id, created_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_short_likes_user ON short_likes (user_id, short_id);
+CREATE INDEX IF NOT EXISTS idx_short_bookmarks_user ON short_bookmarks (user_id, short_id);
+
+-- Live replay ingestion (onLiveStreamEnd) stores origin metadata
+ALTER TABLE shorts ADD COLUMN IF NOT EXISTS source_type VARCHAR(20) DEFAULT 'user';
+ALTER TABLE shorts ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT NULL;
+
+-- DB-backed distributed rate limiting (mirrors migrations/007_production_auth.sql)
+CREATE TABLE IF NOT EXISTS rate_limit_log (
+  id SERIAL PRIMARY KEY,
+  identifier VARCHAR(255) NOT NULL,
+  action VARCHAR(50) NOT NULL,
+  attempted_at TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_rate_limit_identifier ON rate_limit_log (identifier, action, attempted_at);
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS follower_count BIGINT DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS following_count BIGINT DEFAULT 0;
@@ -1277,3 +1320,22 @@ ALTER TABLE creator_ppm_config ADD COLUMN IF NOT EXISTS minimum_payout NUMERIC(1
 ALTER TABLE creator_ppm_config ADD COLUMN IF NOT EXISTS auto_settle BOOLEAN NOT NULL DEFAULT TRUE;
 -- Unified PPM payout rate (admin-set, single source of truth for payouts)
 ALTER TABLE creator_ppm_config ADD COLUMN IF NOT EXISTS base_rate NUMERIC(12,5) DEFAULT 10.00;
+
+-- ============================================================================
+-- TMDB link graph: which creator is credited on which TMDB movie/TV title.
+-- Written by tmdbSyncService (SYNC CREDITS), read by claimController (film
+-- count estimates) and watchService (creator attribution for content).
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS scraped_content_links (
+  id BIGSERIAL PRIMARY KEY,
+  tmdb_id INTEGER NOT NULL,
+  media_type TEXT NOT NULL CHECK (media_type IN ('movie', 'tv')),
+  creator_tmdb_person_id INTEGER NOT NULL,
+  role TEXT,
+  credit_order INTEGER NOT NULL DEFAULT 999,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (tmdb_id, media_type, creator_tmdb_person_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_scl_creator ON scraped_content_links (creator_tmdb_person_id);
+CREATE INDEX IF NOT EXISTS idx_scl_tmdb ON scraped_content_links (tmdb_id, media_type);

@@ -253,8 +253,8 @@ export default function Forum() {
           setReplies(prev => prev.some(r => r.id === msg.reply.id)
             ? prev
             : [...prev, { ...msg.reply, myVote: msg.reply.myVote ?? 0 }])
-          setTopic(t => t && t.id === msg.topicId ? { ...t, reply_count: (t.reply_count || 0) + 1 } : t)
-          setTopics(prev => prev.map(x => x.id === msg.topicId ? { ...x, reply_count: (x.reply_count || 0) + 1 } : x))
+          setTopic(t => t && t.id === msg.topicId ? { ...t, reply_count: Number(t.reply_count || 0) + 1 } : t)
+          setTopics(prev => prev.map(x => x.id === msg.topicId ? { ...x, reply_count: Number(x.reply_count || 0) + 1 } : x))
         } else if (msg.type === 'forum-topic-created' && msg.topic?.id) {
           setTopics(prev => (prev.some(t => t.id === msg.topic.id) ? prev : [msg.topic, ...prev]))
         }

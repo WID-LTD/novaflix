@@ -3,7 +3,15 @@ import { addShort, getShortsFeed, getShortsCount, getShortById, incrementShortVi
 import { uploadFile, deleteFile } from '../lib/r2.js'
 import { broadcastFeed } from '../services/realtime.js'
 
+const ALLOWED_VIDEO_EXT = new Set(['mp4', 'mov', 'webm', 'm4v'])
+const ALLOWED_IMAGE_EXT = new Set(['jpg', 'jpeg', 'png', 'webp'])
+const MAX_DURATION_SECONDS = 300
+const MAX_COMMENT_LENGTH = 600
+
+const safeExt = (name = '') => (name.split('.').pop() || '').toLowerCase()
+
 export async function createShort(req, res) {
+  let uploadedKeys = []
   try {
     const { title, description, durationSeconds } = req.body
     if (!title) return res.status(400).json({ error: 'Title required' })
@@ -11,18 +19,34 @@ export async function createShort(req, res) {
     const videoFile = req.files?.video?.[0]
     if (!videoFile) return res.status(400).json({ error: 'Video file required' })
 
-    const ext = videoFile.originalname.split('.').pop() || 'mp4'
+    const ext = safeExt(videoFile.originalname)
+    if (!ALLOWED_VIDEO_EXT.has(ext)) {
+      return res.status(400).json({ error: `Unsupported video type .${ext}` })
+    }
+    const duration = parseInt(durationSeconds, 10)
+    if (!duration || duration < 1 || duration > MAX_DURATION_SECONDS) {
+      return res.status(400).json({ error: `durationSeconds must be between 1 and ${MAX_DURATION_SECONDS}` })
+    }
+
     const id = uuidv4()
     const videoKey = `shorts/${req.userId}/${id}.${ext}`
     const result = await uploadFile({ buffer: videoFile.buffer, key: videoKey, contentType: videoFile.mimetype })
     if (!result.success) return res.status(500).json({ error: 'Video upload failed' })
+    uploadedKeys.push(videoKey)
 
     let thumbnailUrl = ''
+    let thumbnailKey = ''
     const thumbFile = req.files?.thumbnail?.[0]
     if (thumbFile) {
-      const thumbKey = `shorts/${req.userId}/${id}-thumb.jpg`
-      const tRes = await uploadFile({ buffer: thumbFile.buffer, key: thumbKey, contentType: thumbFile.mimetype })
-      if (tRes.success) thumbnailUrl = tRes.url
+      const thumbExt = safeExt(thumbFile.originalname)
+      if (ALLOWED_IMAGE_EXT.has(thumbExt)) {
+        thumbnailKey = `shorts/${req.userId}/${id}-thumb.${thumbExt}`
+        const tRes = await uploadFile({ buffer: thumbFile.buffer, key: thumbnailKey, contentType: thumbFile.mimetype })
+        if (tRes.success) {
+          thumbnailUrl = tRes.url
+          uploadedKeys.push(thumbnailKey)
+        }
+      }
     }
 
     const short = {
@@ -32,12 +56,21 @@ export async function createShort(req, res) {
       description: description || '',
       videoUrl: result.url,
       thumbnailUrl,
-      durationSeconds: parseInt(durationSeconds) || 0,
+      durationSeconds: duration,
       status: 'active',
+      videoKey,
+      thumbnailKey,
     }
     const created = await addShort(short)
+    broadcastFeed({
+      type: 'shorts:new',
+      short: { ...created, creator_name: req.user?.name || null, creator_avatar: req.user?.avatar || null },
+    })
     res.json({ success: true, short: created })
   } catch (err) {
+    for (const key of uploadedKeys) {
+      try { await deleteFile(key) } catch {}
+    }
     res.status(500).json({ error: err.message })
   }
 }
@@ -67,13 +100,13 @@ export async function getShort(req, res) {
 
 export async function recordShortView(req, res) {
   try {
-    const updated = await incrementShortViews(req.params.id)
+    const updated = await incrementShortViews(req.params.id, req.userId || null)
     if (!updated) return res.status(404).json({ error: 'Short not found' })
     broadcastFeed({ type: 'shorts:view', shortId: req.params.id, views: updated.views })
-    if (updated.user_id) {
+    if (updated.user_id && !updated.alreadyViewed) {
       broadcastFeed({ type: 'view', contentType: 'creator', contentId: updated.user_id })
     }
-    res.json({ success: true, views: updated.views })
+    res.json({ success: true, views: updated.views, alreadyViewed: updated.alreadyViewed })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -81,6 +114,7 @@ export async function recordShortView(req, res) {
 
 export async function likeShort(req, res) {
   try {
+    if (!(await getShortById(req.params.id))) return res.status(404).json({ error: 'Short not found' })
     const result = await toggleShortLike(req.params.id, req.userId)
     broadcastFeed({ type: 'shorts:like', shortId: req.params.id, likes: result.likes })
     if (result.creator_id) {
@@ -94,6 +128,7 @@ export async function likeShort(req, res) {
 
 export async function bookmarkShort(req, res) {
   try {
+    if (!(await getShortById(req.params.id))) return res.status(404).json({ error: 'Short not found' })
     const result = await toggleShortBookmark(req.params.id, req.userId)
     broadcastFeed({ type: 'shorts:bookmark', shortId: req.params.id, bookmarks: result.bookmarks })
     res.json({ success: true, ...result })
@@ -104,8 +139,8 @@ export async function bookmarkShort(req, res) {
 
 export async function shareShort(req, res) {
   try {
-    const result = await incrementShortShares(req.params.id)
-    if (!result) return res.status(404).json({ error: 'Short not found' })
+    if (!(await getShortById(req.params.id))) return res.status(404).json({ error: 'Short not found' })
+    const result = await incrementShortShares(req.params.id, req.userId || null)
     broadcastFeed({ type: 'shorts:share', shortId: req.params.id, shares: result.shares })
     res.json({ success: true, ...result })
   } catch (err) {
@@ -115,8 +150,8 @@ export async function shareShort(req, res) {
 
 export async function listShortComments(req, res) {
   try {
-    const comments = await getShortComments(req.params.id)
-    res.json({ success: true, comments })
+    const { comments, total } = await getShortComments(req.params.id, req.query.page, req.query.limit)
+    res.json({ success: true, comments, total })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -126,6 +161,9 @@ export async function createShortComment(req, res) {
   try {
     const text = (req.body.text || '').trim()
     if (!text) return res.status(400).json({ error: 'Comment text required' })
+    if (text.length > MAX_COMMENT_LENGTH) {
+      return res.status(400).json({ error: `Comment exceeds ${MAX_COMMENT_LENGTH} characters` })
+    }
     const comment = await addShortComment(req.params.id, req.userId, text)
     if (!comment) return res.status(404).json({ error: 'Short not found' })
     broadcastFeed({ type: 'shorts:comment', shortId: req.params.id, comment })
@@ -142,11 +180,13 @@ export async function removeShort(req, res) {
     if (short.user_id !== req.userId && req.user?.role !== 'admin') {
       return res.status(403).json({ error: 'Not authorized' })
     }
-    const key = short.video_url?.split('/').slice(-2).join('/')
-    if (key && short.video_url.includes('shorts/')) {
-      deleteFile(`shorts/${key}`).catch(() => {})
+    const keys = [short.video_key, short.thumbnail_key].filter(Boolean)
+    if (!short.video_key && short.video_url?.includes('shorts/')) {
+      const parts = short.video_url.split('/').slice(-2).join('/')
+      if (parts) keys.push(`shorts/${parts}`)
     }
     await deleteShort(short.id)
+    await Promise.allSettled(keys.filter(Boolean).map((key) => deleteFile(key)))
     res.json({ success: true })
   } catch (err) {
     res.status(500).json({ error: err.message })

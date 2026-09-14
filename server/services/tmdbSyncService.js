@@ -140,12 +140,12 @@ export class TMDBService {
           [Array.from(castNames.keys())]
         );
 
-        for (const linked of linked) {
+        for (const edge of linked) {
           await pool.query(
             `INSERT INTO artist_graph (person_a_id, person_b_id, movie_id, movie_title, role_a, role_b)
              VALUES ($1, $2, $3, $4, $5, $6)
              ON CONFLICT (person_a_id, person_b_id, movie_id) DO UPDATE SET weight = artist_graph.weight + 1`,
-            [userId, linked.user_id, String(movieId), 'Movie', 'Actor', 'Actor']
+            [userId, edge.user_id, String(movieId), 'Movie', 'Actor', 'Actor']
           );
         }
       } catch (err) {

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { getHooksFeed } from '../lib/api'
 import { uploadShort, getShortComments, postShortComment, getToken, getComments, postComment } from '../lib/auth'
 import { WS_ORIGIN } from '../lib/config'
@@ -12,10 +13,13 @@ import type { HookItem, ShortComment } from '../types'
 export default function HooksFeed() {
   const containerRef = useRef<HTMLDivElement>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
-  const { isCreator } = useAuth()
+  const pageFetchingRef = useRef(false)
+  const { isCreator, user } = useAuth()
+  const [searchParams] = useSearchParams()
   const [items, setItems] = useState<HookItem[]>([])
   const [activeIndex, setActiveIndex] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [feedError, setFeedError] = useState('')
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(true)
   const [uploadOpen, setUploadOpen] = useState(false)
@@ -26,96 +30,194 @@ export default function HooksFeed() {
   const [uploadError, setUploadError] = useState('')
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [activeComments, setActiveComments] = useState<ShortComment[]>([])
+  const [commentsTotal, setCommentsTotal] = useState(0)
 
   const fetchPage = useCallback(async (pageNum: number) => {
-    const res = await getHooksFeed(pageNum)
-    if (res.success) {
-      setItems(prev => pageNum === 1 ? res.data : [...prev, ...res.data])
-      setHasMore(!!res.nextPage)
+    if (pageFetchingRef.current) return
+    pageFetchingRef.current = true
+    setLoading(true)
+    try {
+      const res = await getHooksFeed(pageNum)
+      if (res.success) {
+        setItems(prev => pageNum === 1 ? res.data : [...prev, ...res.data])
+        setHasMore(!!res.nextPage)
+        setFeedError('')
+      } else {
+        setFeedError(res.error || 'Could not load the feed')
+      }
+    } catch {
+      setFeedError('Could not load the feed. Check your connection.')
+    } finally {
+      pageFetchingRef.current = false
+      setLoading(false)
     }
-    setLoading(false)
   }, [])
 
   useEffect(() => {
     fetchPage(1)
   }, [fetchPage])
 
+  // Deep link: /hooks?short=<id> — scroll to and open comments for that short
+  useEffect(() => {
+    if (!items.length) return
+    const shortParam = searchParams.get('short')
+    if (!shortParam) return
+    const idx = items.findIndex(it => it.shortId === shortParam)
+    if (idx < 0) return
+    const t = setTimeout(() => {
+      containerRef.current?.querySelector(`[data-index="${idx}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      setActiveIndex(idx)
+    }, 400)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, searchParams])
+
   const activeIndexRef = useRef(0)
   useEffect(() => { activeIndexRef.current = activeIndex }, [activeIndex])
   const itemsRef = useRef<HookItem[]>([])
   useEffect(() => { itemsRef.current = items }, [items])
+  const commentsRef = useRef<ShortComment[]>([])
+  useEffect(() => { commentsRef.current = activeComments }, [activeComments])
 
-  // Realtime shorts events over WebSocket — push like/comment/share/view updates into the feed
+  // Realtime shorts events over WebSocket — push like/comment/share/view/new updates into the feed.
+  // Reconnects with exponential backoff and re-arms when the auth token changes (rotation/logout).
   useEffect(() => {
-    const token = getToken()
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = WS_ORIGIN ? new URL(WS_ORIGIN).host : window.location.host
-    const ws = new WebSocket(`${protocol}//${host}/ws?token=${encodeURIComponent(token || '')}`)
-    ws.onmessage = (ev) => {
-      try {
-        const data = JSON.parse(ev.data)
-        const shortId = data?.shortId
-        if (!shortId) return
-        if (data?.type === 'shorts:like') {
-          setItems(prev => prev.map(it => it.shortId === shortId ? { ...it, likesCount: data.likes, likes: data.likes } : it))
-        } else if (data?.type === 'shorts:comment') {
-          setItems(prev => prev.map(it => it.shortId === shortId ? { ...it, commentsCount: (Number(it.commentsCount) || 0) + 1 } : it))
-          const activeShort = itemsRef.current[activeIndexRef.current]?.shortId
-          if (data.comment?.short_id === activeShort) {
-            setActiveComments(prev => {
-              if (prev.some(c => c.id === data.comment.id)) return prev
-              return [{
-                id: data.comment.id,
-                userName: data.comment.user_name || 'Anonymous',
-                userAvatar: data.comment.user_avatar || null,
-                text: data.comment.text,
-                createdAt: data.comment.created_at,
-              }, ...prev]
-            })
+    let ws: WebSocket | null = null
+    let closed = false
+    let attempt = 0
+    let backoffTimer: ReturnType<typeof setTimeout> | null = null
+    let authTimer: ReturnType<typeof setInterval> | null = null
+    let currentToken = getToken() || ''
+
+    const connect = () => {
+      const token = getToken()
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const host = WS_ORIGIN ? new URL(WS_ORIGIN).host : window.location.host
+      ws = new WebSocket(`${protocol}//${host}/ws?token=${encodeURIComponent(token || '')}`)
+
+      ws.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(ev.data)
+
+          if (data?.type === 'shorts:new' && data?.short) {
+            const s = data.short
+            const existing = itemsRef.current
+            if (existing.some(it => it.shortId === s.id)) return
+            const hookItem: HookItem = {
+              id: `short-${s.id}`,
+              videoUrl: s.video_url,
+              poster: s.thumbnail_url || null,
+              title: s.title,
+              year: '',
+              type: 'short',
+              promoted: false,
+              shortId: s.id,
+              creatorName: s.creator_name,
+              creatorAvatar: s.creator_avatar || null,
+              description: s.description,
+              views: s.views,
+              likes: s.likes,
+            }
+            setItems(prev => [hookItem, ...prev])
+            return
           }
-        } else if (data?.type === 'shorts:share') {
-          setItems(prev => prev.map(it => it.shortId === shortId ? { ...it, shares: data.shares } : it))
-        } else if (data?.type === 'shorts:bookmark') {
-          setItems(prev => prev.map(it => it.shortId === shortId ? { ...it, bookmarksCount: data.bookmarks } : it))
-        } else if (data?.type === 'shorts:view') {
-          setItems(prev => prev.map(it => it.shortId === shortId ? { ...it, views: data.views } : it))
-        } else if (data?.type === 'like' && data?.contentId) {
-          // Generic (TMDB trailer) like broadcast
-          const cid = String(data.contentId)
-          const ctype = data.contentType === 'tv' ? 'tv' : 'movie'
-          setItems(prev => prev.map(it => (
-            it.type !== 'short' && it.mediaId && String(it.mediaId) === cid && (it.mediaType ?? 'movie') === ctype
-              ? { ...it, likesCount: Number(data.count) || 0 }
-              : it
-          )))
-        } else if (data?.type === 'comment' && data?.contentId && data?.comment) {
-          // Generic (TMDB trailer) comment broadcast
-          const cid = String(data.contentId)
-          const ctype = data.contentType === 'tv' ? 'tv' : 'movie'
-          setItems(prev => prev.map(it => (
-            it.type !== 'short' && it.mediaId && String(it.mediaId) === cid && (it.mediaType ?? 'movie') === ctype
-              ? { ...it, commentsCount: (Number(it.commentsCount) || 0) + 1 }
-              : it
-          )))
-          const activeItem = itemsRef.current[activeIndexRef.current]
-          if (activeItem?.type !== 'short' && activeItem?.mediaId && String(activeItem.mediaId) === cid) {
-            setActiveComments(prev => {
-              if (prev.some(c => c.id === data.comment.id)) return prev
-              return [{
-                id: data.comment.id,
-                userName: data.comment.user_name || 'Anonymous',
-                userAvatar: data.comment.user_avatar || null,
-                text: data.comment.text ?? '',
-                createdAt: data.comment.created_at,
-              }, ...prev]
-            })
+
+          const shortId = data?.shortId
+          if (!shortId) return
+          if (data?.type === 'shorts:like') {
+            setItems(prev => prev.map(it => it.shortId === shortId ? { ...it, likesCount: data.likes, likes: data.likes } : it))
+          } else if (data?.type === 'shorts:comment') {
+            setItems(prev => prev.map(it => it.shortId === shortId ? { ...it, commentsCount: (Number(it.commentsCount) || 0) + 1 } : it))
+            const activeShort = itemsRef.current[activeIndexRef.current]?.shortId
+            if (data.comment?.short_id === activeShort) {
+              if (data.comment.id && commentsRef.current.some(c => c.id === data.comment.id)) return
+              setCommentsTotal(prev => prev + 1)
+              setActiveComments(prev => {
+                if (prev.some(c => c.id === data.comment.id)) return prev
+                return [{
+                  id: data.comment.id,
+                  userName: data.comment.user_name || 'Anonymous',
+                  userAvatar: data.comment.user_avatar || null,
+                  text: data.comment.text,
+                  createdAt: data.comment.created_at,
+                }, ...prev]
+              })
+            }
+          } else if (data?.type === 'shorts:share') {
+            setItems(prev => prev.map(it => it.shortId === shortId ? { ...it, shares: data.shares } : it))
+          } else if (data?.type === 'shorts:bookmark') {
+            setItems(prev => prev.map(it => it.shortId === shortId ? { ...it, bookmarksCount: data.bookmarks } : it))
+          } else if (data?.type === 'shorts:view') {
+            setItems(prev => prev.map(it => it.shortId === shortId ? { ...it, views: data.views } : it))
+          } else if (data?.type === 'like' && data?.contentId) {
+            // Generic (TMDB trailer) like broadcast
+            const cid = String(data.contentId)
+            const ctype = data.contentType === 'tv' ? 'tv' : 'movie'
+            setItems(prev => prev.map(it => (
+              it.type !== 'short' && it.mediaId && String(it.mediaId) === cid && (it.mediaType ?? 'movie') === ctype
+                ? { ...it, likesCount: Number(data.count) || 0 }
+                : it
+            )))
+          } else if (data?.type === 'comment' && data?.contentId && data?.comment) {
+            // Generic (TMDB trailer) comment broadcast
+            const cid = String(data.contentId)
+            const ctype = data.contentType === 'tv' ? 'tv' : 'movie'
+            setItems(prev => prev.map(it => (
+              it.type !== 'short' && it.mediaId && String(it.mediaId) === cid && (it.mediaType ?? 'movie') === ctype
+                ? { ...it, commentsCount: (Number(it.commentsCount) || 0) + 1 }
+                : it
+            )))
+            const activeItem = itemsRef.current[activeIndexRef.current]
+            if (activeItem?.type !== 'short' && activeItem?.mediaId && String(activeItem.mediaId) === cid) {
+              if (data.comment.id && commentsRef.current.some(c => c.id === data.comment.id)) return
+              setCommentsTotal(prev => prev + 1)
+              setActiveComments(prev => {
+                if (prev.some(c => c.id === data.comment.id)) return prev
+                return [{
+                  id: data.comment.id,
+                  userName: data.comment.user_name || 'Anonymous',
+                  userAvatar: data.comment.user_avatar || null,
+                  text: data.comment.text ?? '',
+                  createdAt: data.comment.created_at,
+                }, ...prev]
+              })
+            }
           }
-        }
-      } catch { /* ignore malformed frames */ }
+        } catch { /* ignore malformed frames */ }
+      }
+
+      ws.onclose = () => {
+        if (closed) return
+        backoffTimer = setTimeout(() => {
+          attempt += 1
+          connect()
+        }, Math.min(1000 * 2 ** attempt, 10000))
+      }
+
+      ws.onerror = () => {
+        try { ws?.close() } catch { /* noop */ }
+      }
     }
-    return () => ws.close()
+
+    connect()
+
+    // Re-arm the socket when the auth token changes (e.g. rotation or logout).
+    authTimer = setInterval(() => {
+      const nowToken = getToken() || ''
+      if (nowToken !== currentToken) {
+        currentToken = nowToken
+        try { ws?.close() } catch { /* noop */ }
+      }
+    }, 15000)
+
+    return () => {
+      closed = true
+      if (backoffTimer) clearTimeout(backoffTimer)
+      if (authTimer) clearInterval(authTimer)
+      try { ws?.close() } catch { /* noop */ }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [user?.id])
 
   // IntersectionObserver to detect which card is most in view
   useEffect(() => {
@@ -143,11 +245,11 @@ export default function HooksFeed() {
   // Infinite scroll sentinel
   useEffect(() => {
     const sentinel = sentinelRef.current
-    if (!sentinel || !hasMore) return
+    if (!sentinel || !hasMore || feedError) return
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && !loading) {
+        if (entries[0].isIntersecting && !loading && !feedError && !pageFetchingRef.current) {
           setPage(prev => prev + 1)
           fetchPage(page + 1)
         }
@@ -157,23 +259,29 @@ export default function HooksFeed() {
 
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [hasMore, loading, page, fetchPage])
+  }, [hasMore, loading, page, fetchPage, feedError])
 
   const openComments = useCallback(async () => {
     const current = items[activeIndex]
     if (!current) return
     setCommentsOpen(true)
     setActiveComments([])
+    setCommentsTotal(0)
     if (current.shortId) {
       const res = await getShortComments(current.shortId)
       if (res.success && Array.isArray(res.comments)) {
-        setActiveComments(res.comments.map((c: any) => ({
+        const mapped = res.comments.map((c: any) => ({
           id: c.id,
           userName: c.user_name || 'Anonymous',
           userAvatar: c.user_avatar || null,
           text: c.text,
           createdAt: c.created_at,
-        })))
+        }))
+        setActiveComments(mapped)
+        const total = Number(res.total)
+        const safeTotal = Number.isFinite(total) ? total : mapped.length
+        setCommentsTotal(safeTotal)
+        setItems(prev => prev.map((it, idx) => idx === activeIndex ? { ...it, commentsCount: safeTotal } : it))
       }
     } else if (current.mediaId) {
       const contentType = current.mediaType === 'tv' ? 'tv' : 'movie'
@@ -189,8 +297,10 @@ export default function HooksFeed() {
             createdAt: c.created_at,
           }))
         setActiveComments(mapped)
-        const total = Number(res.total) || mapped.length
-        setItems(prev => prev.map((it, idx) => idx === activeIndex ? { ...it, commentsCount: total } : it))
+        const total = Number(res.total)
+        const safeTotal = Number.isFinite(total) && total >= mapped.length ? total : mapped.length
+        setCommentsTotal(safeTotal)
+        setItems(prev => prev.map((it, idx) => idx === activeIndex ? { ...it, commentsCount: safeTotal } : it))
       }
     }
   }, [items, activeIndex])
@@ -311,6 +421,31 @@ export default function HooksFeed() {
             </div>
           )}
 
+          {!loading && feedError && items.length === 0 && (
+            <div className="h-full w-full flex-shrink-0 snap-start bg-surface-container flex items-center justify-center px-8">
+              <div className="text-center">
+                <p className="text-sm text-on-surface-variant mb-4">{feedError}</p>
+                <button
+                  onClick={() => { setFeedError(''); setLoading(true); fetchPage(1) }}
+                  className="px-5 py-2.5 rounded-xl bg-primary-container text-on-primary-container font-semibold text-sm hover:brightness-110 active:scale-95 transition-all"
+                >
+                  Retry
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!loading && feedError && items.length > 0 && (
+            <div className="sticky top-0 z-40 flex justify-center pt-3">
+              <button
+                onClick={() => { setFeedError(''); setLoading(true); fetchPage(page) }}
+                className="px-4 py-2 rounded-full bg-black/60 backdrop-blur-md border border-white/15 text-xs text-white hover:bg-black/80 transition-colors"
+              >
+                {feedError} — Tap to retry
+              </button>
+            </div>
+          )}
+
           <div ref={sentinelRef} className="h-1" />
         </div>
 
@@ -318,17 +453,47 @@ export default function HooksFeed() {
         <ShortCommentsSheet
           open={commentsOpen}
           comments={activeComments}
-          count={activeComments.length}
+          count={commentsTotal}
           onClose={() => setCommentsOpen(false)}
           onSubmit={async (text) => {
             const current = items[activeIndex]
-            if (!current) return
-            if (current.shortId) {
-              // WS 'shorts:comment' echo (sent to us too) inserts the comment and bumps the count
-              await postShortComment(current.shortId, text)
-            } else if (current.mediaId) {
-              // WS 'comment' echo does the same for trailer cards
-              await postComment(String(current.mediaId), current.mediaType === 'tv' ? 'tv' : 'movie', text)
+            if (!current) return false
+            try {
+              if (current.shortId) {
+                const res = await postShortComment(current.shortId, text)
+                if (!res?.success || !res?.comment) return false
+                const c = res.comment
+                const mapped: ShortComment = {
+                  id: c.id,
+                  userName: c.user_name || 'Anonymous',
+                  userAvatar: c.user_avatar || null,
+                  text: c.text ?? '',
+                  createdAt: c.created_at,
+                }
+                // Server-authoritative insert — not dependent on the WS echo
+                setActiveComments(prev => prev.some(cc => cc.id === mapped.id) ? prev : [mapped, ...prev])
+                setCommentsTotal(prev => prev + 1)
+                setItems(prev => prev.map(it => it.shortId === current.shortId ? { ...it, commentsCount: (Number(it.commentsCount) || 0) + 1 } : it))
+                return true
+              }
+              if (current.mediaId) {
+                const res = await postComment(String(current.mediaId), current.mediaType === 'tv' ? 'tv' : 'movie', text)
+                if (!res?.success || !res?.comment) return false
+                const c = res.comment
+                const mapped: ShortComment = {
+                  id: c.id,
+                  userName: c.user_name || 'Anonymous',
+                  userAvatar: c.user_avatar || null,
+                  text: c.text ?? '',
+                  createdAt: c.created_at,
+                }
+                setActiveComments(prev => prev.some(cc => cc.id === mapped.id) ? prev : [mapped, ...prev])
+                setCommentsTotal(prev => prev + 1)
+                return true
+              }
+              return false
+            } catch {
+              return false
             }
           }}
         />

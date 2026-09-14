@@ -60,6 +60,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
   }
 
+  Future<void> _appleSignIn() async {
+    final redirect = Uri.encodeComponent('/home');
+    final url = '${AppConfig.apiBaseUrl}/auth/social/apple?redirect=$redirect';
+    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
@@ -227,7 +233,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 child: _socialButton(
                   icon: Icons.apple,
                   label: 'Apple',
-                  onTap: () {},
+                  onTap: _appleSignIn,
                 ),
               ),
             ],

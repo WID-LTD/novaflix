@@ -30,6 +30,14 @@ services:
         sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
+      - key: APPLE_CLIENT_ID
+        sync: false
+      - key: APPLE_TEAM_ID
+        sync: false
+      - key: APPLE_KEY_ID
+        sync: false
+      - key: APPLE_PRIVATE_KEY
+        sync: false
       - key: SOCIAL_OAUTH_REDIRECT_BASE
         value: https://novaflix-ecz9.onrender.com
       - key: APP_URL

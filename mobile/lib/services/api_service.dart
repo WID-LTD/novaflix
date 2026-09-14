@@ -310,19 +310,19 @@ class ApiService {
         },
       );
 
-  Future<Response> getShort(int id) => get('/shorts/$id');
+  Future<Response> getShort(String id) => get('/shorts/$id');
 
-  Future<Response> recordShortView(int id) => post('/shorts/$id/view');
+  Future<Response> recordShortView(String id) => post('/shorts/$id/view');
 
-  Future<Response> likeShort(int id) => post('/shorts/$id/like');
+  Future<Response> likeShort(String id) => post('/shorts/$id/like');
 
-  Future<Response> bookmarkShort(int id) => post('/shorts/$id/bookmark');
+  Future<Response> bookmarkShort(String id) => post('/shorts/$id/bookmark');
 
-  Future<Response> shareShort(int id) => post('/shorts/$id/share');
+  Future<Response> shareShort(String id) => post('/shorts/$id/share');
 
-  Future<Response> getShortComments(int id) => get('/shorts/$id/comments');
+  Future<Response> getShortComments(String id) => get('/shorts/$id/comments');
 
-  Future<Response> createShortComment(int id, String text) =>
+  Future<Response> createShortComment(String id, String text) =>
       post('/shorts/$id/comment', data: {'text': text});
 
   Future<Response> toggleLike(

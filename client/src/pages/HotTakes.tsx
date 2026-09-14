@@ -50,6 +50,14 @@ function fmt(n: number): string {
   return String(n)
 }
 
+const DEFAULT_STATS: Stats = { agree: 0, disagree: 0, total: 0, agreePct: 50, leadingSide: 'tied' }
+
+function saneStats<T extends { stats?: Stats | null; upvotes?: number; downvotes?: number }>(x: T): T & { stats: Stats } {
+  const s = x?.stats
+  const ok = !!s && typeof s.agree === 'number' && typeof s.disagree === 'number' && typeof s.agreePct === 'number'
+  return { ...x, stats: ok ? (s as Stats) : DEFAULT_STATS }
+}
+
 function timeAgo(iso: string): string {
   const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
   if (s < 60) return 'just now'
@@ -87,7 +95,7 @@ function StanceTag({ stance }: { stance: 'agree' | 'disagree' | null }) {
 }
 
 export default function HotTakes() {
-  const { user } = useAuth()
+  const { user, isCreator } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [takes, setTakes] = useState<Take[]>([])
@@ -130,7 +138,7 @@ export default function HotTakes() {
     setLoading(true)
     getHotTakes(s).then(r => {
       if (r.success) {
-        setTakes(r.topics)
+        setTakes((r.topics || []).map((t: Take) => saneStats(t)))
         const fromUrl = searchParams.get('take')
         const target = selectFirst
           ? (fromUrl && r.topics.find((t: Take) => t.id === fromUrl)) || r.topics[0] || null
@@ -152,8 +160,8 @@ export default function HotTakes() {
     getHotTake(activeId).then(r => {
       if (cancelled) return
       if (r.success) {
-        setActive(r.topic)
-        setComments(r.replies)
+        setActive(r.topic ? saneStats(r.topic) : null)
+        setComments(Array.isArray(r.replies) ? r.replies : [])
         if (r.topic.myVote !== 0) setMyStance(r.topic.myVote > 0 ? 'agree' : 'disagree')
       }
       setDetailLoading(false)
@@ -197,15 +205,19 @@ export default function HotTakes() {
       try {
         const data = JSON.parse(ev.data)
         if (data?.type === 'hot-take-vote' && data.topicId) {
+          const agree = Number(data.agree) || 0
+          const disagree = Number(data.disagree) || 0
+          const total = agree + disagree
           applyStats(data.topicId, {
-            agree: data.agree, disagree: data.disagree, total: data.total,
-            agreePct: data.agreePct, leadingSide: data.leadingSide,
+            agree, disagree, total,
+            agreePct: total ? Math.round((agree / total) * 100) : 50,
+            leadingSide: data.leadingSide || (agree > disagree ? 'agree' : disagree > agree ? 'disagree' : 'tied'),
           })
         } else if (data?.type === 'hot-take-created' && data.topic?.id) {
-          setTakes(prev => (prev.some(t => t.id === data.topic.id) ? prev : [data.topic, ...prev]))
+          setTakes(prev => (prev.some(t => t.id === data.topic.id) ? prev : [saneStats(data.topic), ...prev]))
         } else if (data?.type === 'topic-reply' && data.topicId === activeIdRef.current && data.reply) {
           setComments(prev => (prev.some(c => c.id === data.reply.id) ? prev : [...prev, data.reply]))
-          setTakes(prev => prev.map(t => (t.id === data.topicId ? { ...t, reply_count: (t.reply_count || 0) + 1 } : t)))
+          setTakes(prev => prev.map(t => (t.id === data.topicId ? { ...t, reply_count: Number(t.reply_count || 0) + 1 } : t)))
         }
       } catch {}
     }
@@ -274,7 +286,7 @@ export default function HotTakes() {
     const res = await createHotTake(movieTitle.trim(), headline.trim(), true)
     setCreating(false)
     if (res.success) {
-      setTakes(prev => (prev.some(t => t.id === res.topic.id) ? prev : [res.topic, ...prev]))
+      setTakes(prev => (prev.some(t => t.id === res.topic.id) ? prev : [saneStats(res.topic), ...prev]))
       setActiveId(res.topic.id)
       setShowModal(false)
       setMovieTitle(''); setHeadline(''); setNoSpoilers(false)
@@ -303,9 +315,11 @@ export default function HotTakes() {
               <button onClick={() => { setSort('hot'); loadTakes('hot', false) }} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${sort === 'hot' ? 'bg-red-600 text-white' : 'text-on-surface-variant hover:text-on-surface'}`}>🔥 Hot</button>
               <button onClick={() => { setSort('new'); loadTakes('new', false) }} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${sort === 'new' ? 'bg-red-600 text-white' : 'text-on-surface-variant hover:text-on-surface'}`}>New</button>
             </div>
-            <button onClick={() => setShowModal(true)} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-red-600 text-white font-label-md text-sm font-bold hover:bg-red-700 transition-all">
-              <Icon name="add" className="w-4 h-4" /> New Take
-            </button>
+            {isCreator && (
+              <button onClick={() => setShowModal(true)} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-red-600 text-white font-label-md text-sm font-bold hover:bg-red-700 transition-all">
+                <Icon name="add" className="w-4 h-4" /> New Take
+              </button>
+            )}
           </div>
         </div>
 

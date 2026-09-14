@@ -208,6 +208,24 @@ export default function Trivia() {
     })
   }, [])
 
+  const loadGuess = useCallback(() => {
+    setGuessPicked(null)
+    setGuessResult(null)
+    setGuessError(null)
+    setGuessDailyLimit(false)
+    getGuessMovie().then(r => {
+      if (r.success) {
+        setGuessQ(r.question)
+        if (typeof r.remaining === 'number') setGuessRemaining(r.remaining)
+        if (r.dailyLimitReached) setGuessDailyLimit(true)
+      } else if (r.alreadyPlayed) {
+        setGuessCompleted(true)
+        setGuessResult(r)
+        setGuessDailyLimit(true)
+      }
+    })
+  }, [])
+
   useEffect(() => {
     const tick = () => {
       const now = new Date()
@@ -289,11 +307,6 @@ export default function Trivia() {
         loadTrivia()
       }
 
-      // Defer guess loading until user actually visits guess tab to avoid creating question prematurely
-      if (tab === 'guess') {
-        loadGuess()
-      }
-
       loadStreak()
       getCoinsBalance().then(r => {
         if (r.success && typeof r.coins === 'number') setCoins(r.coins)
@@ -309,26 +322,6 @@ export default function Trivia() {
       loadGuess()
     }
   }, [tab, guessCompleted, guessQ, guessDailyLimit, loadGuess])
-
-  const loadGuess = useCallback(() => {
-    setGuessPicked(null)
-    setGuessResult(null)
-    setGuessError(null)
-    setGuessDailyLimit(false)
-    getGuessMovie().then(r => {
-      if (r.success) {
-        setGuessQ(r.question)
-        if (typeof r.remaining === 'number') setGuessRemaining(r.remaining)
-        if (r.dailyLimitReached) setGuessDailyLimit(true)
-      } else if (r.alreadyPlayed) {
-        setGuessCompleted(true)
-        setGuessResult(r)
-        setGuessDailyLimit(true)
-      }
-    })
-  }, [])
-
-  useEffect(() => { if (tab === 'guess' && !guessCompleted) loadGuess() }, [tab, loadGuess, guessCompleted])
 
   const loadShop = useCallback(() => {
     getCosmetics().then(r => {
@@ -473,25 +466,25 @@ export default function Trivia() {
               <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-28 bg-white/5 rounded-xl animate-pulse" />)}</div>
             ) : result ? (
               <div className="space-y-4">
-                <ScoreResult score={result.score} total={result.total} passed={result.passed} />
+                <ScoreResult score={result.score || 0} total={result.total || 0} passed={result.passed} />
                 <CountdownCard h={countdown.h} m={countdown.m} s={countdown.s} />
                 <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.2 }} className="text-center">
                   {result.alreadyPlayed ? (
-                    <p className="text-on-surface-variant mb-4">You already played today. Your score: {result.score}/{result.total} · Streak: {result.streak} 🔥</p>
+                    <p className="text-on-surface-variant mb-4">You already played today. Your score: {result.score || 0}/{result.total || 0} · Streak: {result.streak || 0} 🔥</p>
                   ) : result.passed === false ? (
                     <p className="text-on-surface-variant mb-4">
-                      No coins earned — score {Math.round(PASS_RATIO * 100)}%+ tomorrow to win · Streak frozen at {result.streak} 🔥
+                      No coins earned — score {Math.round(PASS_RATIO * 100)}%+ tomorrow to win · Streak frozen at {result.streak || 0} 🔥
                     </p>
                   ) : (
                     <p className="text-on-surface-variant mb-4">
-                      +{result.coinsEarned} coins earned · Current streak: {result.streak} 🔥
+                      +{result.coinsEarned || 0} coins earned · Current streak: {result.streak || 0} 🔥
                     </p>
                   )}
-                  {result.results && result.results.length > 0 && (
+                  {result.results?.length > 0 && (
                     <div className="mb-4 max-h-56 overflow-y-auto">
                       <p className="text-xs text-on-surface-variant mb-2 text-left">Question review:</p>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-left">
-                        {result.results.map((r: ResultItem) => (
+                        {(result.results || []).map((r: ResultItem) => (
                           <div key={r.id} className={`px-2 py-1.5 rounded-lg space-y-1 ${r.alreadyAnswered && r.correct === undefined ? 'bg-white/5' : r.correct ? 'bg-green-500/15' : 'bg-red-500/15'}`}>
                             <div className="flex items-center justify-between gap-1">
                               <span className={`text-xs font-bold font-mono ${r.correct ? 'text-green-300' : 'text-red-300'}`}>{r.correct ? '✓' : '✗'}</span>

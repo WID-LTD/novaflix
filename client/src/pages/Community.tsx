@@ -270,10 +270,7 @@ export default function Community() {
   }
 
   const handleCreate = async () => {
-    if (!isCreator) {
-      navigate('/pricing')
-      return
-    }
+    if (!isCreator) return
     if (!newName.trim() || creating) return
     setCreating(true)
     const res = await createCommunity({ name: newName.trim(), description: newDesc.trim() })
@@ -408,20 +405,12 @@ export default function Community() {
 
           {/* Footer actions */}
           <div className="p-3 border-t border-white/5 space-y-2">
-            {isCreator ? (
+            {isCreator && (
               <button
                 onClick={() => setShowCreate(true)}
                 className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-red-600 text-white font-semibold text-sm hover:bg-red-700 transition-colors"
               >
                 <Icon name="add" className="w-4 h-4" /> New Community
-              </button>
-            ) : (
-              <button
-                onClick={() => navigate('/pricing')}
-                className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-red-600/15 border border-red-500/30 text-red-400 font-semibold text-sm hover:bg-red-600/25 hover:text-red-300 transition-colors"
-              >
-                <Icon name="add" className="w-4 h-4" /> New Community
-                <span className="text-[0.68rem] font-medium text-red-500/80 ml-1">Creator plan</span>
               </button>
             )}
             <button
@@ -476,7 +465,7 @@ export default function Community() {
                   <div className="flex items-center flex-wrap gap-x-5 gap-y-2 mb-3.5 text-sm">
                     <button onClick={openMembers} className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors">
                       <Icon name="group" className="w-4 h-4 text-red-600" />
-                      <span><strong className="text-white font-bold">{community.member_count}</strong> members</span>
+                      <span><strong className="text-white font-bold">{community.member_count ?? 0}</strong> members</span>
                     </button>
                     <div className="flex items-center gap-2">
                       <span className="text-gray-400">Created by</span>
@@ -737,7 +726,7 @@ export default function Community() {
                         <p className="text-sm font-medium text-white truncate">{k.contentId}</p>
                         {k.hint && <p className="text-xs text-gray-500 italic mt-1 line-clamp-2">“{k.hint}”</p>}
                         <p className="text-[11px] text-gray-600 mt-2">
-                          Found at {Math.floor(k.ts_seconds / 60)}:{Math.floor(k.ts_seconds % 60).toString().padStart(2, '0')}
+                          Found at {Math.floor(Number(k.ts_seconds || 0) / 60)}:{Math.floor(Number(k.ts_seconds || 0) % 60).toString().padStart(2, '0')}
                           {k.room ? ' • Secret Room unlocked' : ''}
                         </p>
                       </div>

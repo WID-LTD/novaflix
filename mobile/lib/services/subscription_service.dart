@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutterwave_standard/flutterwave.dart';
 import '../models/subscription_plan.dart';
 import '../models/user.dart';
 import '../providers/auth_provider.dart';
@@ -9,11 +8,12 @@ import '../screens/subscription_activated_screen.dart';
 import '../theme/app_colors.dart';
 import '../widgets/subscription/securing_dialog.dart';
 import '../services/api_service.dart';
-import '../core/config.dart';
+import '../widgets/subscription/payment_webview.dart';
 
-/// Robust in-app checkout using **flutterwave_standard** Charge API.
-/// - Enforces card tokenization for Spotify-style monthly billing via paymentOptions
-/// - Ties user to Flutterwave Dashboard recurring plan via paymentPlanId
+/// Robust checkout using **Flutterwave Standard web redirect**.
+/// - Uses server-side initialization to get authorization URL
+/// - Opens Flutterwave hosted payment page in WebView (like Paystack)
+/// - Ties user to Flutterwave Dashboard recurring plan via payment_plan
 Future<void> executeInAppSubscription(
   BuildContext context,
   SubscriptionPlan selectedPlan, {
@@ -38,64 +38,48 @@ Future<void> executeInAppSubscription(
   );
 
   try {
-    final txRef = 'NOVAFLEX_${selectedPlan.slug}_${DateTime.now().millisecondsSinceEpoch}';
-    final email = user.email.trim();
-    final name = user.username.trim().isNotEmpty ? user.username.trim() : 'NovaFlix User';
-    final phoneFallback = user.phone?.isNotEmpty == true ? user.phone! : '08000000000';
-
-    final customer = Customer(email: email, name: name, phoneNumber: phoneFallback);
-
-    final publicKey = AppConfig.flutterwavePublicKey;
-
-    final flutterwave = Flutterwave(
-      publicKey: publicKey,
-      txRef: txRef,
-      amount: selectedPlan.priceNgn.toString(),
-      customer: customer,
-      paymentOptions: 'card',
-      customization: Customization(title: 'NovaFlix — ${selectedPlan.name}'),
-      redirectUrl: 'https://novaflix.app/payment-success',
-      isTestMode: !AppConfig.isProduction,
-      currency: 'NGN',
-      paymentPlanId: selectedPlan.id,
+    // 1) Initialize payment on server to get authorization URL
+    final api = ProviderScope.containerOf(context, listen: false).read(apiServiceProvider);
+    final initRes = await api.initializePayment(
+      selectedPlan.slug,
+      gateway: 'flutterwave',
+      promoCode: null,
     );
-
-    // Dismiss loading BEFORE opening Flutterwave sheet (which has its own overlay) to avoid double-dialog
-    if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
-
-    final ChargeResponse response = await flutterwave.charge(context);
-
+    
     if (!context.mounted) return;
+    Navigator.of(context, rootNavigator: true).pop(); // dismiss loading dialog
 
-    final status = response.status?.toLowerCase();
-    final success = response.success == true;
-
-    if ((status == 'successful' || status == 'success') && success) {
-      // Background server verification (best-effort)
-      try {
-        final api = ProviderScope.containerOf(context, listen: false).read(apiServiceProvider);
-        await api.verifyPayment(response.transactionId ?? txRef, selectedPlan.slug);
-        await ProviderScope.containerOf(context, listen: false).read(authProvider.notifier).refreshUser();
-      } catch (_) {}
-
-      if (context.mounted) {
-        Navigator.of(context).popUntil((r) => r.isFirst);
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => SubscriptionActivatedScreen(plan: selectedPlan)),
-        );
-      }
-    } else if (response.status == null || status == 'cancelled' || status == 'failed') {
+    final body = initRes.data is Map<String, dynamic> 
+        ? initRes.data as Map<String, dynamic> 
+        : <String, dynamic>{};
+    final url = body['authorization_url']?.toString();
+    final reference = body['reference']?.toString() ?? '';
+    
+    if (url == null || url.isEmpty) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Payment cancelled — your movie pass is waiting.'),
-            backgroundColor: Color(0xFF1E1E1E),
+            content: Text('Failed to initialize payment. Please try again.'),
+            backgroundColor: Color(0xFF2A0B0B),
             behavior: SnackBarBehavior.floating,
           ),
         );
       }
-    } else {
-      throw Exception(response.status ?? 'Transaction failed — please try again.');
+      return;
+    }
+
+    // Navigate to WebView payment screen (like Paystack flow)
+    if (context.mounted) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => PaymentWebViewScreen(
+            authorizationUrl: url,
+            reference: reference,
+            plan: selectedPlan.slug,
+            gateway: 'flutterwave',
+          ),
+        ),
+      );
     }
   } catch (e) {
     try {

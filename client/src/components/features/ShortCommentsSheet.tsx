@@ -8,7 +8,7 @@ interface ShortCommentsSheetProps {
   comments: ShortComment[]
   count: number
   onClose: () => void
-  onSubmit?: (text: string) => void
+  onSubmit?: (text: string) => boolean | void | Promise<boolean | void>
 }
 
 function timeAgo(iso: string): string {
@@ -26,11 +26,14 @@ function timeAgo(iso: string): string {
 export default function ShortCommentsSheet({ open, comments, count, onClose, onSubmit }: ShortCommentsSheetProps) {
   const { user } = useAuth()
   const [text, setText] = useState('')
+  const [sending, setSending] = useState(false)
+  const [submitError, setSubmitError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (open) {
       setText('')
+      setSubmitError('')
       setTimeout(() => inputRef.current?.focus(), 320)
     }
   }, [open])
@@ -41,11 +44,15 @@ export default function ShortCommentsSheet({ open, comments, count, onClose, onS
     }
   }, [comments.length, open])
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const trimmed = text.trim()
-    if (!trimmed) return
-    onSubmit?.(trimmed)
-    setText('')
+    if (!trimmed || sending || !onSubmit) return
+    setSending(true)
+    setSubmitError('')
+    const ok = await onSubmit(trimmed)
+    if (ok !== false) setText('')
+    if (ok === false) setSubmitError('Could not post your comment. Please try again.')
+    setSending(false)
   }
 
   return (
@@ -111,31 +118,40 @@ export default function ShortCommentsSheet({ open, comments, count, onClose, onS
         </div>
 
         {/* Input tray */}
-        <div className="sticky bottom-0 bg-neutral-900 border-t border-neutral-800 p-3 flex gap-2">
-          <div className="w-9 h-9 rounded-full bg-neutral-700 flex items-center justify-center shrink-0 overflow-hidden">
-            {user?.avatar ? (
-              <img src={user.avatar} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <Icon name="person" size="sm" className="text-neutral-300" />
-            )}
+        <div className="sticky bottom-0 bg-neutral-900 border-t border-neutral-800 p-3 flex flex-col gap-2">
+          {submitError && (
+            <p className="text-xs text-red-400 px-2" role="alert">{submitError}</p>
+          )}
+          <div className="flex gap-2">
+            <div className="w-9 h-9 rounded-full bg-neutral-700 flex items-center justify-center shrink-0 overflow-hidden">
+              {user?.avatar ? (
+                <img src={user.avatar} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <Icon name="person" size="sm" className="text-neutral-300" />
+              )}
+            </div>
+            <input
+              ref={inputRef}
+              value={text}
+              onChange={e => setText(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSubmit() }}
+              placeholder="Add a comment..."
+              maxLength={600}
+              className="flex-1 min-w-0 bg-neutral-800 border border-neutral-700 rounded-full px-4 py-2.5 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-500 transition-colors"
+            />
+            <button
+              onClick={handleSubmit}
+              disabled={!text.trim() || sending}
+              className="w-11 h-11 rounded-full flex items-center justify-center bg-[#e50914] text-white hover:brightness-110 active:scale-90 disabled:opacity-40 disabled:pointer-events-none transition-all"
+              aria-label="Send comment"
+            >
+              {sending ? (
+                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Icon name="send" />
+              )}
+            </button>
           </div>
-          <input
-            ref={inputRef}
-            value={text}
-            onChange={e => setText(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleSubmit() }}
-            placeholder="Add a comment..."
-            maxLength={300}
-            className="flex-1 min-w-0 bg-neutral-800 border border-neutral-700 rounded-full px-4 py-2.5 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-500 transition-colors"
-          />
-          <button
-            onClick={handleSubmit}
-            disabled={!text.trim()}
-            className="w-11 h-11 rounded-full flex items-center justify-center bg-[#e50914] text-white hover:brightness-110 active:scale-90 disabled:opacity-40 disabled:pointer-events-none transition-all"
-            aria-label="Send comment"
-          >
-            <Icon name="send" />
-          </button>
         </div>
       </div>
     </div>

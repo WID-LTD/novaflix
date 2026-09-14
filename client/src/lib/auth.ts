@@ -2,6 +2,20 @@ import { API_BASE } from './config'
 
 const BASE = API_BASE
 
+// Any request that hangs (slow server, dropped connection, runaway background
+// job) must fail instead of leaving page loaders/skeletons stuck forever.
+const DEFAULT_TIMEOUT_MS = 15000
+
+function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  const { signal, ...rest } = options
+  if (signal && !signal.aborted) {
+    signal.addEventListener('abort', () => controller.abort())
+  }
+  return fetch(url, { ...rest, signal: controller.signal }).finally(() => clearTimeout(timer))
+}
+
 interface AuthResponse {
   success: boolean
   token?: string
@@ -140,7 +154,7 @@ export async function resendVerification(userId: string): Promise<AuthResponse> 
 
 export async function getMe(token: string): Promise<AuthResponse> {
   try {
-    const res = await fetch(`${BASE}/auth/me`, {
+    const res = await fetchWithTimeout(`${BASE}/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     return res.json()
@@ -2191,7 +2205,7 @@ export async function voteForumReply(replyId: string, vote: number): Promise<any
 export async function getHotTakes(sort: 'hot' | 'new' = 'hot', limit = 30, offset = 0): Promise<any> {
   try {
     const token = getToken()
-    const res = await fetch(`${BASE}/hot-takes?sort=${sort}&limit=${limit}&offset=${offset}`, { headers: { Authorization: `Bearer ${token}` } })
+    const res = await fetchWithTimeout(`${BASE}/hot-takes?sort=${sort}&limit=${limit}&offset=${offset}`, { headers: { Authorization: `Bearer ${token}` } })
     return res.json()
   } catch { return { success: false, topics: [], error: 'Network error' } }
 }
@@ -2199,7 +2213,7 @@ export async function getHotTakes(sort: 'hot' | 'new' = 'hot', limit = 30, offse
 export async function getHotTake(id: string): Promise<any> {
   try {
     const token = getToken()
-    const res = await fetch(`${BASE}/hot-takes/${id}`, { headers: { Authorization: `Bearer ${token}` } })
+    const res = await fetchWithTimeout(`${BASE}/hot-takes/${id}`, { headers: { Authorization: `Bearer ${token}` } })
     return res.json()
   } catch { return { success: false, error: 'Network error' } }
 }
@@ -2242,7 +2256,7 @@ export async function addHotTakeReply(topicId: string, content: string, stance: 
 
 export async function getForumCategories(): Promise<any> {
   try {
-    const res = await fetch(`${BASE}/forum/categories`)
+    const res = await fetchWithTimeout(`${BASE}/forum/categories`)
     return res.json()
   } catch { return { success: false, categories: [], error: 'Network error' } }
 }
@@ -2251,7 +2265,7 @@ export async function getForumCategories(): Promise<any> {
 export async function getDailyTrivia(): Promise<any> {
   try {
     const token = getToken()
-    const res = await fetch(`${BASE}/trivia/today`, { headers: { Authorization: `Bearer ${token}` } })
+    const res = await fetchWithTimeout(`${BASE}/trivia/today`, { headers: { Authorization: `Bearer ${token}` } })
     return res.json()
   } catch { return { success: false, questions: [], error: 'Network error' } }
 }
@@ -2271,7 +2285,7 @@ export async function submitDailyTrivia(answers: { id: string; answerIndex: numb
 export async function getTriviaStreak(): Promise<any> {
   try {
     const token = getToken()
-    const res = await fetch(`${BASE}/trivia/streak`, { headers: { Authorization: `Bearer ${token}` } })
+    const res = await fetchWithTimeout(`${BASE}/trivia/streak`, { headers: { Authorization: `Bearer ${token}` } })
     return res.json()
   } catch { return { success: false, streak: 0, error: 'Network error' } }
 }
@@ -2279,7 +2293,7 @@ export async function getTriviaStreak(): Promise<any> {
 export async function getTriviaLeaderboard(limit = 20): Promise<any> {
   try {
     const token = getToken()
-    const res = await fetch(`${BASE}/trivia/leaderboard?limit=${limit}`, { headers: { Authorization: `Bearer ${token}` } })
+    const res = await fetchWithTimeout(`${BASE}/trivia/leaderboard?limit=${limit}`, { headers: { Authorization: `Bearer ${token}` } })
     return res.json()
   } catch { return { success: false, leaderboard: [], error: 'Network error' } }
 }
@@ -2287,7 +2301,7 @@ export async function getTriviaLeaderboard(limit = 20): Promise<any> {
 export async function getGuessMovie(): Promise<any> {
   try {
     const token = getToken()
-    const res = await fetch(`${BASE}/trivia/guess`, { headers: { Authorization: `Bearer ${token}` } })
+    const res = await fetchWithTimeout(`${BASE}/trivia/guess`, { headers: { Authorization: `Bearer ${token}` } })
     return res.json()
   } catch { return { success: false, error: 'Network error' } }
 }
@@ -2307,7 +2321,7 @@ export async function submitGuess(questionId: string, answerIndex: number): Prom
 export async function getCoinsBalance(): Promise<any> {
   try {
     const token = getToken()
-    const res = await fetch(`${BASE}/trivia/coins`, { headers: { Authorization: `Bearer ${token}` } })
+    const res = await fetchWithTimeout(`${BASE}/trivia/coins`, { headers: { Authorization: `Bearer ${token}` } })
     return res.json()
   } catch { return { success: false, coins: 0, error: 'Network error' } }
 }
@@ -2315,7 +2329,7 @@ export async function getCoinsBalance(): Promise<any> {
 export async function getTriviaStatus(): Promise<any> {
   try {
     const token = getToken()
-    const res = await fetch(`${BASE}/trivia/status`, { headers: { Authorization: `Bearer ${token}` } })
+    const res = await fetchWithTimeout(`${BASE}/trivia/status`, { headers: { Authorization: `Bearer ${token}` } })
     return res.json()
   } catch { return { success: false, completedToday: false, error: 'Network error' } }
 }
@@ -2323,7 +2337,7 @@ export async function getTriviaStatus(): Promise<any> {
 export async function getGuessStatus(): Promise<any> {
   try {
     const token = getToken()
-    const res = await fetch(`${BASE}/trivia/status`, { headers: { Authorization: `Bearer ${token}` } })
+    const res = await fetchWithTimeout(`${BASE}/trivia/status`, { headers: { Authorization: `Bearer ${token}` } })
     const data = await res.json()
     // derive guess status without side-effect of creating a new guess question
     // server guess limit is checked on /trivia/guess fetch; for init we treat not played

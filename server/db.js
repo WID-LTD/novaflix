@@ -61,6 +61,7 @@ const SOCIAL_ID_COLUMNS = {
   youtube: 'youtube_id',
   twitch: 'twitch_id',
   discord: 'discord_id',
+  apple: 'apple_id',
 }
 
 export function socialIdColumn(provider) {
@@ -1726,9 +1727,9 @@ export async function getLeaderboard(limit = 20) {
 
 export async function addShort(short) {
   const { rows } = await pool.query(
-    `INSERT INTO shorts (id, user_id, title, description, video_url, thumbnail_url, duration_seconds, status, trailer_url, media_id, media_type)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-    [short.id, short.userId, short.title, short.description, short.videoUrl, short.thumbnailUrl, short.durationSeconds || 0, short.status || 'active', short.trailerUrl || '', short.mediaId || null, short.mediaType || null]
+    `INSERT INTO shorts (id, user_id, title, description, video_url, thumbnail_url, duration_seconds, status, trailer_url, media_id, media_type, video_key, thumbnail_key)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
+    [short.id, short.userId, short.title, short.description, short.videoUrl, short.thumbnailUrl, short.durationSeconds || 0, short.status || 'active', short.trailerUrl || '', short.mediaId || null, short.mediaType || null, short.videoKey || '', short.thumbnailKey || '']
   )
   return rows[0]
 }
@@ -1739,7 +1740,7 @@ export async function getShortsFeed(limit = 30, offset = 0, viewerId = null) {
      FROM shorts s
      LEFT JOIN users u ON u.id = s.user_id
      WHERE s.status = 'active'
-     ORDER BY s.created_at DESC
+     ORDER BY s.created_at DESC, s.id DESC
      LIMIT $1 OFFSET $2`,
     [limit, offset]
   )
@@ -1778,12 +1779,23 @@ export async function getShortById(id) {
   return rows[0] || null
 }
 
-export async function incrementShortViews(id) {
+export async function incrementShortViews(id, userId = null) {
+  if (userId) {
+    const { rows: inserted } = await pool.query(
+      `INSERT INTO short_views (short_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING short_id`,
+      [id, userId]
+    )
+    if (inserted.length === 0) {
+      const { rows } = await pool.query(`SELECT views, user_id FROM shorts WHERE id = $1`, [id])
+      return rows[0] ? { views: rows[0].views, user_id: rows[0].user_id, alreadyViewed: true } : null
+    }
+  }
   const { rows } = await pool.query(
     `UPDATE shorts SET views = views + 1 WHERE id = $1 RETURNING views, user_id`,
     [id]
   )
-  return rows[0] || null
+  if (!rows[0]) return null
+  return { views: rows[0].views, user_id: rows[0].user_id, alreadyViewed: false }
 }
 
 export async function hasUserLikedShort(shortId, userId) {
@@ -1796,15 +1808,30 @@ export async function hasUserLikedShort(shortId, userId) {
 }
 
 export async function toggleShortLike(shortId, userId) {
-  const exists = await hasUserLikedShort(shortId, userId)
-  if (exists) {
-    await pool.query(`DELETE FROM short_likes WHERE short_id = $1 AND user_id = $2`, [shortId, userId])
-    const { rows } = await pool.query(`UPDATE shorts SET likes = GREATEST(likes - 1, 0) WHERE id = $1 RETURNING likes, user_id`, [shortId])
-    return { liked: false, likes: rows[0].likes, creator_id: rows[0].user_id }
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const { rows: inserted } = await client.query(
+      `INSERT INTO short_likes (short_id, user_id) VALUES ($1, $2) ON CONFLICT (short_id, user_id) DO NOTHING RETURNING short_id`,
+      [shortId, userId]
+    )
+    const liked = inserted.length > 0
+    const { rows } = await client.query(
+      `UPDATE shorts SET likes = ${liked ? 'likes + 1' : 'GREATEST(likes - 1, 0)'} WHERE id = $1 RETURNING likes, user_id`,
+      [shortId]
+    )
+    if (!rows[0]) {
+      await client.query('ROLLBACK')
+      return null
+    }
+    await client.query('COMMIT')
+    return { liked, likes: rows[0].likes, creator_id: rows[0].user_id }
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
   }
-  await pool.query(`INSERT INTO short_likes (short_id, user_id) VALUES ($1, $2)`, [shortId, userId])
-  const { rows } = await pool.query(`UPDATE shorts SET likes = likes + 1 WHERE id = $1 RETURNING likes, user_id`, [shortId])
-  return { liked: true, likes: rows[0].likes, creator_id: rows[0].user_id }
 }
 
 export async function hasUserBookmarkedShort(shortId, userId) {
@@ -1817,32 +1844,63 @@ export async function hasUserBookmarkedShort(shortId, userId) {
 }
 
 export async function toggleShortBookmark(shortId, userId) {
-  const exists = await hasUserBookmarkedShort(shortId, userId)
-  if (exists) {
-    await pool.query(`DELETE FROM short_bookmarks WHERE short_id = $1 AND user_id = $2`, [shortId, userId])
-    const { rows } = await pool.query(`UPDATE shorts SET bookmarks = GREATEST(bookmarks - 1, 0) WHERE id = $1 RETURNING bookmarks`, [shortId])
-    return { bookmarked: false, bookmarks: rows[0].bookmarks }
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const { rows: inserted } = await client.query(
+      `INSERT INTO short_bookmarks (short_id, user_id) VALUES ($1, $2) ON CONFLICT (short_id, user_id) DO NOTHING RETURNING short_id`,
+      [shortId, userId]
+    )
+    const bookmarked = inserted.length > 0
+    const { rows } = await client.query(
+      `UPDATE shorts SET bookmarks = ${bookmarked ? 'bookmarks + 1' : 'GREATEST(bookmarks - 1, 0)'} WHERE id = $1 RETURNING bookmarks`,
+      [shortId]
+    )
+    if (!rows[0]) {
+      await client.query('ROLLBACK')
+      return null
+    }
+    await client.query('COMMIT')
+    return { bookmarked, bookmarks: rows[0].bookmarks }
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
   }
-  await pool.query(`INSERT INTO short_bookmarks (short_id, user_id) VALUES ($1, $2)`, [shortId, userId])
-  const { rows } = await pool.query(`UPDATE shorts SET bookmarks = bookmarks + 1 WHERE id = $1 RETURNING bookmarks`, [shortId])
-  return { bookmarked: true, bookmarks: rows[0].bookmarks }
 }
 
-export async function incrementShortShares(shortId) {
+export async function incrementShortShares(shortId, userId = null) {
+  if (userId) {
+    const { rows: inserted } = await pool.query(
+      `INSERT INTO short_shares (short_id, user_id) VALUES ($1, $2) ON CONFLICT (short_id, user_id) DO NOTHING RETURNING short_id`,
+      [shortId, userId]
+    )
+    if (inserted.length === 0) {
+      const { rows } = await pool.query(`SELECT shares FROM shorts WHERE id = $1`, [shortId])
+      return rows[0] ? { shares: rows[0].shares, alreadyShared: true } : null
+    }
+  }
   const { rows } = await pool.query(`UPDATE shorts SET shares = shares + 1 WHERE id = $1 RETURNING shares`, [shortId])
-  return rows[0] ? { shares: rows[0].shares } : null
+  return rows[0] ? { shares: rows[0].shares, alreadyShared: false } : null
 }
 
-export async function getShortComments(shortId) {
-  const { rows } = await pool.query(
-    `SELECT c.*, u.name as user_name, u.avatar as user_avatar
-     FROM short_comments c
-     LEFT JOIN users u ON u.id = c.user_id
-     WHERE c.short_id = $1
-     ORDER BY c.created_at DESC`,
-    [shortId]
-  )
-  return rows
+export async function getShortComments(shortId, page = 1, limit = 100) {
+  const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 100, 1), 100)
+  const offset = (Math.max(parseInt(page, 10) || 1, 1) - 1) * safeLimit
+  const [commentsRes, countRes] = await Promise.all([
+    pool.query(
+      `SELECT c.*, u.name as user_name, u.avatar as user_avatar
+       FROM short_comments c
+       LEFT JOIN users u ON u.id = c.user_id
+       WHERE c.short_id = $1
+       ORDER BY c.created_at DESC, c.id DESC
+       LIMIT $2 OFFSET $3`,
+      [shortId, safeLimit, offset]
+    ),
+    pool.query(`SELECT COUNT(*)::int AS total FROM short_comments WHERE short_id = $1`, [shortId]),
+  ])
+  return { comments: commentsRes.rows, total: countRes.rows[0]?.total || 0 }
 }
 
 export async function addShortComment(shortId, userId, text) {

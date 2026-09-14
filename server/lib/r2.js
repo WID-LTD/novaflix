@@ -8,6 +8,13 @@ const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL
 
 let _client = null
 
+const UPLOAD_TIMEOUT_MS = 60 * 1000
+const IO_TIMEOUT_MS = 15 * 1000
+
+function withTimeout(ms) {
+  return { abortSignal: AbortSignal.timeout(ms) }
+}
+
 function getClient() {
   if (_client) return _client
   if (!R2_ENDPOINT || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) return null
@@ -34,6 +41,7 @@ export async function uploadFile({ buffer, key, contentType }) {
         Key: key,
         Body: buffer,
         ContentType: contentType || 'application/octet-stream',
+        ...withTimeout(UPLOAD_TIMEOUT_MS),
       })
     )
     const url = R2_PUBLIC_URL ? `${R2_PUBLIC_URL}/${key}` : `${R2_ENDPOINT}/${R2_BUCKET}/${key}`
@@ -52,6 +60,7 @@ export async function deleteFile(key) {
       new DeleteObjectCommand({
         Bucket: R2_BUCKET,
         Key: key,
+        ...withTimeout(IO_TIMEOUT_MS),
       })
     )
     return { success: true }
@@ -70,6 +79,7 @@ export async function streamFile(key, rangeHeader) {
       Bucket: R2_BUCKET,
       Key: key,
       Range: rangeHeader,
+      ...withTimeout(IO_TIMEOUT_MS),
     })
     const { Body, ContentLength, ContentType, ContentRange } = await client.send(command)
     return {

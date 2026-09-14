@@ -33,7 +33,7 @@ export interface HookItem {
   poster: string | null
   title: string
   year: string
-  type: 'trailer' | 'short' | 'ad'
+  type: 'trailer' | 'short' | 'ad' | 'live'
   promoted?: boolean
   sponsorName?: string
   mediaId?: number
@@ -43,6 +43,7 @@ export interface HookItem {
   creatorId?: string
   creatorAvatar?: string | null
   views?: number
+  viewerCount?: number
   likes?: number
   description?: string
   hashtags?: string[]

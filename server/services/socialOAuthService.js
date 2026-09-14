@@ -1,5 +1,6 @@
 import axios from 'axios'
 import crypto from 'crypto'
+import jwt from 'jsonwebtoken'
 
 // Registry of supported social OAuth providers for Claim Profile verification
 // and social login. Each provider exposes:
@@ -198,6 +199,54 @@ const PROVIDERS = {
       profileUrl: '',
     }),
   },
+  // Sign in with Apple. There is no static client secret: Apple requires an
+  // ES256 JWT client_secret signed with your developer Key (APPLE_KEY_ID +
+  // APPLE_PRIVATE_KEY) under Team APPLE_TEAM_ID for the Services ID
+  // APPLE_CLIENT_ID. The secret is regenerated on every authorize/token call.
+  apple: {
+    id: 'apple',
+    name: 'Apple',
+    clientIdEnv: 'APPLE_CLIENT_ID',
+    clientSecretEnv: 'APPLE_TEAM_ID',
+    requiredEnv: ['APPLE_CLIENT_ID', 'APPLE_TEAM_ID', 'APPLE_KEY_ID', 'APPLE_PRIVATE_KEY'],
+    authorizeUrl: 'https://appleid.apple.com/auth/authorize',
+    tokenUrl: 'https://appleid.apple.com/auth/token',
+    scope: 'name email',
+    tokenGrantType: 'authorization_code',
+    usesIdToken: true,
+    authParams: () => ({ response_mode: 'query', client_secret: buildAppleClientSecret() }),
+    clientSecretFn: () => buildAppleClientSecret(),
+    mapProfile: (payload) => ({
+      id: String(payload.sub || ''),
+      email: payload.email || '',
+      name: payload.name ? (typeof payload.name === 'object' ? (payload.name.firstName + ' ' + payload.name.lastName).trim() : payload.name) : '',
+      avatar: null,
+      handle: payload.email || `apple:${payload.sub}`,
+      profileUrl: '',
+    }),
+  },
+}
+
+// Sign in with Apple client secret: ES256 JWT issued by your Team for the
+// Services ID. Expiry follows Apple's 6-month (15777000s) max.
+function buildAppleClientSecret() {
+  const teamId = process.env.APPLE_TEAM_ID
+  const clientId = process.env.APPLE_CLIENT_ID
+  const keyId = process.env.APPLE_KEY_ID
+  let privateKey = process.env.APPLE_PRIVATE_KEY || ''
+  if (privateKey.includes('\\n')) privateKey = privateKey.replace(/\\n/g, '\n')
+  const now = Math.floor(Date.now() / 1000)
+  return jwt.sign(
+    {
+      iss: teamId,
+      iat: now,
+      exp: now + 15777000,
+      aud: 'https://appleid.apple.com',
+      sub: clientId,
+    },
+    privateKey,
+    { algorithm: 'ES256', keyid: keyId }
+  )
 }
 
 export function getProvider(name) {
@@ -205,18 +254,22 @@ export function getProvider(name) {
   return PROVIDERS[key] || null
 }
 
+function providerConfigured(p) {
+  if (!p) return false
+  if (p.requiredEnv) return p.requiredEnv.every((k) => !!process.env[k])
+  return !!(process.env[p.clientIdEnv] && process.env[p.clientSecretEnv])
+}
+
 export function listProviders() {
   return Object.values(PROVIDERS).map(p => ({
     id: p.id,
     name: p.name,
-    configured: !!(process.env[p.clientIdEnv] && process.env[p.clientSecretEnv]),
+    configured: providerConfigured(p),
   }))
 }
 
 export function isProviderConfigured(name) {
-  const p = getProvider(name)
-  if (!p) return false
-  return !!(process.env[p.clientIdEnv] && process.env[p.clientSecretEnv])
+  return providerConfigured(getProvider(name))
 }
 
 export function buildAuthorizeUrl(req, provider, redirectPath) {
@@ -247,6 +300,9 @@ export function buildAuthorizeUrl(req, provider, redirectPath) {
     params.set('prompt', 'select_account')
   }
   if (p.id === 'tiktok') params.set('response_type', 'code') // explicit
+  if (p.authParams) {
+    for (const [k, v] of Object.entries(p.authParams())) params.set(k, v)
+  }
 
   return { url: `${p.authorizeUrl}?${params.toString()}`, redirectUri, state, verifier: params.get('code_verifier') }
 }
@@ -257,7 +313,7 @@ export async function exchangeCode(req, provider, code, verifier) {
 
   const redirectUri = `${getRedirectBase(req)}/api/auth/social/${p.id}/callback`
   const clientId = process.env[p.clientIdEnv]
-  const clientSecret = process.env[p.clientSecretEnv]
+  const clientSecret = p.clientSecretFn ? p.clientSecretFn() : process.env[p.clientSecretEnv]
 
   const body = new URLSearchParams({
     code,

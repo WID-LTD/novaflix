@@ -58,6 +58,11 @@ export default function HooksCard({
   const lastTapRef = useRef(0)
   const singleTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const likeInFlight = useRef(false)
+  const viewedRef = useRef<Set<string>>(new Set())
+
+  useEffect(() => {
+    return () => { viewedRef.current.clear() }
+  }, [])
 
   const [posterHidden, setPosterHidden] = useState(false)
   const [muted, setMuted] = useState(true)
@@ -131,8 +136,8 @@ export default function HooksCard({
 
   useEffect(() => {
     if (!isShort || !active || !item.shortId) return
-    if (viewedShortIds.has(item.shortId)) return
-    viewedShortIds.add(item.shortId)
+    if (viewedRef.current.has(item.shortId)) return
+    viewedRef.current.add(item.shortId)
     recordShortView(item.shortId).catch(() => {})
   }, [active, isShort, item.shortId])
 
@@ -178,7 +183,8 @@ export default function HooksCard({
         const res = await likeShort(item.shortId)
         if (res.success) {
           setLiked(res.liked)
-          setLikeCount(Number(res.likes) || 0)
+          const n = Number(res.likes)
+          setLikeCount(Number.isFinite(n) ? n : wasCount)
         } else {
           setLiked(wasLiked)
           setLikeCount(wasCount)
@@ -550,5 +556,3 @@ export default function HooksCard({
     </div>
   )
 }
-
-let viewedShortIds = new Set<string>()

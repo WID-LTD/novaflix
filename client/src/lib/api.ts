@@ -393,7 +393,7 @@ export async function getHollywood(): Promise<{ success: boolean; data: MediaIte
   return res
 }
 
-export function getHooksFeed(page?: number): Promise<{ success: boolean; data: HookItem[]; nextPage?: number }> {
+export function getHooksFeed(page?: number): Promise<{ success: boolean; data: HookItem[]; nextPage?: number; error?: string }> {
   const params: Record<string, string> = {}
   if (page && page > 1) params.page = String(page)
   return fetchJson(`${BASE}/hooks`, params)

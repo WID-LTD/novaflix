@@ -42,6 +42,9 @@ export async function listHotTakes(req, res) {
 
 export async function createHotTake(req, res) {
   try {
+    if (req.user?.role !== 'creator' && req.user?.role !== 'admin') {
+      return res.status(403).json({ error: 'Only creators can create hot takes' })
+    }
     const { movieTitle, title, content, noSpoilers } = req.body
     if (!title || !String(title).trim()) return res.status(400).json({ error: 'Your hot take headline is required' })
     if (!noSpoilers) return res.status(400).json({ error: 'You must confirm the take is spoiler-free' })
